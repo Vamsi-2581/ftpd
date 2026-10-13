@@ -95,11 +95,13 @@ delete = ["TFTP110"]
 a second digit. At patch 9 cut the next minor, at minor 9 the next major;
 ftpd 1.2.10 cannot be expressed and must not be released.
 
-Current: **`TFTP120`** for 1.2.0, deleting `TFTP110`. `TFTP120` is free on the
-maintainer's word (only this project assigns `TFTP` ids); no `LIST` was run on
-any stand. `TFTP111` was assigned to a 1.1.1 that was never cut (the
-libc370 2.0 port made the next release 1.2.0) and is unspent and unassigned.
-Burned: `TFTP100` (1.0.0–1.0.2) and `TFTP110` (1.1.0, released 2026-09-14).
+Current: `main` is 1.3.0-dev, so mbt 3 derives **`TFTP130`**, deleting
+`TFTP120`; not yet checked on any stand. `TFTP111` was assigned to a 1.1.1 that
+was never cut (the libc370 2.0 port made the next release 1.2.0) and is unspent
+and unassigned. Burned: `TFTP100` (1.0.0–1.0.2), `TFTP110` (1.1.0, released
+2026-09-14) and `TFTP120` (1.2.0, released 2026-10-13; free on the maintainer's
+word, no `LIST` was run on any stand before it shipped). `docs/uninstall.md`
+names every spent id; add `TFTP130` there with 1.3.0.
 
 Never re-spend an id, and never install a test package under the real one: a
 test needs a throwaway id **and** throwaway module names, because SMP keys

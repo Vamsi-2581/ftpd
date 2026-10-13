@@ -1060,7 +1060,11 @@ ftp_run "delete '$DSN_X37'" "$TMPDIR/ftp_x37_post.log"
 # A member of 47 records is smaller than one 19040-byte block, so it
 # reaches DASD only inside CLOSE, and an x37 there is reported by
 # fclose() alone.  Members are stored until one fails; how many fit
-# depends on the volume, so the loop finds out.  Then the PDS is full,
+# depends on the volume, so the loop finds out.  Five directory blocks
+# so that the space runs out before the directory does: one block holds
+# 20 members, and on a 3390 two tracks hold more than that -- the 21st
+# member then fails on the directory (an ABEND in CLOSE, 451), and the
+# overwrite below succeeds, which measures nothing (dev1, 2026-10-13).  Then the PDS is full,
 # and three things must hold:
 #
 #   - the STOR that failed answered 552, not 250;
@@ -1079,13 +1083,18 @@ section "Test 8: Failed member STOR into a full PDS"
 DSN_FULL="${HLQ}.TEST.FULLPDS"
 MEMRECS=47
 
+# xfer_reply <log>: the reply that ended the transfer -- not the 221 of QUIT
+xfer_reply() {
+    grep -E "^(226|250|[45][0-9][0-9]) " "$1" | tail -1
+}
+
 # mkmem <file> <tag>: MEMRECS records, each starting with the tag
 mkmem() {
     awk -v n=$MEMRECS -v t="$2" \
         'BEGIN{for(i=1;i<=n;i++) printf "%s%06d\n", t, i}' > "$1"
 }
 
-info "MKD '$DSN_FULL' (FB 80, BLKSIZE 19040, TRK(2,0), 1 directory block)"
+info "MKD '$DSN_FULL' (FB 80, BLKSIZE 19040, TRK(2,0), 5 directory blocks)"
 FTP_OUT="$TMPDIR/ftp_full_mkd.log"
 ftp_run "$(cat <<CMDS
 rmdir '$DSN_FULL'
@@ -1095,7 +1104,7 @@ site blksize=19040
 site tracks
 site primary=2
 site secondary=0
-site directory=1
+site directory=5
 mkdir '$DSN_FULL'
 CMDS
 )" "$FTP_OUT"
@@ -1107,21 +1116,21 @@ else
     FULL=0
     FULL_REPLY=""
     m=1
-    while [ "$m" -le 40 ]; do
+    while [ "$m" -le 80 ]; do
         mkmem "$TMPDIR/full_m$m.txt" "MEMBER$m-"
         FTP_OUT="$TMPDIR/ftp_full_m$m.log"
         ftp_run "type ascii
 put $TMPDIR/full_m$m.txt '$DSN_FULL(M$m)'" "$FTP_OUT"
         if ! grep -q "^226\|^250" "$FTP_OUT"; then
             FULL=$m
-            FULL_REPLY=$(grep -E "^[45][0-9][0-9]" "$FTP_OUT" | tail -1)
+            FULL_REPLY=$(xfer_reply "$FTP_OUT")
             break
         fi
         m=$((m + 1))
     done
 
     if [ "$FULL" -eq 0 ]; then
-        fail "The PDS did not fill within 40 members (or every failure answered 2xx)"
+        fail "The PDS did not fill within 80 members (or every failure answered 2xx)"
     elif [ "$FULL" -eq 1 ]; then
         fail "The first member into the empty PDS failed: $FULL_REPLY"
     else
@@ -1152,7 +1161,7 @@ get '$DSN_FULL(M$FULL)' $TMPDIR/full_absent.txt" "$FTP_OUT"
         FTP_OUT="$TMPDIR/ftp_full_r1.log"
         ftp_run "type ascii
 put $TMPDIR/full_r1.txt '$DSN_FULL(M1)'" "$FTP_OUT"
-        R1_REPLY=$(grep -E "^[2-5][0-9][0-9]" "$FTP_OUT" | tail -1)
+        R1_REPLY=$(xfer_reply "$FTP_OUT")
 
         FTP_OUT="$TMPDIR/ftp_full_m1back.log"
         rm -f "$TMPDIR/full_m1back.txt"

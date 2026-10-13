@@ -15,6 +15,7 @@
 #   5b. UFS file ops: TYPE A + TYPE I roundtrip, LIST, SIZE, DELE, MKD/RMD
 #   6.  Cleanup (DELE/RMD)
 #   7.  Out of space (x37): permanent 552, no hang, data set scratched
+#   8.  Failed member STOR into a full PDS: 552, directory untouched
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1052,6 +1053,132 @@ else
 fi
 
 ftp_run "delete '$DSN_X37'" "$TMPDIR/ftp_x37_post.log"
+
+# ============================================================
+# TEST 8: A failed member STOR into a full PDS
+#
+# A member of 47 records is smaller than one 19040-byte block, so it
+# reaches DASD only inside CLOSE, and an x37 there is reported by
+# fclose() alone.  Members are stored until one fails; how many fit
+# depends on the volume, so the loop finds out.  Then the PDS is full,
+# and three things must hold:
+#
+#   - the STOR that failed answered 552, not 250;
+#   - the member it was storing is not in the directory;
+#   - a failed overwrite of an existing member leaves its old content.
+#
+# The first needs FTPD to check fclose(); the other two need libc370
+# 2.10.3, whose CLOSE of a failed member skips the STOW (libc370#524).
+# Before that a failed new member stayed with no records and a failed
+# overwrite left the old member empty.  The PDS has to be filled by
+# SUCCESSFUL members: one filled by a failed STOR proves nothing about
+# the next one.  The shape is mvsMF's curl-nospace section 5.
+# ============================================================
+section "Test 8: Failed member STOR into a full PDS"
+
+DSN_FULL="${HLQ}.TEST.FULLPDS"
+MEMRECS=47
+
+# mkmem <file> <tag>: MEMRECS records, each starting with the tag
+mkmem() {
+    awk -v n=$MEMRECS -v t="$2" \
+        'BEGIN{for(i=1;i<=n;i++) printf "%s%06d\n", t, i}' > "$1"
+}
+
+info "MKD '$DSN_FULL' (FB 80, BLKSIZE 19040, TRK(2,0), 1 directory block)"
+FTP_OUT="$TMPDIR/ftp_full_mkd.log"
+ftp_run "$(cat <<CMDS
+rmdir '$DSN_FULL'
+site recfm=fb
+site lrecl=80
+site blksize=19040
+site tracks
+site primary=2
+site secondary=0
+site directory=1
+mkdir '$DSN_FULL'
+CMDS
+)" "$FTP_OUT"
+
+if ! grep -q "^257" "$FTP_OUT"; then
+    fail "MKD '$DSN_FULL' failed"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+else
+    FULL=0
+    FULL_REPLY=""
+    m=1
+    while [ "$m" -le 40 ]; do
+        mkmem "$TMPDIR/full_m$m.txt" "MEMBER$m-"
+        FTP_OUT="$TMPDIR/ftp_full_m$m.log"
+        ftp_run "type ascii
+put $TMPDIR/full_m$m.txt '$DSN_FULL(M$m)'" "$FTP_OUT"
+        if ! grep -q "^226\|^250" "$FTP_OUT"; then
+            FULL=$m
+            FULL_REPLY=$(grep -E "^[45][0-9][0-9]" "$FTP_OUT" | tail -1)
+            break
+        fi
+        m=$((m + 1))
+    done
+
+    if [ "$FULL" -eq 0 ]; then
+        fail "The PDS did not fill within 40 members (or every failure answered 2xx)"
+    elif [ "$FULL" -eq 1 ]; then
+        fail "The first member into the empty PDS failed: $FULL_REPLY"
+    else
+        info "Filled: M1..M$((FULL - 1)) stored, M$FULL answered: $FULL_REPLY"
+
+        if echo "$FULL_REPLY" | grep -q "^552"; then
+            pass "A member STOR into the full PDS answers 552"
+        else
+            fail "A member STOR into the full PDS answered: $FULL_REPLY"
+        fi
+
+        # A member whose CLOSE failed must not be listed.  RETR of a
+        # member in the directory with no records would answer 226 and
+        # an empty file; one that is absent answers 550.
+        FTP_OUT="$TMPDIR/ftp_full_absent.log"
+        rm -f "$TMPDIR/full_absent.txt"
+        ftp_run "type ascii
+get '$DSN_FULL(M$FULL)' $TMPDIR/full_absent.txt" "$FTP_OUT"
+        if grep -q "^550" "$FTP_OUT"; then
+            pass "The member whose STOR failed (M$FULL) is not in the directory"
+        else
+            fail "The member whose STOR failed (M$FULL) is in the directory ($(wc -l < "$TMPDIR/full_absent.txt" 2>/dev/null || echo 0) records)"
+            tail -3 "$FTP_OUT" | sed 's/^/    /'
+        fi
+
+        # The overwrite of an existing member that does not fit any more
+        mkmem "$TMPDIR/full_r1.txt" "REPLACE1-"
+        FTP_OUT="$TMPDIR/ftp_full_r1.log"
+        ftp_run "type ascii
+put $TMPDIR/full_r1.txt '$DSN_FULL(M1)'" "$FTP_OUT"
+        R1_REPLY=$(grep -E "^[2-5][0-9][0-9]" "$FTP_OUT" | tail -1)
+
+        FTP_OUT="$TMPDIR/ftp_full_m1back.log"
+        rm -f "$TMPDIR/full_m1back.txt"
+        ftp_run "type ascii
+get '$DSN_FULL(M1)' $TMPDIR/full_m1back.txt" "$FTP_OUT"
+        OLD=$(grep -c "^MEMBER1-" "$TMPDIR/full_m1back.txt" 2>/dev/null)
+        NEW=$(grep -c "^REPLACE1-" "$TMPDIR/full_m1back.txt" 2>/dev/null)
+        OLD=${OLD:-0}
+        NEW=${NEW:-0}
+
+        if echo "$R1_REPLY" | grep -q "^2"; then
+            fail "An overwrite into the full PDS answered: $R1_REPLY ($NEW new records) -- the PDS was not full, so this proved nothing"
+        elif ! echo "$R1_REPLY" | grep -q "^552"; then
+            fail "An overwrite into the full PDS answered: $R1_REPLY (expected 552)"
+        else
+            pass "An overwrite into the full PDS answers 552"
+        fi
+        if [ "$OLD" -eq "$MEMRECS" ] && [ "$NEW" -eq 0 ]; then
+            pass "The failed overwrite left M1 with its $MEMRECS old records"
+        else
+            fail "The failed overwrite left M1 with $OLD old and $NEW new records (libc370#524: is the sysroot older than 2.10.3?)"
+        fi
+    fi
+fi
+
+ftp_run "rmdir '$DSN_FULL'" "$TMPDIR/ftp_full_post.log"
 
 # ============================================================
 # Summary

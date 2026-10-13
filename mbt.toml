@@ -23,9 +23,13 @@ kind = "application"
 # rather than 2.3.0 for the subtask cleanup fix (mvslovers/libc370#431).
 # 2.4.0: needs cc370 >= 1.4.0 and ships no crt0.o/crt1.o,
 # which mbt 2.2.0 no longer asks for.
-# 2.6.1 with cc370 1.4.0: the current toolchain pair.
-cc370 = "1.4.0"
-libc370 = "2.6.1"
+# 2.6.1 with cc370 1.4.0: the toolchain pair of the mbt 3 migration.
+# 2.10.3 with cc370 1.6.1: the pair 1.2.0 ships with. 2.10.3 is the first
+# libc370 whose CLOSE of a member that failed with an x37 skips the STOW
+# (mvslovers/libc370#524): before it, a STOR into a full PDS emptied the
+# member it was replacing. The IBM macros come from maclib370 since 2.8.0.
+cc370 = "1.6.1"
+libc370 = "2.10.3"
 mbt = "3.0"
 
 # ── Load module ──────────────────────────────────────────

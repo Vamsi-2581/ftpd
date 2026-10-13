@@ -87,7 +87,7 @@ sources = ["test/tstprm.c", "src/ftpd#cfg.c", "src/ftpd#log.c",
 # The C runtime -- sockets, threads, JES2, RACF, dynalloc -- is libc370, the
 # cc370 sysroot, pinned in [toolchain] above rather than declared here.
 [dependencies]
-"mvslovers/ufsd" = ">=1.4.0-dev"
+"mvslovers/ufsd" = ">=1.4.0"
 
 # ── Deploy (mbt deploy, the inner loop) ──────────────────
 # `mbt deploy` RECEIVEs the LINKLIB XMIT into FTPD.DEV.LINKLIB, mbt's default

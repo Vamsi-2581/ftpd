@@ -96,6 +96,10 @@ want it: <https://github.com/mvslovers/ufsd/releases>, with its own guide at
 Note that UFSD has to be **running**, not just installed — it is a started task
 FTPD talks to across address spaces.
 
+FTPD 1.2.0 carries `libufs` from UFSD 1.4.0 and was tested against a running
+UFSD 1.4.0. UFSD 1.4.0 changed only the C library it is built with; its server
+and the `libufs` interface are unchanged from 1.3.0.
+
 ### RAKF is required for logins
 
 FTPD has no user database of its own. Every `USER`/`PASS` is verified by RAKF
@@ -193,7 +197,50 @@ install that is not finished.
 
 ---
 
-## 2a. Upgrading from 1.0.x — read this first
+## 2a. Upgrading from 1.1.0
+
+A fresh install can skip this section. From 1.1.0, the upgrade is a
+**drop-in**: 1.2.0 installs into the same data sets, under the same started
+task procedure and APF entry, and reads the same `FTPDPRM0`.
+
+| | 1.1.0 | 1.2.0 |
+|---|---|---|
+| FMID | `TFTP110` | `TFTP120`, deletes `TFTP110` |
+| Libraries | `FTPD.LINKLIB`, … | unchanged |
+| C library | LIBC/370 1.0.6 | LIBC/370 2.10.3 |
+
+1. **Stop FTPD** (`/P FTPD`, step 5).
+2. **Skip the allocation job** (step 4). The data sets exist already, and the
+   job allocates them `NEW`, so it would fail.
+3. **Run the install job** (step 6). The `APPLY` ends `COND CODE 0004` on
+   `HMA2461 SYSMOD TFTP110 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
+   result of a replacement; see *One return code that looks wrong and is not*
+   in section 2b.
+4. **Start FTPD** (`/S FTPD`) and read the banner. It must name the new
+   release and the new C library:
+
+   ```
+   FTPD000I FTPD 1.2.0 (xxxxxxx) STARTING
+   FTPD005I LIBC370 2.10.3 (A790DC4)
+   ```
+
+   `LIBC370 V1.0.6` on the second line means the started task still runs 1.1.0.
+   Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380 COPY
+   SUCCESSFUL` — not the condition codes.
+
+**Coming from 1.0.x?** 1.2.0 deletes `TFTP110` only. On a system where
+`TFTP100` still owns the load module, the 1.2.0 install copies **nothing** and
+still ends `RC 00`. Upgrade to 1.1.0 first, following section 2b with the
+1.1.0 package from the
+[releases page](https://github.com/mvslovers/ftpd/releases/tag/v1.1.0), then
+come back here.
+
+---
+
+## 2b. Upgrading from 1.0.x to 1.1.0
+
+This section describes the 1.1.0 install. It is kept here because that is the
+step a 1.0.x system has to take first (see the end of section 2a).
 
 A fresh install can skip this section. An upgrade from any 1.0.x release cannot:
 **1.1.0 changes both the FMID and the data set names.**
@@ -282,8 +329,8 @@ now.
 `FTPD005I` at startup names the release and the library it was built against:
 
 ```
-FTPD000I FTPD 1.2.0 (XXXXXXX) STARTING
-FTPD005I LIBC370 2.0.0
+FTPD000I FTPD 1.1.0 (XXXXXXX) STARTING
+FTPD005I LIBC370 V1.0.6 (XXXXXXX)
 ```
 
 `LIBC370 1.0.4` on that second line means the started task is still loading the
@@ -400,7 +447,8 @@ dataset.
 
 Expect `COND CODE 0000`.
 
-> **Run this once.** There is no DELETE step in it, on purpose. After the
+> **Run this once**, on the first install. An upgrade skips it: the data
+> sets are already there. There is no DELETE step in it, on purpose. After the
 > install, `FTPD.AFTPDLOD` holds SMP's accepted copy of the module; a
 > re-run that scratched it would leave the SMP inventory reporting an install
 > that is no longer on the system, and nothing would say so. To start over,
@@ -456,7 +504,7 @@ The SYSMOD travels inline in the job — there is no third file to upload.
 0000`, and in the SMP output:
 
 ```
-HMA3930    SYSMOD TFTP110 SUCCESSFULLY RECEIVED
+HMA3930    SYSMOD TFTP120 SUCCESSFULLY RECEIVED
 HMA2380    COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB
            - RETURN CODE=00
 HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
@@ -464,7 +512,7 @@ HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
 
 **On an upgrade the `APPLY` ends `COND CODE 0004` instead, and that is
 correct** — `HMA2461` reporting that the deleted level has no backup entry.
-See *One return code that looks wrong and is not* in section 2a. `HMA2270
+See *One return code that looks wrong and is not* in section 2b. `HMA2270
 APPLY PROCESSING SUCCESSFULLY COMPLETED` is the line that says the `APPLY`
 worked; the return code is not.
 
@@ -475,7 +523,7 @@ condition codes say.
 Then check `FTPD.LINKLIB` really holds `FTPD` (ISPF 3.4). Do look: SMP reports
 the library by **ddname**, and a ddname says nothing about which dataset was
 behind it. That is not a nicety — it is exactly why an upgrade leaves the old
-library populated, and section 2a is about the consequences.
+library populated, and section 2b is about the consequences.
 
 SMP **copies** this module rather than re-binding it, which is why the `AC(1)`
 authorisation code and the link attributes are exactly what the build produced.
@@ -636,8 +684,8 @@ A healthy start ends in `FTPD001I … READY`:
 
 ```
 FTPD000I FTPD <version> (A3F2C91) STARTING
-FTPD005I LIBC370 V1.0.2 (22B4870)
-FTPD008I AUTHORIZED BY SVC (MODULE KEY 8)
+FTPD005I LIBC370 2.10.3 (A790DC4)
+FTPD008I AUTHORIZED BY LIBRARY (MODULE KEY 0)
 FTPD004I STC IDENTITY SET TO FTPD/USER VIA RACINIT
 FTPD054I LISTENING ON 0.0.0.0 PORT 2121
 FTPD001I FTPD <version> READY
@@ -710,7 +758,7 @@ The full procedure, with the job to submit and the messages to check, is in
 [uninstall.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/uninstall.md).
 
 **This is for removing FTPD, not for upgrading it.** An upgrade installs over
-the release before it — see section 2a — and needs none of this.
+the release before it — see sections 2a and 2b — and needs none of this.
 
 What SMP does **not** remove, because it never owned them: the copies you made
 in step 7, and your RAKF definitions. Those are yours to delete.

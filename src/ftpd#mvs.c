@@ -2306,7 +2306,18 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         io_err = 1;
     }
 
-    fclose(fp);
+    /* ...and fclose() can still fail on its own.  The flush hands records to
+    ** QSAM, which writes a block when it fills, so a partial last block --
+    ** and with it a whole member smaller than one block -- reaches DASD
+    ** inside CLOSE, and an x37 there is reported by fclose() alone (EOF,
+    ** ENOSPC).  A STOR into a full PDS answered 250 for a member that was
+    ** never stored.  Read errno before ftpd_data_close() issues services of
+    ** its own. */
+    if (fclose(fp) != 0) {
+        if (!io_err)
+            io_errno = errno;
+        io_err = 1;
+    }
     ftpd_data_close(sess);
 
     sess->bytes_recv += total;

@@ -96,10 +96,13 @@ sources = ["test/tstprm.c", "src/ftpd#cfg.c", "src/ftpd#log.c",
 #
 # NOT the installed library. FTPD.LINKLIB is what SMP installs into and what
 # IEAAPF00 authorises; this one is the development target and deliberately
-# separate, so a deploy cannot overwrite an installed release. It is also not
-# APF-authorised, so a module deployed here is fetched key 8 and authorises
-# itself through SVC 244 instead -- which means the AC(1) module-data trap
-# (#101) does not fire on it. Test that from FTPD.LINKLIB, not from here.
+# separate, so a deploy cannot overwrite an installed release. Whether it is
+# APF-authorised depends on the stand. Where it is not, a module deployed here
+# is fetched key 8 and authorises itself through SVC 244 instead -- which
+# means the AC(1) module-data trap (#101) does not fire on it; test that from
+# FTPD.LINKLIB. On mvsdev it is: the deployed build started with FTPD008I
+# AUTHORIZED BY LIBRARY (MODULE KEY 0) on 2026-10-13, so the trap is live
+# there for a development build too. FTPD008I says which case applies.
 
 # ── Distribution (SMP4 install package) ──────────────────
 # Turns `mbt package` into an installable product, the same two transports

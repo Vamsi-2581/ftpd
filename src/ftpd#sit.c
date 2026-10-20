@@ -60,6 +60,25 @@ parse_kv(const char *arg, char *key, int keysz, char *val, int valsz)
 }
 
 /* --------------------------------------------------------------------
+** Copy a keyword value into a session field, upper-cased.
+**
+** Job names, user IDs and JES status names are upper case on MVS, and the
+** other keyword values (RECFM, VOLUME, UNIT, FILETYPE) are folded already;
+** a JES filter stored as typed would make "jesowner=ibmuser" and
+** "JESOWNER=IBMUSER" two different settings (#189).
+** ----------------------------------------------------------------- */
+static void
+site_copy_upper(char *dst, int dstsz, const char *val)
+{
+    int i;
+
+    strncpy(dst, val, dstsz - 1);
+    dst[dstsz - 1] = '\0';
+    for (i = 0; dst[i]; i++)
+        dst[i] = (char)toupper((unsigned char)dst[i]);
+}
+
+/* --------------------------------------------------------------------
 ** Record a warning for the final reply.
 **
 ** First writer wins, matching how the unrecognized-parameter path keeps
@@ -330,20 +349,17 @@ site_apply_one(ftpd_session_t *sess,
     ** through to the unrecognized-parameter path below. */
 
     if (strcmp(key, "JESJOBNAME") == 0) {
-        strncpy(sess->jes_jobname, val, sizeof(sess->jes_jobname) - 1);
-        sess->jes_jobname[sizeof(sess->jes_jobname) - 1] = '\0';
+        site_copy_upper(sess->jes_jobname, sizeof(sess->jes_jobname), val);
         return 0;
     }
 
     if (strcmp(key, "JESOWNER") == 0) {
-        strncpy(sess->jes_owner, val, sizeof(sess->jes_owner) - 1);
-        sess->jes_owner[sizeof(sess->jes_owner) - 1] = '\0';
+        site_copy_upper(sess->jes_owner, sizeof(sess->jes_owner), val);
         return 0;
     }
 
     if (strcmp(key, "JESSTATUS") == 0) {
-        strncpy(sess->jes_status, val, sizeof(sess->jes_status) - 1);
-        sess->jes_status[sizeof(sess->jes_status) - 1] = '\0';
+        site_copy_upper(sess->jes_status, sizeof(sess->jes_status), val);
         return 0;
     }
 

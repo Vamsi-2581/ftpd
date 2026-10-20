@@ -133,6 +133,26 @@ A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the
 session. `BLOCKS` counts the space in units of the current `BLKSIZE`.
 
+The verb, the keywords and their values are case-insensitive: `SITE`, `site`
+and `Site` are one command, as are `LRECL=80` and `lrecl=80`, `RECFM=FB` and
+`recfm=fb`, `FILETYPE=JES` and `filetype=jes`. FTPD upper-cases all of them
+(JES job names, owners and statuses included) before it acts on them.
+
+The BSD `ftp` client and tnftp (the `ftp` of many Linux, BSD and macOS systems)
+implement `site` as a command of their own, which sends `SITE <arguments>` to
+the server. They do not know `SITE` or `Site`: the client answers
+`?Invalid command.` without contacting FTPD. Type `site` in lower case, or use
+`quote`, which sends the line to the server unchanged, in any spelling:
+
+```
+ftp> site lrecl=80
+200 SITE command was accepted
+ftp> quote SITE RECFM=FB
+200 SITE command was accepted
+ftp> quote Site FILETYPE=JES
+200 SITE command was accepted
+```
+
 Allocation parameters are sticky for the session and apply to a dataset FTPD
 has to create; their starting values come from `DEFPRIMARY`, `DEFSECONDARY`
 and `DEFSPACETYPE` in `FTPDPRM`.

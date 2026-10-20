@@ -93,6 +93,14 @@ parm = "IBMUSER.FTPD.TPRM"
 sources = ["test/tstprm.c", "src/ftpd#cfg.c", "src/ftpd#log.c",
            "src/ftpd#adr.c"]
 
+# ftpd_site_dispatch() -- SITE keywords and keyword values in any spelling
+# (#189).  MVS-only: ftpd#sit.c includes ftpd.h and so the libc370 MVS
+# headers.  The test replaces the two reply functions and the volume check,
+# so it needs no socket, no UCB scan and no log anchor.
+[test.TSTSIT]
+host = false
+sources = ["test/tstsit.c", "src/ftpd#sit.c"]
+
 # ── Dependencies ─────────────────────────────────────────
 # Only ufsd is a declared dependency: libufs.h / libufs.a are ufsd-specific.
 # The C runtime -- sockets, threads, JES2, RACF, dynalloc -- is libc370, the

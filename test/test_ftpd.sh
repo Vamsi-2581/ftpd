@@ -18,6 +18,7 @@
 #   8.  Failed member STOR into a full PDS: 552, directory untouched
 #   9.  APPE: appends to a sequential data set, creates what is missing,
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
+#   10. SITE in any spelling: verb, keywords and values (quote form)
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1363,6 +1364,67 @@ fi
 ftp_run "delete '$DSN_APP'
 delete '$DSN_APPN'
 rmdir '$DSN_APPP'" "$TMPDIR/ftp_app_post.log"
+
+# ============================================================
+# TEST 10: SITE in any spelling (#189, RFC 959 5.3)
+#
+# The server upper-cases the verb, the keywords and their values, so
+# SITE, site and Site are one command.  BSD ftp/tnftp implement `site`
+# themselves and refuse `SITE` and `Site` without asking the server, so
+# every spelling is sent through `quote`, which passes the line unchanged.
+# The per-keyword comparison is test/tstsit.c; this section covers the
+# verb and one value that decides what the server does (JESOWNER, read back
+# from the 550 that DELE of a job that is not there answers; it needs no data
+# connection).
+# ============================================================
+section "Test 10: SITE in any spelling"
+
+LUSER=$(echo "$USER" | tr '[:upper:]' '[:lower:]')
+
+info "quote SITE / site / Site with upper, lower and mixed case keywords"
+FTP_OUT="$TMPDIR/ftp_site_case.log"
+ftp_run "$(cat <<CMDS
+quote SITE LRECL=80
+quote site LRECL=80
+quote Site Lrecl=80
+quote SITE RECFM=FB
+quote site recfm=fb
+quote SITE FILETYPE=JES
+quote site filetype=seq
+quote SITE JESSTATUS=ALL
+quote site jesstatus=all
+quote sItE TRACKS
+quote SITE
+CMDS
+)" "$FTP_OUT"
+SITE_OK=$(grep -c "^200 SITE command was accepted" "$FTP_OUT")
+if [ "$SITE_OK" -eq 10 ] && grep -q "^202 SITE not necessary" "$FTP_OUT" \
+   && ! grep -q "^500\|Unrecognized" "$FTP_OUT"; then
+    pass "SITE, site, Site and sItE with any keyword spelling: 10 x 200, bare SITE 202"
+else
+    fail "SITE spellings: $SITE_OK of 10 answered 200"
+    tail -14 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+info "JESOWNER in upper and lower case"
+FTP_OUT="$TMPDIR/ftp_site_owner.log"
+ftp_run "$(cat <<CMDS
+quote SITE FILETYPE=JES
+quote SITE JESOWNER=$HLQ
+quote DELE JOB99999
+quote site jesowner=$LUSER
+quote DELE JOB99999
+quote SITE FILETYPE=SEQ
+CMDS
+)" "$FTP_OUT"
+OWN_UP=$(grep -c "^550 .*JESOWNER=$HLQ\$" "$FTP_OUT")
+OWN_ANY=$(grep -c "^550 Jobid JOB99999 not found for JESJOBNAME=" "$FTP_OUT")
+if [ "$OWN_ANY" -eq 2 ] && [ "$OWN_UP" -eq 2 ]; then
+    pass "jesowner=$LUSER filters the same owner as JESOWNER=$HLQ"
+else
+    fail "JESOWNER spelling: $OWN_UP of $OWN_ANY JES replies named JESOWNER=$HLQ"
+    grep "^550" "$FTP_OUT" | sed 's/^/    /'
+fi
 
 # ============================================================
 # Summary

@@ -188,6 +188,20 @@ same(const char *canon, const char *variant)
 /* The token is refused: "Unrecognized parameter" naming it, and nothing
 ** changed -- the state is the one a SITE that did nothing leaves. */
 static void
+retpd_bad(const char *value, const char *msg)
+{
+    state_t st;
+    int code;
+    char text[256];
+    char arg[64];
+
+    snprintf(arg, sizeof(arg), "RETPD=5 RETPD=%s", value);
+    run(arg, &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
+          msg);
+}
+
+static void
 refused(const char *arg)
 {
     state_t before;
@@ -363,18 +377,10 @@ main(void)
     run("RETPD=9999", &st, &code, text, sizeof(text));
     CHECK(st.alloc.retpd == 9999 && strstr(text, "|") == NULL,
           "RETPD=9999 is the top of the range");
-    run("RETPD=5 RETPD=10000", &st, &code, text, sizeof(text));
-    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
-          "RETPD=10000 is refused with a warning, 5 stays");
-    run("RETPD=5 RETPD=abc", &st, &code, text, sizeof(text));
-    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
-          "RETPD=abc is refused, 5 stays");
-    run("RETPD=5 RETPD=-1", &st, &code, text, sizeof(text));
-    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
-          "RETPD=-1 is refused, 5 stays");
-    run("RETPD=5 RETPD=99999999999999", &st, &code, text, sizeof(text));
-    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
-          "an absurd RETPD is refused, 5 stays");
+    retpd_bad("10000", "RETPD=10000 is refused with a warning, 5 stays");
+    retpd_bad("abc", "RETPD=abc is refused, 5 stays");
+    retpd_bad("-1", "RETPD=-1 is refused, 5 stays");
+    retpd_bad("99999999999999", "an absurd RETPD is refused, 5 stays");
     run("RETPD=5 RETPD", &st, &code, text, sizeof(text));
     CHECK(st.alloc.retpd == 0, "a bare RETPD goes back to no retention");
 

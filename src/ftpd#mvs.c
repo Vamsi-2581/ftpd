@@ -1937,7 +1937,6 @@ alloc_old_retained(const char *dsn, int retpd, char *ddout)
     s99_tu_t tu[5];
     void *tu_list[5];
     char old = 0x01;            /* DISP=OLD */
-    int i;
     int err;
 
     memset(&rb, 0, sizeof(rb));
@@ -1949,7 +1948,7 @@ alloc_old_retained(const char *dsn, int retpd, char *ddout)
     tu_put_num(&tu[3], 0x0023, 2, retpd);                     /* DALRETPD */
     tu_put(&tu[4], 0x000D, 0, 0, NULL);       /* DALRLSE: STOR guessed the size */
 
-    for (i = 0; i < 5; i++)
+    for (int i = 0; i < 5; i++)
         tu_list[i] = &tu[i];
     tu_list[4] = (void *)((unsigned long)&tu[4] | 0x80000000);
 

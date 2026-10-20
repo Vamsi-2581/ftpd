@@ -12,6 +12,7 @@
 #include "ftpd#aut.h"
 #include "ftpd#dat.h"
 #include "ftpd#dsn.h"
+#include "ftpd#lse.h"
 #include "ftpd#mvs.h"
 #include "ftpd#xlt.h"
 #include <mvs/dynalloc.h>
@@ -912,6 +913,7 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
         int i;
         int count;
         int list_errno;
+        int recfm_errno;
 
         /* Uppercase member filter */
         char filter_buf[9];
@@ -946,7 +948,7 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
         pds = __listpd(prefix, filter);
         list_errno = errno;
         ftpd_acee_leave(sess);
-        if (!pds && list_errno == ENOMEM) {
+        if (ftpd_list_nomem(pds, list_errno)) {
             ftpd_log(LOG_ERROR, "LIST: out of storage reading the "
                      "directory of %s", prefix);
             ftpd_session_reply(sess, FTP_451,
@@ -969,8 +971,23 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
         ** find a single exact dataset), fall back to DSCB lookup.
         */
         recfm[0] = '\0';
-        /* No identity window -- see the other __listds() below for why. */
+        /* No identity window -- see the other __listds() below for why.
+        **
+        ** NULL here also means "ran out of storage" (errno ENOMEM, #118),
+        ** and that must not fall through to the DSCB lookup and a normal
+        ** listing: the shortage is the answer.  errno is cleared first and
+        ** copied at once, as for __listpd() above. */
+        errno = 0;
         dsl = __listds(prefix, "NONVSAM VOLUME", NULL);
+        recfm_errno = errno;
+        if (ftpd_list_nomem(dsl, recfm_errno)) {
+            ftpd_log(LOG_ERROR, "LIST: out of storage looking up the "
+                     "RECFM of %s", prefix);
+            __freepd(&pds);
+            ftpd_session_reply(sess, FTP_451,
+                               "Insufficient storage to list %s.", prefix);
+            return 0;
+        }
         if (dsl && dsl[0])
             strncpy(recfm, dsl[0]->recfm, sizeof(recfm) - 1);
         if (dsl)
@@ -1026,6 +1043,7 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
         int has_filter;
         int has_wildcard;
         int i;
+        int list_errno;
 
         /* Determine if we need to filter results.
         ** "ls *" was normalized to no-arg above (prefix == cwd).
@@ -1066,7 +1084,22 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
         ** wide ENQ per LIST and changes nothing.  #123's RAKF refusal named
         ** for the started task does not come from here -- ruled out, along
         ** with __locate(), by the same run. */
+        errno = 0;
         dsl = __listds(cwd_notrail, "NONVSAM VOLUME", NULL);
+        list_errno = errno;
+
+        /* NULL with ENOMEM is a storage shortage, not an empty level
+        ** (#118): answer it before the __locate() second opinion below
+        ** turns it into an empty listing and 226.  errno is cleared above
+        ** so a stale ENOMEM cannot misreport an empty level. */
+        if (ftpd_list_nomem(dsl, list_errno)) {
+            ftpd_log(LOG_ERROR, "LIST: out of storage listing %s",
+                     cwd_notrail);
+            ftpd_session_reply(sess, FTP_451,
+                               "Insufficient storage to list %s.",
+                               cwd_notrail);
+            return 0;
+        }
 
         /* __listds() returns NULL both for "prefix not cataloged" and
         ** "prefix exists but has no children".  Use __locate() to tell

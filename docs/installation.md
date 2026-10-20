@@ -692,10 +692,13 @@ A healthy start ends in `FTPD001I … READY`:
 FTPD000I FTPD <version> (A3F2C91) STARTING
 FTPD005I LIBC370 2.10.3 (A790DC4)
 FTPD008I AUTHORIZED BY LIBRARY (MODULE KEY 0)
-FTPD004I STC RUNS AS FTPD/USER
+FTPD004I STC RUNS AS <user>/<group>
 FTPD054I LISTENING ON 0.0.0.0 PORT 2121
 FTPD001I FTPD <version> READY
 ```
+
+`FTPD004I` names the identity RAKF gave the started task: the one you mapped
+the name `FTPD` to, or `STC`/`STCGROUP` where RAKF has no mapping (step 8).
 
 The two build stamps identify exactly what is running: `FTPD000I` gives the
 version and the commit it was built from, `FTPD005I` the libc370 it was linked

@@ -258,7 +258,7 @@ FTPD no longer replaces the identity it starts with. At startup it reports the
 one it has:
 
 ```
-FTPD004I STC RUNS AS FTPD/USER
+FTPD004I STC RUNS AS <user>/<group>
 ```
 
 On a RAKF that maps the STC name to a low-privilege identity, that is the

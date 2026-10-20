@@ -10,7 +10,8 @@ one is the RAKF User's Guide that ships with RAKF itself.
 
 ## Which RAKF this assumes
 
-**RAKF 1.2.x**, which is what TK4-, TK5 and MVS/CE ship. There is **no
+**RAKF 1.2.x**, which is what TK4- and TK5 ship; the current MVS/CE image
+ships **RAKF 2.0.0** (`S RAKF` reports `RAKF V2R0M0`). There is **no
 administration tooling** at that level: the tables are plain text members you
 edit by hand and then reload. Where RAKF 2.0.0 changes something, this guide
 says so in a box.
@@ -96,7 +97,7 @@ A rejected one echoes the offending card and terminates:
 
 ```
 RAKFUIDS2  INPUT DATA INVALID OR OUT OF SEQ.
-FTPD     FTPD     ******** N                                            00000706
+JSMITH   USER     ******** N                                            00000706
 RAKFUIDSX  ** PROGRAM TERMINATED **
 ```
 

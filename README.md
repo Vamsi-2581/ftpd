@@ -73,7 +73,7 @@ copy samplib/ftpdpm00 to SYS2.PARMLIB
 ```
 
 ### RAKF Setup
-1. Add user `FTPD` in group `USER` to `SYS1.SECURE.CNTL(USERS)`
+1. Map the started task name `FTPD` to a low-privilege identity (Operations `N`) where your RAKF supports it; FTPD no longer needs a user of its own
 2. Add `FTPAUTH` profile to `SYS1.SECURE.CNTL(PROFILES)`
 3. Recycle RAKF: `/S RAKF`
 4. See [docs/FTPD_RAKF_SETUP.md](docs/FTPD_RAKF_SETUP.md) for details

@@ -222,7 +222,7 @@ task procedure and APF entry, and reads the same `FTPDPRM0`.
    FTPD005I LIBC370 2.10.3 (A790DC4)
    ```
 
-   `LIBC370 V1.0.6` on the second line means the started task still runs 1.1.0.
+   `LIBC370 1.0.6` on the second line means the started task still runs 1.1.0.
    Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380 COPY
    SUCCESSFUL` — not the condition codes.
 
@@ -297,13 +297,31 @@ now.
 
 ### The procedure
 
+The order matters: the old libraries are scratched **last**, after the banner
+has told you the new release is what runs. Until then the old library is your
+way back.
+
 1. **Stop FTPD** (`/P FTPD`).
 2. **Run the 1.1.0 allocation job** (step 4 below), then the **install job**
    (step 6). No `UCLIN`, nothing to remove first.
-3. **Scratch the old libraries.** Their names carry the patch level of whatever
-   you installed, so look them up rather than assuming: ISPF 3.4 on `FTPD.*`,
-   or `LISTCAT LEVEL(FTPD)`. Expect three — `FTPD.V1R0M?.LINKLIB`,
-   `.AFTPDLOD`, `.SAMPLIB`:
+3. **Repoint the started task procedure.** The `STEPLIB` you copied at the last
+   install names `FTPD.V1R0M?.LINKLIB`. **This is the step that decides whether
+   you are running 1.1.0 at all.** While the old library still exists it still
+   holds a working module: FTPD starts, serves, and logs no error — it is
+   simply the old one. Change it to `FTPD.LINKLIB`.
+4. **Replace the APF entry** if you use one: it names the old library, and the
+   new library needs an entry of its own. Edit the old `IEAAPF00` line into
+   the new one rather than adding a second line, so no entry for a library that
+   is about to be scratched stays behind. The list is read at IPL only, so the
+   entry takes effect at the next IPL; until then FTPD authorises through SVC
+   244 (RAKF) as before. See *Authorisation* above — this is the last time it
+   will need changing, because the new name no longer carries a version.
+5. **Start FTPD and check the banner** as described under *Verifying* below. It
+   must say 1.1.0. If it does not, stop here: the old libraries are untouched.
+6. **Scratch the old libraries**, and only now. Their names carry the patch
+   level of whatever you installed, so look them up rather than assuming: ISPF
+   3.4 on `FTPD.*`, or `LISTCAT LEVEL(FTPD)`. Expect three —
+   `FTPD.V1R0M?.LINKLIB`, `.AFTPDLOD`, `.SAMPLIB`:
 
    ```
      DELETE FTPD.V1R0M2.LINKLIB  NONVSAM SCRATCH PURGE
@@ -312,15 +330,7 @@ now.
    ```
 
    They are invisible to SMP now — it has moved on to the new names — so
-   nothing will ever report them again.
-4. **Repoint the started task procedure.** The `STEPLIB` you copied at the last
-   install names `FTPD.V1R0M?.LINKLIB`. **This is the step that decides whether
-   you are running 1.1.0 at all.** If you skipped step 3, that library still
-   exists and still holds a working module: FTPD starts, serves, and logs no
-   error — it is simply the old one. Change it to `FTPD.LINKLIB`.
-5. **Update the APF entry** if you use one: it names the old library. See
-   *Authorisation* above — this is the last time it will need changing, because
-   the new name no longer carries a version.
+   nothing will ever report them again, and nothing but you will remove them.
 
 ### Verifying, since the job log will not tell you
 
@@ -328,12 +338,12 @@ now.
 
 ```
 FTPD000I FTPD 1.1.0 (XXXXXXX) STARTING
-FTPD005I LIBC370 V1.0.6 (XXXXXXX)
+FTPD005I LIBC370 1.0.6 (XXXXXXX)
 ```
 
 `LIBC370 1.0.4` on that second line means the started task is still loading the
-1.0.2 module — step 4 did not take, or step 3 was skipped and the `STEPLIB`
-still points at the old library.
+1.0.2 module — step 3 did not take and the `STEPLIB` still points at the old
+library. Fix that before you scratch anything.
 
 And before that, check the new library really holds the module:
 
@@ -402,8 +412,9 @@ ftp -P 2121 your-mvs-host
 > quit
 ```
 
-(A `quote site …` is accepted but its parameters are ignored — you do not need
-it.)
+(You can also set the attributes per upload with `quote site recfm=fb lrecl=80
+blksize=3120` — FTPD honours them. You do not need it: without it a new
+sequential data set already gets FB/80/3120 from the server defaults.)
 
 ### b) mvsMF (z/OSMF-compatible REST API), via zowe
 
@@ -480,7 +491,24 @@ with what you uploaded in step 3:
   RECEIVE INDSN('CHANGE.ME.SAMPLIB') -       <- IBMUSER.FTPD.SAMP.XMIT
 ```
 
-Those are the only lines you have to change. Submit it.
+Those are the only lines you have to change on most systems. Submit it.
+
+**On MVS/CE, name the volume.** TSO RECEIVE allocates `FTPD.FTPDLOAD` and
+`FTPD.SAMPLIB` itself and lets the system pick the volume. Put the two data
+sets on the public pack explicitly by adding `VOLUME('PUB000')` to each
+`DATASET(...)` operand:
+
+```
+  RECEIVE INDSN('IBMUSER.FTPD.LOAD.XMIT') -
+    DATASET('FTPD.FTPDLOAD') VOLUME('PUB000')
+  RECEIVE INDSN('IBMUSER.FTPD.SAMP.XMIT') -
+    DATASET('FTPD.SAMPLIB') VOLUME('PUB000')
+```
+
+On a stock MVS/CE image the job also ends `RC 0` without it and the data sets
+land on `PUB000` anyway; the operand only removes the dependence on that
+default. `FTPD.SAMPLIB` is the one you keep, so check it with ISPF 3.4 after
+the job and read the volume from the listing.
 
 The job runs eight steps, each conditional on the one before, so it stops at
 the first failure rather than building on it:
@@ -540,7 +568,7 @@ Copy from `FTPD.SAMPLIB`:
 
 | Member | Copy to | Adjust |
 |--------|---------|--------|
-| `FTPD` | a PROCLIB in the started-task concatenation | **yes — the JES DDs, see below**. `STEPLIB` already names this release's LINKLIB |
+| `FTPD` | a PROCLIB in the started-task concatenation | no — `STEPLIB` already names this release's LINKLIB, and JES mode needs no DDs (see below) |
 | `FTPDPRM0` | a PARMLIB | **yes — see below** |
 
 `SYS2.PROCLIB` is the usual home for the procedure.
@@ -559,24 +587,34 @@ On MVS/CE, `SYS2.PARMLIB` exists and the default is fine. `M=` selects the
 member (default `FTPDPRM0`), so a second configuration can live alongside the
 first.
 
-### The JES DDs — these carry development-system values
+### JES mode needs no DDs
 
-`SITE FILETYPE=JES` (job submission and spool retrieval) needs **both** the JES2
-checkpoint and the spool dataset, and the shipped procedure names them with the
-unit and volume of the system it was built on:
+`SITE FILETYPE=JES` (job submission and spool retrieval) reads the JES2
+checkpoint and the spool. Since 1.3.0 FTPD finds both itself: the checkpoint
+through the catalog (or, if it is not cataloged, by looking at the online
+volumes), the spool from the volume the checkpoint names. The shipped
+procedure therefore has **no `HASPCKPT`/`HASPACE1` DDs**, and nothing here has
+to be edited for a standard JES2.
+
+Names come from JES2's `DSNPRFX`, `SYS1` unless your site changed it
+(`SYS1.HASPCKPT`, `SYS1.HASPACE`). Add the two DDs to the procedure only when
+
+- your JES2 uses another prefix, or
+- the checkpoint is neither cataloged nor on an online volume.
 
 ```
-//HASPCKPT DD  DISP=SHR,DSN=SYS1.HASPCKPT,UNIT=3350,VOL=SER=MVS000
-//HASPACE1 DD  DISP=SHR,DSN=SYS1.HASPACE,UNIT=3350,VOL=SER=SPOOL1
+//HASPCKPT DD  DISP=SHR,DSN=SYS1.HASPCKPT,UNIT=unit,VOL=SER=volser
+//HASPACE1 DD  DISP=SHR,DSN=SYS1.HASPACE,UNIT=unit,VOL=SER=volser
 ```
 
-Change `UNIT` and `VOL=SER` to the volumes your JES2 checkpoint and spool
-datasets actually live on. Both DDs are required: with `HASPACE1` missing every
-JES command answers `451` and the started task log shows
-`IEC130I HASPACE1 DD STATEMENT MISSING`.
-
-If you do not want the JES interface at all, delete both DDs — the rest of FTPD
-is unaffected.
+Each DD overrides the lookup for its own data set (`HASPCKPT` the checkpoint,
+`HASPACE1` the spool), so you add only the one that needs it. Use the unit and
+volume of **your** system, with `DSN` as JES2 names the data set. Procedures
+from earlier releases carry both DDs with development-system values
+(`UNIT=3350`, `VOL=SER=MVS000` / `SPOOL1`); on any other system delete them or
+correct them. A DD with the wrong `DSN` or volume makes the JES commands fail
+with `451`; a DD that merely omits `UNIT`/`VOL` works when the data set is
+cataloged.
 
 ### Editing FTPDPRM0
 
@@ -656,7 +694,7 @@ Without this, FTPD starts and refuses every login. The short version:
    FTPAUTH  FACILITY  UACC(NONE)  ID(USER READ)
    ```
 
-3. Reload: `/F RAKF,RELOAD`
+3. Reload: `S RAKF` (RAKF reads its tables again when the started task runs).
 
 **One security invariant:** the identity of the started task must stay
 least-privilege — no broad `ID(FTPD) ACCESS(ALTER)` dataset profiles. Per-user
@@ -743,7 +781,7 @@ Three namespaces, selected per session:
   z/OS-compatible `SITE` keywords for `RECFM`, `LRECL`, `BLKSIZE`, `SPACE`,
   `UNIT` and `VOLUME`.
 - **JES** — `quote site filetype=jes`; submit a job, list your jobs, retrieve
-  spool output. Needs the two DDs from step 7.
+  spool output. Needs nothing in the procedure: see *JES mode needs no DDs* in step 7.
 - **UFS** — the UFSD filesystem, reached by `cd` to a UFS path. Needs the UFSD
   started task to be *running*, not just installed; without it those commands
   answer `550 UFS service not available`.
@@ -793,7 +831,7 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | `530 Login incorrect` for a valid user | RAKF user or password wrong — step 8 |
 | `530 Not authorized for FTP access` | The `FTPAUTH` FACILITY profile denies this user — step 8 |
 | `550 Access denied to <dsn>` | A RAKF `DATASET` profile denies it, checked under the client's identity |
-| `451` on every JES command | `HASPCKPT`/`HASPACE1` missing or wrong in the procedure — step 7 |
+| `451` on every JES command | A `HASPCKPT`/`HASPACE1` DD in the procedure names the wrong data set or volume — delete it or correct it, step 7 |
 | `451 Read error on data set` / `451 Write error on data set` after a partial transfer | An uncorrectable I/O error on the data set itself. The transfer is incomplete and reported as such rather than as a success — the byte count in the reply says how far it got |
 | `552 ... out of space on the data set` on an upload | The data set could not grow: the space it was allocated is used up. `552` is permanent on purpose — retrying the same upload into the same allocation cannot succeed. Give the transfer more space *before* the next attempt: raise `DEFPRIMARY`/`DEFSECONDARY`/`DEFSPACETYPE` in `FTPDPRM`, or have the client send `SITE CYLINDERS PRIMARY=10 SECONDARY=10`. If FTPD created the data set for this upload it scratches it again, so the retry starts from a clean allocation. |
 | `550 UFS service not available` | The UFSD started task is not running (installed is not enough) |

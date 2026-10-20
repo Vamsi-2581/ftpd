@@ -64,9 +64,12 @@ parse_kv(const char *arg, char *key, int keysz, char *val, int valsz)
 /* --------------------------------------------------------------------
 ** SITE keywords and their minimum abbreviations.
 **
-** min is the length of the capitalised part of the keyword in the z/OS
-** Communications Server IP User's Guide and Commands (SITE subcommand):
-** PRImary, SECondary, TRacks, CYlinders, RECfm, LRecl, BLKsize, Directory.
+** min is the shortest accepted abbreviation.  PRI, SEC, TR, CY, RECF, LREC,
+** BLK and DIR are the forms z/OS scripts are known to send (#130); the other
+** lengths are the shortest ones that are unique among the keywords FTPD has
+** (DIRECTORY and UNIT are held to 3 so that a single letter stays free for
+** keywords z/OS has and FTPD does not yet), and have not been checked
+** against the z/OS manual.
 ** A token matches a keyword when it is a prefix of it at least min long, so
 ** "PRI", "PRIM" and "PRIMARY" are one keyword while "PR" is none.  An exact
 ** name always wins, which is what keeps BLOCKS apart from BLOCKSIZE.
@@ -89,7 +92,7 @@ static const site_keyword_t site_keywords[] = {
     { "BLOCKS",          2 },
     { "CYLINDERS",       2 },
     { "DATACLASS",       5 },
-    { "DIRECTORY",       1 },
+    { "DIRECTORY",       3 },
     { "FILETYPE",        4 },
     { "JESJOBNAME",      7 },
     { "JESOWNER",        4 },
@@ -106,7 +109,7 @@ static const site_keyword_t site_keywords[] = {
     { "TRACKS",          2 },
     { "TRAILINGBLANKS",  5 },
     { "TRUNCATE",        4 },
-    { "UNIT",            1 },
+    { "UNIT",            3 },
     { "VOLUME",          3 },
     { NULL,              0 }
 };
@@ -116,7 +119,6 @@ static const site_keyword_t site_keywords[] = {
 static const char *
 site_resolve(const char *key)
 {
-    const site_keyword_t *kw;
     const char *hit = NULL;
     int klen = (int)strlen(key);
     int nmatch = 0;
@@ -124,7 +126,7 @@ site_resolve(const char *key)
     if (klen == 0)
         return NULL;
 
-    for (kw = site_keywords; kw->name; kw++) {
+    for (const site_keyword_t *kw = site_keywords; kw->name; kw++) {
         if (strcmp(key, kw->name) == 0)
             return kw->name;
         if (klen >= kw->min && strncmp(key, kw->name, klen) == 0) {
@@ -142,11 +144,10 @@ static int
 site_parse_range(const char *val, int max, int *out)
 {
     long v = 0;
-    int i;
 
     if (val[0] == '\0' || strlen(val) > 9)
         return 0;
-    for (i = 0; val[i]; i++) {
+    for (int i = 0; val[i]; i++) {
         if (val[i] < '0' || val[i] > '9')
             return 0;
         v = v * 10 + (val[i] - '0');

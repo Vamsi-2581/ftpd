@@ -1603,6 +1603,53 @@ space_operand(ftpd_session_t *sess, char *buf, size_t bufsz)
 }
 
 /* --------------------------------------------------------------------
+** SVC 99 request block and text unit, shared by the dynamic allocation
+** helpers below (types only, no module data).
+** ----------------------------------------------------------------- */
+typedef struct s99_rb {
+    char            len;
+    char            verb;
+    char            flag1;
+    char            flag2;
+    short           error;
+    short           info;
+    void            *txtptr;
+    void            *rbx99;
+    unsigned        flag3;
+} s99_rb_t;
+
+typedef struct s99_tu {
+    short           key;
+    short           numparms;
+    short           parm1_len;
+    char            parm1[98];
+} s99_tu_t;
+
+/* Fill one text unit.  A key without a value (DALCYL, DALRLSE) passes
+** nparms 0; one whose value the system returns (DALRTDDN) passes no data. */
+static void
+tu_put(s99_tu_t *tu, int key, int nparms, int len, const void *data)
+{
+    tu->key = (short)key;
+    tu->numparms = (short)nparms;
+    tu->parm1_len = (short)len;
+    if (data && len > 0)
+        memcpy(tu->parm1, data, len);
+}
+
+/* Text unit carrying an unsigned number in 1..3 big-endian bytes. */
+static void
+tu_put_num(s99_tu_t *tu, int key, int nbytes, int value)
+{
+    char b[3];
+
+    b[0] = (char)((value >> 16) & 0xFF);
+    b[1] = (char)((value >> 8) & 0xFF);
+    b[2] = (char)(value & 0xFF);
+    tu_put(tu, key, 1, nbytes, b + (3 - nbytes));
+}
+
+/* --------------------------------------------------------------------
 ** Helper: allocate a NEW dataset via SVC99 using session alloc params.
 ** Returns allocated ddname in ddout (8 chars + null).
 ** Returns 0 on success, -1 on error.
@@ -1615,24 +1662,8 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
     ** Use the __fildef pattern from libc370 but with custom params.
     ** Build SVC99 text units directly (same as @@fildef.c).
     */
-    struct rb99_local {
-        char            len;
-        char            verb;
-        char            flag1;
-        char            flag2;
-        short           error;
-        short           info;
-        void            *txtptr;
-        void            *rbx99;
-        unsigned        flag3;
-    } rb;
-
-    struct tu99_local {
-        short           key;
-        short           numparms;
-        short           parm1_len;
-        char            parm1[98];
-    } tu[16];
+    s99_rb_t rb;
+    s99_tu_t tu[16];
 
     void *tu_list[17];
     int idx = 0;
@@ -1694,8 +1725,6 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
         else if (sess->alloc.recfm[0] == 'U') rf = 0xC0;
         if (strchr(sess->alloc.recfm, 'B')) rf |= 0x10;
         if (strchr(sess->alloc.recfm, 'A')) rf |= 0x04;
-        if (strchr(sess->alloc.recfm, 'M')) rf |= 0x02;
-        if (strchr(sess->alloc.recfm, 'S')) rf |= 0x08;
 
         tu_list[idx] = &tu[idx];
         tu[idx].key = 0x0049;   /* DALRECFM */
@@ -1819,13 +1848,8 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
     /* Retention period.  0 is "none" and sends nothing; the range is the
     ** SITE RETPD one, which fits the two bytes DALRETPD carries. */
     if (sess->alloc.retpd > 0) {
-        int r = sess->alloc.retpd;
         tu_list[idx] = &tu[idx];
-        tu[idx].key = 0x0023;   /* DALRETPD */
-        tu[idx].numparms = 1;
-        tu[idx].parm1_len = 2;
-        tu[idx].parm1[0] = (char)((r >> 8) & 0xFF);
-        tu[idx].parm1[1] = (char)(r & 0xFF);
+        tu_put_num(&tu[idx], 0x0023, 2, sess->alloc.retpd);  /* DALRETPD */
         idx++;
     }
 
@@ -1870,25 +1894,8 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
 static void
 free_ddname(const char *ddname)
 {
-    struct rb99_local {
-        char            len;
-        char            verb;
-        char            flag1;
-        char            flag2;
-        short           error;
-        short           info;
-        void            *txtptr;
-        void            *rbx99;
-        unsigned        flag3;
-    } rb;
-
-    struct tu99_local {
-        short           key;
-        short           numparms;
-        short           parm1_len;
-        char            parm1[8];
-    } tu;
-
+    s99_rb_t rb;
+    s99_tu_t tu;
     void *tu_list[2];
 
     memset(&rb, 0, sizeof(rb));
@@ -1926,58 +1933,24 @@ free_ddname(const char *ddname)
 static int
 alloc_old_retained(const char *dsn, int retpd, char *ddout)
 {
-    struct rb99_local {
-        char            len;
-        char            verb;
-        char            flag1;
-        char            flag2;
-        short           error;
-        short           info;
-        void            *txtptr;
-        void            *rbx99;
-        unsigned        flag3;
-    } rb;
-
-    struct tu99_local {
-        short           key;
-        short           numparms;
-        short           parm1_len;
-        char            parm1[48];
-    } tu[5];
-
+    s99_rb_t rb;
+    s99_tu_t tu[5];
     void *tu_list[5];
+    char old = 0x01;            /* DISP=OLD */
+    int i;
     int err;
 
     memset(&rb, 0, sizeof(rb));
     memset(tu, 0, sizeof(tu));
 
-    tu[0].key = 0x0055;         /* DALRTDDN */
-    tu[0].numparms = 1;
-    tu[0].parm1_len = 8;
+    tu_put(&tu[0], 0x0055, 1, 8, NULL);                       /* DALRTDDN */
+    tu_put(&tu[1], 0x0002, 1, (int)strlen(dsn), dsn);         /* DALDSNAM */
+    tu_put(&tu[2], 0x0004, 1, 1, &old);                       /* DALSTATS */
+    tu_put_num(&tu[3], 0x0023, 2, retpd);                     /* DALRETPD */
+    tu_put(&tu[4], 0x000D, 0, 0, NULL);       /* DALRLSE: STOR guessed the size */
 
-    tu[1].key = 0x0002;         /* DALDSNAM */
-    tu[1].numparms = 1;
-    tu[1].parm1_len = (short)strlen(dsn);
-    strncpy(tu[1].parm1, dsn, sizeof(tu[1].parm1) - 1);
-
-    tu[2].key = 0x0004;         /* DALSTATS */
-    tu[2].numparms = 1;
-    tu[2].parm1_len = 1;
-    tu[2].parm1[0] = 0x01;      /* OLD */
-
-    tu[3].key = 0x0023;         /* DALRETPD */
-    tu[3].numparms = 1;
-    tu[3].parm1_len = 2;
-    tu[3].parm1[0] = (char)((retpd >> 8) & 0xFF);
-    tu[3].parm1[1] = (char)(retpd & 0xFF);
-
-    tu[4].key = 0x000D;         /* DALRLSE: STOR guessed the size */
-    tu[4].numparms = 0;
-
-    tu_list[0] = &tu[0];
-    tu_list[1] = &tu[1];
-    tu_list[2] = &tu[2];
-    tu_list[3] = &tu[3];
+    for (i = 0; i < 5; i++)
+        tu_list[i] = &tu[i];
     tu_list[4] = (void *)((unsigned long)&tu[4] | 0x80000000);
 
     rb.len = 20;
@@ -2029,7 +2002,7 @@ ftpd_mvs_scratch(ftpd_session_t *sess, const char *dsn)
     /* idcams() takes a format string and cmd is not a literal, which is
     ** safe only because the name came through resolve_dsn(): a valid MVS
     ** data set name cannot contain a '%'. */
-    snprintf(cmd, sizeof(cmd), " DELETE '%s' PURGE", dsn);   /* PURGE: SITE RETPD */
+    snprintf(cmd, sizeof(cmd), " DELETE '%s'", dsn);
 
     ftpd_acee_enter(sess);
     rc = idcams(cmd);
@@ -2259,7 +2232,9 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     }
 
     /* fclose() unallocates what it allocated; mark the DD this STOR made
-    ** the same way, so every close below -- and recovery's -- releases it. */
+    ** the same way, so every close below -- and recovery's -- releases it.
+    ** Relies on libc370 2.24.1 internals (FILE flags, __fpfree): re-check
+    ** on a libc370 bump. */
     if (held_dd)
         fp->flags |= _FILE_FLAG_DYNAMIC;
 

@@ -167,7 +167,8 @@ run(const char *arg, state_t *st, int *code, char *text, int textsz)
 static void
 same(const char *canon, const char *variant)
 {
-    state_t a, b;
+    state_t a;
+    state_t b;
     int ca, cb;
     char ta[256], tb[256];
     char msg[160];
@@ -189,7 +190,8 @@ same(const char *canon, const char *variant)
 static void
 refused(const char *arg)
 {
-    state_t before, after;
+    state_t before;
+    state_t after;
     int code;
     char text[256];
     char msg[160];
@@ -296,9 +298,7 @@ main(void)
     same("BLKSIZE=6240", "BLKS=6240");
     same("BLKSIZE=6240", "BLOCKSIZE=6240");
     same("BLKSIZE=6240", "BLOCKSI=6240");
-    same("DIRECTORY=20", "D=20");
     same("DIRECTORY=20", "DIR=20");
-    same("UNIT=3390", "U=3390");
     same("UNIT=3390", "UNI=3390");
     same("VOLUME=PUB001", "VOL=PUB001");
     same("FILETYPE=JES", "FILE=JES");
@@ -347,6 +347,10 @@ main(void)
     refused("DCBDSN=A.B");
     refused("DSNTYPE=LARGE");
     refused("DIRECTORYMODE=X");
+    refused("D=20");
+    refused("DI=20");
+    refused("U=3390");
+    refused("UN=3390");
 
     /* --- RETPD (#130) ------------------------------------------------ */
     run("", &st, &code, text, sizeof(text));

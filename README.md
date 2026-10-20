@@ -137,9 +137,9 @@ units of the current `BLKSIZE`.
 
 Keywords can be abbreviated the way z/OS allows, so scripts written for z/OS
 work unchanged: `PRI=`, `SEC=`, `TR`, `CY`, `REC=`, `LR=`, `BLK=`, `DIR=`,
-`VOL=`, `UNI=`, `RET=` and so on. The shortest accepted form is the one the
-z/OS manual capitalises; anything shorter (`PR=`, `T`) is answered with
-`Unrecognized parameter` and changes nothing.
+`VOL=`, `UNI=`, `RET=` and so on. A form that fits more than one keyword or is
+too short (`PR=`, `T`, `D=`) is answered with `Unrecognized parameter` and
+changes nothing.
 
 The verb, the keywords and their values are case-insensitive: `SITE`, `site`
 and `Site` are one command, as are `LRECL=80` and `lrecl=80`, `RECFM=FB` and

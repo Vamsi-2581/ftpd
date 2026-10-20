@@ -155,7 +155,15 @@ After any change to the tables, `S RAKF`.
 ## 3. FTPAUTH — who may use FTP at all
 
 `FTPAUTH` in the `FACILITY` class is the gate FTPD checks after the password is
-verified. Add to `SYS1.SECURE.CNTL(PROFILES)`:
+verified. It has to exist in `SYS1.SECURE.CNTL(PROFILES)`, and the group of your
+FTP users has to be allowed to read it.
+
+**Look first whether it is already there.** MVS/CE ships `FTPAUTH` in `PROFILES`
+with the universal entry `NONE` and the group `ADMIN` at `READ`. In that case
+add only the line for your group, below the existing ones, and never the
+universal `NONE` line a second time: a duplicate entry makes the table fail its
+sort check, and `S RAKF` ends with `RAKFPROF3 I/P RECORDS OUT OF ORDER` and
+ABEND U0300. If `FTPAUTH` is not there, add both lines, universal first:
 
 ```
          1         2         3         4         5         6
@@ -169,9 +177,11 @@ FACILITYFTPAUTH                                     FTPUSER READ
 ```
 
 The first line denies everyone, the second grants one group. Order matters —
-universal first, as above.
+universal first, as above, and the group lines of one resource in ascending
+group order. Where `FTPAUTH` already exists, the second line is the only one you
+add.
 
-**Define this profile.** It is tempting to skip it, because FTPD lets everyone
+**The profile must exist.** It is tempting to skip it, because FTPD lets everyone
 in when it is absent — but that is not a permissive default, it is RAKF's
 behaviour of granting **ALTER to undefined resources**. Skipping it also means
 the userid of the started task from section 2 can log in over FTP.

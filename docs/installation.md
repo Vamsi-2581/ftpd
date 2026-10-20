@@ -314,8 +314,10 @@ way back.
    the new one rather than adding a second line, so no entry for a library that
    is about to be scratched stays behind. The list is read at IPL only, so the
    entry takes effect at the next IPL; until then FTPD authorises through SVC
-   244 (RAKF) as before. See *Authorisation* above — this is the last time it
-   will need changing, because the new name no longer carries a version.
+   244 (RAKF) as before. The old library name stays APF-authorised until that
+   IPL, so do not reuse it for anything before then. See *Authorisation* above —
+   this is the last time it will need changing, because the new name no longer
+   carries a version.
 5. **Start FTPD and check the banner** as described under *Verifying* below. It
    must say 1.1.0. If it does not, stop here: the old libraries are untouched.
 6. **Scratch the old libraries**, and only now. Their names carry the patch
@@ -479,6 +481,18 @@ block the install. That is no longer true.)
 /P FTPD
 ```
 
+**MVS/CE ships with an FTPD 1.2.0 already running**, put there by the image and
+not installed through SMP. Stop it too: a new FTPD started beside it ends with
+
+```
+FTPD002E FTPD IS ALREADY ACTIVE ON PORT 2121, THIS INSTANCE ENDS
+FTPD091E INITIALIZATION FAILED RC=8
+```
+
+and only starts after `/P FTPD`. Because SMP never saw that 1.2.0, `TFTP120` is
+not in its inventory, so on MVS/CE the `APPLY` ends `COND CODE 0000`, not the
+`0004` described for upgrades in step 6.
+
 ---
 
 ## 6. Install
@@ -530,7 +544,7 @@ The SYSMOD travels inline in the job — there is no third file to upload.
 0000`, and in the SMP output:
 
 ```
-HMA3930    SYSMOD TFTP120 SUCCESSFULLY RECEIVED
+HMA3930    SYSMOD TFTP130 SUCCESSFULLY RECEIVED
 HMA2380    COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB
            - RETURN CODE=00
 HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
@@ -538,9 +552,10 @@ HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
 
 **On an upgrade the `APPLY` ends `COND CODE 0004` instead, and that is
 correct** — `HMA2461` reporting that the deleted level has no backup entry.
-See *One return code that looks wrong and is not* in section 2b. `HMA2270
-APPLY PROCESSING SUCCESSFULLY COMPLETED` is the line that says the `APPLY`
-worked; the return code is not.
+(Not on MVS/CE, where the `APPLY` ends `0000` — see step 5.) See *One return
+code that looks wrong and is not* in section 2b. `HMA2270 APPLY PROCESSING
+SUCCESSFULLY COMPLETED` is the line that says the `APPLY` worked; the return
+code is not.
 
 `HMA2380` is the message that separates a real install from one that copied
 nothing. **If it is not in the job log, nothing was installed** — whatever the
@@ -590,7 +605,7 @@ first.
 ### JES mode needs no DDs
 
 `SITE FILETYPE=JES` (job submission and spool retrieval) reads the JES2
-checkpoint and the spool. Since 1.3.0 FTPD finds both itself: the checkpoint
+checkpoint and the spool. With the libc370 this release is built against, FTPD finds both itself: the checkpoint
 through the catalog (or, if it is not cataloged, by looking at the online
 volumes), the spool from the volume the checkpoint names. The shipped
 procedure therefore has **no `HASPCKPT`/`HASPACE1` DDs**, and nothing here has
@@ -685,14 +700,33 @@ Without this, FTPD starts and refuses every login. The short version:
    runs as `STC`/`STCGROUP`, which has Operations authority. `FTPD004I` at
    startup names the identity you got — see step 9.
 
-2. Optionally define the `FTPAUTH` FACILITY profile, which controls who may use
-   FTP at all. If it is **not** defined, RAKF answers "undefined resource" and
-   every authenticated user is let in — acceptable for development, not for
-   production:
+2. Define the `FTPAUTH` FACILITY profile, which controls who may use FTP at
+   all: make sure it exists in `SYS1.SECURE.CNTL(PROFILES)` and that the group
+   of your FTP users may read it. If it is **not** defined, RAKF answers
+   "undefined resource" with ALTER and every authenticated user is let in.
+
+   **Look first whether `FTPAUTH` is already in PROFILES.** MVS/CE ships it,
+   with the universal entry `NONE` and the group `ADMIN` at `READ`. If it is
+   there, add only the line for your group (`USER` for every ordinary user, or
+   your own group), in ascending group order, below the existing lines:
 
    ```
-   FTPAUTH  FACILITY  UACC(NONE)  ID(USER READ)
+   FACILITYFTPAUTH                                     USER    READ
    ```
+
+   Never add the universal `NONE` line a second time: a duplicate makes the
+   table fail its sort check, `S RAKF` ends with `RAKFPROF3 I/P RECORDS OUT OF
+   ORDER` and ABEND U0300. If the profile is **not** there, add both lines,
+   the universal one first:
+
+   ```
+   FACILITYFTPAUTH                                             NONE
+   FACILITYFTPAUTH                                     USER    READ
+   ```
+
+   The lines are column-positioned (class in columns 1-8, resource from
+   column 9, group in columns 53-60, permission from column 61); section 3 of
+   the RAKF guide has the ruler.
 
 3. Reload: `S RAKF` (RAKF reads its tables again when the started task runs).
 
@@ -725,6 +759,9 @@ patterns, RAKFCL equivalents and the reasoning behind the invariant — is
 /S FTPD,D='SYS1.PARMLIB'     alternate PARMLIB -- TK5, see step 7
 ```
 
+On MVS/CE, stop the FTPD 1.2.0 that comes with the image first (`/P FTPD`,
+step 5); otherwise this start ends in `FTPD002E`/`FTPD091E`.
+
 A healthy start ends in `FTPD001I … READY`:
 
 ```
@@ -732,7 +769,7 @@ FTPD000I FTPD <version> (A3F2C91) STARTING
 FTPD005I LIBC370 2.24.1 (EF09210)
 FTPD008I AUTHORIZED BY LIBRARY (MODULE KEY 0)
 FTPD004I STC RUNS AS <user>/<group>
-FTPD054I LISTENING ON 0.0.0.0 PORT 2121
+FTPD054I LISTENING ON ANY PORT 2121
 FTPD001I FTPD <version> READY
 ```
 

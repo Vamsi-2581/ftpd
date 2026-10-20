@@ -73,8 +73,8 @@ copy samplib/ftpdpm00 to SYS2.PARMLIB
 ```
 
 ### RAKF Setup
-1. Map the started task name `FTPD` to a low-privilege identity (Operations `N`) where your RAKF supports it; FTPD no longer needs a user of its own
-2. Add `FTPAUTH` profile to `SYS1.SECURE.CNTL(PROFILES)`
+1. Map the started task name `FTPD` to a low-privilege identity (Operations `N`) where your RAKF supports it; FTPD no longer needs a user of its own. **Without such a mapping, FTPD runs as `STC`/`STCGROUP` with Operations authority.** That is the normal case on MVS/CE, TK4- and TK5 before Update 6, and it breaks the security invariant: the recovery path can then fail open. Check `FTPD004I STC RUNS AS <user>/<group>` at startup, and read [Why the started task's identity matters](docs/FTPD_RAKF_SETUP.md#5-why-the-started-tasks-identity-matters)
+2. Make sure the `FTPAUTH` profile exists in `SYS1.SECURE.CNTL(PROFILES)` and that your group may read it (without the profile RAKF grants ALTER, so everybody gets in); on MVS/CE it is already there, so check first and add only the group line (details in the RAKF guide, section 3)
 3. Recycle RAKF: `/S RAKF`
 4. See [docs/FTPD_RAKF_SETUP.md](docs/FTPD_RAKF_SETUP.md) for details
 

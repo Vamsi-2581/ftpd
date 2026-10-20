@@ -669,7 +669,8 @@ authority; give it broad authority and the same switch becomes fail-open.
 **Upgrading from 1.2.0 or earlier:** those releases logged on as `FTPD`/`USER`
 at startup, so the started task ran under that identity whatever RAKF assigned.
 FTPD 1.3.0 does not. On a system whose RAKF has no mapping by STC name, such as
-TK5 before its RAKF update, the started task now runs as `STC`/`STCGROUP` again.
+TK5 before Update 6 (which brings the RAKF that maps by STC name), the started
+task now runs as `STC`/`STCGROUP` again, with Operations authority.
 The `FTPD` line in `USERS` is no longer used by FTPD.
 
 The complete reference — dataset access levels per FTP command, per-user HLQ

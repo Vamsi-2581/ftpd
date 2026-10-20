@@ -146,7 +146,8 @@ After any change to the tables, `S RAKF`.
 > `FTPD`/`USER` themselves at startup. FTPD 1.3.0 does not. The `FTPD` user
 > line in `USERS` is no longer used by FTPD; on a RAKF without a mapping by STC
 > name the started task now runs as `STC`/`STCGROUP` again, with Operations
-> authority. Section 5 says what that means.
+> authority. This is the case on TK5 before Update 6, whose RAKF is the one
+> that maps by STC name. Section 5 says what that means.
 
 ---
 

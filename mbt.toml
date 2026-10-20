@@ -28,8 +28,16 @@ kind = "application"
 # libc370 whose CLOSE of a member that failed with an x37 skips the STOW
 # (mvslovers/libc370#524): before it, a STOR into a full PDS emptied the
 # member it was replacing. The IBM macros come from maclib370 since 2.8.0.
+# 2.24.1 with cc370 1.6.1: every libc370 2.x header accepts cc370 >= 1.6.0, < 2,
+# so the cc370 pin stays. 2.24.1 rather than 2.24.0 because from 2.15.0 to
+# 2.24.0 the library created its open-file list and the standard streams on
+# first use in the caller's storage key; an AC(1) module whose first fopen()
+# came inside a key-0 window got them in key-0 storage and abended S0C4 in its
+# own key (mvslovers/libc370#693, fixed in 2.24.1). 2.24.0 is also the first
+# libc370 whose send() passes at most one 256-byte X'75' segment per call
+# (mvslovers/libc370#160), which closes the send side of #137.
 cc370 = "1.6.1"
-libc370 = "2.10.3"
+libc370 = "2.24.1"
 mbt = "3.0"
 
 # ── Load module ──────────────────────────────────────────
@@ -57,6 +65,17 @@ reus = false
 [test.TSTADR]
 sources = ["test/tstadr.c", "src/ftpd#adr.c"]
 
+# ftpd_ufs_rc_to_ftp() -- UFSD return code to FTP reply code (#151).  ftpd#urc.c
+# is free of ftpd.h and of MVS services, so this is DUAL like TSTADR.
+[test.TSTUER]
+sources = ["test/tstuer.c", "src/ftpd#urc.c"]
+
+# ftpd_list_nomem() -- a list builder's NULL with errno ENOMEM is a storage
+# shortage, not an empty result (#118).  ftpd#lse.c is free of project and MVS
+# headers, so this is DUAL like TSTADR.
+[test.TSTLSE]
+sources = ["test/tstlse.c", "src/ftpd#lse.c"]
+
 # ftpd_dsn_valid() -- the data set name character check (#95).  Same shape as
 # TSTADR: ftpd#dsn.c is free of ftpd.h and of MVS services, so this is DUAL.
 [test.TSTDSN]
@@ -81,6 +100,14 @@ host = false
 parm = "IBMUSER.FTPD.TPRM"
 sources = ["test/tstprm.c", "src/ftpd#cfg.c", "src/ftpd#log.c",
            "src/ftpd#adr.c"]
+
+# ftpd_site_dispatch() -- SITE keywords and keyword values in any spelling
+# (#189).  MVS-only: ftpd#sit.c includes ftpd.h and so the libc370 MVS
+# headers.  The test replaces the two reply functions and the volume check,
+# so it needs no socket, no UCB scan and no log anchor.
+[test.TSTSIT]
+host = false
+sources = ["test/tstsit.c", "src/ftpd#sit.c"]
 
 # ── Dependencies ─────────────────────────────────────────
 # Only ufsd is a declared dependency: libufs.h / libufs.a are ufsd-specific.

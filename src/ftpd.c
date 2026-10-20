@@ -30,9 +30,20 @@
 
 /* Forward declarations */
 static int  socket_thread(void *arg1, void *arg2);
-static int  close_stale_port(ftpd_server_t *server, int own, unsigned want);
+static int  close_stale_port(const ftpd_server_t *server, int own,
+                             unsigned want);
+static int  stale_socket_addr(int fd, int port, unsigned want,
+                              unsigned *bound);
 static int  bind_retryable(int err);
-static int  bind_wait(ftpd_server_t *server, int secs);
+static int  bind_wait(const ftpd_server_t *server, int secs);
+static int  try_bind(int sock, struct sockaddr_in *saddr, int *err);
+static int  bind_retry(const ftpd_server_t *server, int sock,
+                       struct sockaddr_in *saddr, int err);
+static int  bind_listener(const ftpd_server_t *server, int sock,
+                          struct sockaddr_in *saddr, unsigned bindaddr);
+static void accept_loop(ftpd_server_t *server, int sock);
+static void wait_for_listener(ftpd_server_t *server);
+static int  socket_thread_gone(const ftpd_server_t *server);
 static int  initialize(ftpd_server_t *server);
 static void terminate(ftpd_server_t *server);
 
@@ -203,33 +214,7 @@ main(int argc, char **argv)
     ** (cthread_create_ex failed) is the same answer arrived at sooner:
     ** nothing will listen.
     */
-    {
-        int w;
-        int cap = (server.config.bind_tries * server.config.bind_wait + 30)
-                  * 10;             /* tenths of a second */
-
-        for (w = 0; w < cap && server.listen_sock < 0; w++) {
-            if (!server.sock_task ||
-                (server.sock_task->termecb & ECB_POSTED_BIT))
-                break;
-
-            /* Drain CIBs here as well, not only in the event loop below.
-            ** A bind retry runs for up to BINDTRIES x BINDWAIT seconds and
-            ** main spends all of it in this loop, so an operator's /P used
-            ** to sit unread on the CIB queue until the retries gave up by
-            ** themselves: measured at 10x10s, /P did nothing and the STC
-            ** ran the full 100 seconds.  Reading them here is what makes
-            ** the FTPD_ACTIVE check in bind_wait() mean anything. */
-            while ((cib = __cibget()) != NULL) {
-                ftpd_process_cib(&server, cib);
-                __cibdel(cib);
-            }
-            if (!(server.flags & FTPD_ACTIVE))
-                break;
-
-            __asm__("STIMER WAIT,BINTVL==F'10'" : : : "0", "1", "14", "15");
-        }
-    }
+    wait_for_listener(&server);
 
     if (server.listen_sock >= 0) {
         ftpd_log_wto("FTPD001I FTPD %s READY", vers);
@@ -307,6 +292,46 @@ main(int argc, char **argv)
     ** code is the only part of a start an automation product can read
     ** without parsing the console. */
     return rc;
+}
+
+/* ====================================================================
+** Wait for the socket thread to listen (see the note in main())
+** ================================================================= */
+
+/* The socket thread will never publish a listener: it was not created,
+** or it has returned. */
+static int
+socket_thread_gone(const ftpd_server_t *server)
+{
+    return !server->sock_task ||
+           (server->sock_task->termecb & ECB_POSTED_BIT);
+}
+
+static void
+wait_for_listener(ftpd_server_t *server)
+{
+    CIB *cib;
+    int cap = (server->config.bind_tries * server->config.bind_wait + 30)
+              * 10;                 /* tenths of a second */
+
+    for (int w = 0; w < cap && server->listen_sock < 0 &&
+                    !socket_thread_gone(server); w++) {
+        /* Drain CIBs here as well, not only in the event loop of main().
+        ** A bind retry runs for up to BINDTRIES x BINDWAIT seconds and
+        ** main spends all of it in this loop, so an operator's /P used
+        ** to sit unread on the CIB queue until the retries gave up by
+        ** themselves: measured at 10x10s, /P did nothing and the STC
+        ** ran the full 100 seconds.  Reading them here is what makes
+        ** the FTPD_ACTIVE check in bind_wait() mean anything. */
+        while ((cib = __cibget()) != NULL) {
+            ftpd_process_cib(server, cib);
+            __cibdel(cib);
+        }
+        if (!(server->flags & FTPD_ACTIVE))
+            break;
+
+        __asm__("STIMER WAIT,BINTVL==F'10'" : : : "0", "1", "14", "15");
+    }
 }
 
 /* ====================================================================
@@ -464,17 +489,37 @@ bind_retryable(int err)
 ** Returns 0 when the wait completed, -1 when shutdown was signalled.
 ** ----------------------------------------------------------------- */
 static int
-bind_wait(ftpd_server_t *server, int secs)
+bind_wait(const ftpd_server_t *server, int secs)
 {
-    int s;
-
-    for (s = 0; s < secs; s++) {
+    for (int s = 0; s < secs; s++) {
         if (!(server->flags & FTPD_ACTIVE))
             return -1;
         __asm__("STIMER WAIT,BINTVL==F'100'" : : : "0", "1", "14", "15");
     }
 
     return (server->flags & FTPD_ACTIVE) ? 0 : -1;
+}
+
+/* Is descriptor `fd` bound to local `port` on an address that could have
+** made a bind() of `want` fail?  Right port, wrong interface: with SRVBIND
+** naming one address, a socket on a different one cannot be what made our
+** bind fail, so it is not ours to close.  On a yes, *bound is the address
+** the socket holds, host byte order. */
+static int
+stale_socket_addr(int fd, int port, unsigned want, unsigned *bound)
+{
+    struct sockaddr_in sin;
+    int salen = sizeof(sin);
+
+    memset(&sin, 0, sizeof(sin));
+    if (getsockname(fd, &sin, &salen) != 0)
+        return 0;
+
+    if (sin.sin_port != htons(port))
+        return 0;
+
+    *bound = ntohl(sin.sin_addr.s_addr);
+    return ftpd_adr_conflicts(*bound, want);
 }
 
 /* --------------------------------------------------------------------
@@ -506,32 +551,14 @@ bind_wait(ftpd_server_t *server, int secs)
 ** Returns the number of sockets closed.
 ** ----------------------------------------------------------------- */
 static int
-close_stale_port(ftpd_server_t *server, int own, unsigned want)
+close_stale_port(const ftpd_server_t *server, int own, unsigned want)
 {
-    struct sockaddr sa;
-    struct sockaddr_in *sin;
     unsigned bound;
-    int salen;
-    int si;
     int closed = 0;
 
-    for (si = 1; si < FD_SETSIZE; si++) {
-        if (si == own)
-            continue;
-
-        salen = sizeof(sa);
-        if (getsockname(si, &sa, &salen) != 0)
-            continue;
-
-        sin = (struct sockaddr_in *)&sa;
-        if (sin->sin_port != htons(server->config.port))
-            continue;
-
-        /* Right port, wrong interface: with SRVBIND naming one address, a
-        ** socket on a different one cannot be what made our bind fail, so
-        ** it is not ours to close. */
-        bound = ntohl(sin->sin_addr.s_addr);
-        if (!ftpd_adr_conflicts(bound, want))
+    for (int si = 1; si < FD_SETSIZE; si++) {
+        if (si == own || !stale_socket_addr(si, server->config.port,
+                                            want, &bound))
             continue;
 
         ftpd_log_wto("FTPD053I CLOSING STALE SOCKET %d ON %u.%u.%u.%u "
@@ -552,138 +579,102 @@ close_stale_port(ftpd_server_t *server, int own, unsigned want)
     return closed;
 }
 
+/* bind() with errno taken at once: the sweep issues getsockname() and
+** closesocket(), and either clobbers it before FTPD051E gets to report it. */
 static int
-socket_thread(void *arg1, void *arg2)
+try_bind(int sock, struct sockaddr_in *saddr, int *err)
 {
-    ftpd_server_t *server = (ftpd_server_t *)arg1;
-    struct sockaddr_in saddr;
-    struct sockaddr_in caddr;
-    int len;
-    int sock;
-    int rc;
-    int err;
-    unsigned bindaddr;
-    ftpd_session_t *sess;
+    int rc = bind(sock, saddr, sizeof(*saddr));
 
-    (void)arg2;
+    *err = (rc < 0) ? errno : 0;
+    return rc;
+}
 
-    /* Create listening socket.
-    ** On failure, log the error via WTO and return — do NOT call
-    ** signal_shutdown.  The main event loop stays running so the
-    ** operator can see the error and /P the server.
-    */
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        ftpd_log_wto("FTPD050E SOCKET() FAILED, ERRNO=%d", errno);
-        return 8;
-    }
+/* The bind failed with `err`: report it, then keep trying while the errno
+** is one worth waiting out.  Returns 0 once bound, 8 when it gave up. */
+static int
+bind_retry(const ftpd_server_t *server, int sock,
+           struct sockaddr_in *saddr, int err)
+{
+    int rc = -1;
+    int tries = 0;
 
-    memset(&saddr, 0, sizeof(saddr));
-    saddr.sin_family = AF_INET;
-    saddr.sin_port = htons(server->config.port);
+    ftpd_log_wto("FTPD051E BIND() FAILED ON %s PORT %d, ERRNO=%d",
+                 server->config.bind_ip, server->config.port, err);
 
-    /* The config parser only stores ANY or a validated address, so this
-    ** cannot normally fail -- and if it ever does, refuse to listen rather
-    ** than fall through to the 0 left by the memset.  Binding every address
-    ** because one could not be read is the opposite of what was asked for
-    ** (issue #76). */
-    if (ftpd_adr_parse(server->config.bind_ip, NULL, &bindaddr)
-            == FTPD_ADR_BAD) {
-        ftpd_log_wto("FTPD055E SRVBIND %s IS NOT AN ADDRESS, NOT LISTENING",
-                     server->config.bind_ip);
-        closesocket(sock);
-        return 8;
-    }
-    saddr.sin_addr.s_addr = htonl(bindaddr);
-
-    /* Bind first.  The stale-socket sweep below is a last resort and only
-    ** runs when the bind actually failed with EADDRINUSE -- it used to run
-    ** unconditionally in front of every bind, where it could close a socket
-    ** that belongs to something alive on that port for no gain at all
-    ** (issue #109).
-    **
-    ** errno is captured immediately after each bind(): the sweep issues
-    ** getsockname() and closesocket(), and either clobbers it before
-    ** FTPD051E below gets to report it.
-    */
-    rc  = bind(sock, &saddr, sizeof(saddr));
-    err = (rc < 0) ? errno : 0;
-
-    if (rc < 0 && err == EADDRINUSE) {
-        if (close_stale_port(server, sock, bindaddr) > 0) {
-            /* Give the closes a moment to reach the host stack, then retry
-            ** at once -- the 10s wait below is the fallback, not the first
-            ** resort.  A start that recovers here reports no bind failure
-            ** at all: the FTPD053I lines and FTPD054I tell the story, and an
-            ** E-message in front of a successful start only alarms. */
-            __asm__("STIMER WAIT,BINTVL==F'200'" : : : "0", "1", "14", "15");
-            rc  = bind(sock, &saddr, sizeof(saddr));
-            err = (rc < 0) ? errno : 0;
+    while (rc < 0 && bind_retryable(err)
+                  && tries < server->config.bind_tries) {
+        tries++;
+        ftpd_log_wto("FTPD051I RETRYING BIND IN %dS (%d OF %d)",
+                     server->config.bind_wait, tries,
+                     server->config.bind_tries);
+        if (bind_wait(server, server->config.bind_wait) < 0) {
+            ftpd_log_wto("FTPD051I BIND RETRY ABANDONED, "
+                         "FTPD IS STOPPING");
+            return 8;
         }
+        rc = try_bind(sock, saddr, &err);
     }
 
     if (rc < 0) {
-        int tries = 0;
-
-        ftpd_log_wto("FTPD051E BIND() FAILED ON %s PORT %d, ERRNO=%d",
-                     server->config.bind_ip, server->config.port, err);
-
-        while (rc < 0 && bind_retryable(err)
-                      && tries < server->config.bind_tries) {
-            tries++;
-            ftpd_log_wto("FTPD051I RETRYING BIND IN %dS (%d OF %d)",
-                         server->config.bind_wait, tries,
-                         server->config.bind_tries);
-            if (bind_wait(server, server->config.bind_wait) < 0) {
-                ftpd_log_wto("FTPD051I BIND RETRY ABANDONED, "
-                             "FTPD IS STOPPING");
-                closesocket(sock);
-                return 8;
-            }
-            rc  = bind(sock, &saddr, sizeof(saddr));
-            err = (rc < 0) ? errno : 0;
-        }
-
-        if (rc < 0) {
-            /* A non-retryable errno said everything it had to say in the
-            ** FTPD051E above; only a run of retries needs its own verdict. */
-            if (tries)
-                ftpd_log_wto("FTPD051E BIND() STILL FAILING AFTER %d "
-                             "TRIES, ERRNO=%d", tries, err);
-            closesocket(sock);
-            return 8;
-        }
-    }
-
-    if (listen(sock, 10) < 0) {
-        ftpd_log_wto("FTPD052E LISTEN() FAILED, ERRNO=%d", errno);
-        closesocket(sock);
+        /* A non-retryable errno said everything it had to say in the
+        ** FTPD051E above; only a run of retries needs its own verdict. */
+        if (tries)
+            ftpd_log_wto("FTPD051E BIND() STILL FAILING AFTER %d "
+                         "TRIES, ERRNO=%d", tries, err);
         return 8;
     }
 
-    server->listen_sock = sock;
-    /* Name the address, not just the port: ANY and one interface look the
-    ** same from the console otherwise, and that is exactly the difference
-    ** an operator who set SRVBIND wants confirmed (issue #76). */
-    ftpd_log_wto("FTPD054I LISTENING ON %s PORT %d",
-                 server->config.bind_ip, server->config.port);
+    return 0;
+}
 
-    /* Accept loop — non-blocking socket + ecb_timed_wait.
-    **
-    ** DYN75 selectex() does not reliably honour its timeout on a
-    ** listening socket (SVC 75 uses its own internal wait, not MVS
-    ** WAIT).  Closing the fd from another thread also fails to
-    ** interrupt selectex.
-    **
-    ** Instead: set the socket non-blocking, then poll with
-    ** ecb_timed_wait on wakeup_ecb (1 second).  accept() returns
-    ** EWOULDBLOCK when no connection is pending.  cmd_shutdown()
-    ** posts wakeup_ecb which breaks the timed_wait immediately.
-    */
-    {
-        int nb = 1;
-        ioctlsocket(sock, FIONBIO, &nb);
+/* Bind first.  The stale-socket sweep is a last resort and only runs when
+** the bind actually failed with EADDRINUSE -- it used to run
+** unconditionally in front of every bind, where it could close a socket
+** that belongs to something alive on that port for no gain at all
+** (issue #109).  Returns 0 when bound, 8 when not; the caller closes the
+** socket. */
+static int
+bind_listener(const ftpd_server_t *server, int sock,
+              struct sockaddr_in *saddr, unsigned bindaddr)
+{
+    int err;
+    int rc = try_bind(sock, saddr, &err);
+
+    if (rc < 0 && err == EADDRINUSE &&
+        close_stale_port(server, sock, bindaddr) > 0) {
+        /* Give the closes a moment to reach the host stack, then retry
+        ** at once -- the 10s wait below is the fallback, not the first
+        ** resort.  A start that recovers here reports no bind failure
+        ** at all: the FTPD053I lines and FTPD054I tell the story, and an
+        ** E-message in front of a successful start only alarms. */
+        __asm__("STIMER WAIT,BINTVL==F'200'" : : : "0", "1", "14", "15");
+        rc = try_bind(sock, saddr, &err);
     }
+
+    if (rc < 0)
+        return bind_retry(server, sock, saddr, err);
+
+    return 0;
+}
+
+/* Accept loop -- non-blocking socket + ecb_timed_wait.
+**
+** DYN75 selectex() does not reliably honour its timeout on a listening
+** socket (SVC 75 uses its own internal wait, not MVS WAIT).  Closing the
+** fd from another thread also fails to interrupt selectex.
+**
+** Instead: the socket is non-blocking and polled with ecb_timed_wait on
+** wakeup_ecb (1 second).  accept() returns EWOULDBLOCK when no connection
+** is pending.  cmd_shutdown() posts wakeup_ecb which breaks the timed_wait
+** immediately. */
+static void
+accept_loop(ftpd_server_t *server, int sock)
+{
+    struct sockaddr_in caddr;
+    ftpd_session_t *sess;
+    int len;
+    int rc;
 
     while (server->flags & FTPD_ACTIVE) {
         /* Wait 1 second or until wakeup_ecb is posted */
@@ -723,6 +714,71 @@ socket_thread(void *arg1, void *arg2)
 
         cthread_queue_add(server->mgr, sess);
     }
+}
+
+static int
+socket_thread(void *arg1, void *arg2)
+{
+    ftpd_server_t *server = (ftpd_server_t *)arg1;
+    struct sockaddr_in saddr;
+    int sock;
+    unsigned bindaddr;
+
+    (void)arg2;
+
+    /* Create listening socket.
+    ** On failure, log the error via WTO and return — do NOT call
+    ** signal_shutdown.  The main event loop stays running so the
+    ** operator can see the error and /P the server.
+    */
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        ftpd_log_wto("FTPD050E SOCKET() FAILED, ERRNO=%d", errno);
+        return 8;
+    }
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(server->config.port);
+
+    /* The config parser only stores ANY or a validated address, so this
+    ** cannot normally fail -- and if it ever does, refuse to listen rather
+    ** than fall through to the 0 left by the memset.  Binding every address
+    ** because one could not be read is the opposite of what was asked for
+    ** (issue #76). */
+    if (ftpd_adr_parse(server->config.bind_ip, NULL, &bindaddr)
+            == FTPD_ADR_BAD) {
+        ftpd_log_wto("FTPD055E SRVBIND %s IS NOT AN ADDRESS, NOT LISTENING",
+                     server->config.bind_ip);
+        closesocket(sock);
+        return 8;
+    }
+    saddr.sin_addr.s_addr = htonl(bindaddr);
+
+    if (bind_listener(server, sock, &saddr, bindaddr) != 0) {
+        closesocket(sock);
+        return 8;
+    }
+
+    if (listen(sock, 10) < 0) {
+        ftpd_log_wto("FTPD052E LISTEN() FAILED, ERRNO=%d", errno);
+        closesocket(sock);
+        return 8;
+    }
+
+    server->listen_sock = sock;
+    /* Name the address, not just the port: ANY and one interface look the
+    ** same from the console otherwise, and that is exactly the difference
+    ** an operator who set SRVBIND wants confirmed (issue #76). */
+    ftpd_log_wto("FTPD054I LISTENING ON %s PORT %d",
+                 server->config.bind_ip, server->config.port);
+
+    {
+        int nb = 1;
+        ioctlsocket(sock, FIONBIO, &nb);
+    }
+
+    accept_loop(server, sock);
 
     closesocket(sock);
     server->listen_sock = -1;

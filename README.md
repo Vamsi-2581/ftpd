@@ -99,7 +99,7 @@ ftp mvshost 2121
 | LIST/NLST | Directory listing (z/OS MVS format / Unix format) |
 | RETR | Download dataset, PDS member, or UFS file |
 | STOR | Upload (auto-allocates new datasets) |
-| APPE | Append to dataset |
+| APPE | Append to a sequential dataset (creates what is missing); an existing PDS member is refused with 550, UFS answers 502 |
 | DELE | Delete dataset, PDS member, or UFS file |
 | MKD/RMD | Create/remove PDS or UFS directory |
 | RNFR/RNTO | Rename dataset or UFS file |
@@ -132,6 +132,26 @@ ftp mvshost 2121
 A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the
 session. `BLOCKS` counts the space in units of the current `BLKSIZE`.
+
+The verb, the keywords and their values are case-insensitive: `SITE`, `site`
+and `Site` are one command, as are `LRECL=80` and `lrecl=80`, `RECFM=FB` and
+`recfm=fb`, `FILETYPE=JES` and `filetype=jes`. FTPD upper-cases all of them
+(JES job names, owners and statuses included) before it acts on them.
+
+The BSD `ftp` client and tnftp (the `ftp` of many Linux, BSD and macOS systems)
+implement `site` as a command of their own, which sends `SITE <arguments>` to
+the server. They do not know `SITE` or `Site`: the client answers
+`?Invalid command.` without contacting FTPD. Type `site` in lower case, or use
+`quote`, which sends the line to the server unchanged, in any spelling:
+
+```
+ftp> site lrecl=80
+200 SITE command was accepted
+ftp> quote SITE RECFM=FB
+200 SITE command was accepted
+ftp> quote Site FILETYPE=JES
+200 SITE command was accepted
+```
 
 Allocation parameters are sticky for the session and apply to a dataset FTPD
 has to create; their starting values come from `DEFPRIMARY`, `DEFSECONDARY`

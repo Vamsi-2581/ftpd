@@ -29,16 +29,6 @@ struct libufs_ufs *ftpd_ufs_get(ftpd_session_t *sess)      asm("FTPUFGET");
 void ftpd_ufs_free(ftpd_session_t *sess)                   asm("FTPUFFRE");
 
 /*
-** Map UFSD return code to FTP reply code.
-*/
-int ftpd_ufs_rc_to_ftp(int ufsd_rc)                        asm("FTPUFRC");
-
-/*
-** Get human-readable error message for UFSD return code.
-*/
-const char *ftpd_ufs_rc_message(int ufsd_rc)                asm("FTPUFMSG");
-
-/*
 ** Send FTP error reply for a UFSD return code.
 ** Maps RC to FTP code + message, sends via ftpd_session_reply().
 */

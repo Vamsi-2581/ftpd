@@ -57,6 +57,12 @@ reus = false
 [test.TSTADR]
 sources = ["test/tstadr.c", "src/ftpd#adr.c"]
 
+# ftpd_list_nomem() -- a list builder's NULL with errno ENOMEM is a storage
+# shortage, not an empty result (#118).  ftpd#lse.c is free of project and MVS
+# headers, so this is DUAL like TSTADR.
+[test.TSTLSE]
+sources = ["test/tstlse.c", "src/ftpd#lse.c"]
+
 # ftpd_dsn_valid() -- the data set name character check (#95).  Same shape as
 # TSTADR: ftpd#dsn.c is free of ftpd.h and of MVS services, so this is DUAL.
 [test.TSTDSN]

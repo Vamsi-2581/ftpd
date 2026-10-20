@@ -130,6 +130,16 @@ ftpd_session_t *ftpd_session_new(ftpd_server_t *server, int sock)
                                                             asm("FTPSESNW");
 
 /*
+** Hand a new session to the worker pool.
+** Returns 0 when it was queued; the worker owns the session from then on.
+** Returns -1 when the pool refused it (manager quiescing or stopped, no
+** storage for the queue element): the client gets 421, and the session and
+** its control socket are released here -- the caller must not touch sess.
+*/
+int ftpd_session_queue(ftpd_server_t *server, ftpd_session_t *sess)
+                                                            asm("FTPSESQU");
+
+/*
 ** Main session loop (thread entry point).
 ** Runs the command-response loop until QUIT or error.
 */

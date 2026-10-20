@@ -729,7 +729,7 @@ socket_thread(void *arg1, void *arg2)
                  ntohl(caddr.sin_addr.s_addr) & 0xFF,
                  ntohs(caddr.sin_port));
 
-        cthread_queue_add(server->mgr, sess);
+        ftpd_session_queue(server, sess);
     }
 
     closesocket(sock);

@@ -44,8 +44,10 @@ texts that this book quotes are the ones of FTPD 1.3.0.
     [#cmd("257")], [The reply to #cmd("PWD") and #cmd("MKD").],
     [#cmd("331")], [The user ID is accepted; send the password.],
     [#cmd("350")], [#cmd("RNFR"): the name is accepted.],
-    [#cmd("421")], [FTPD closes the connection because the session was idle
-      for #cmd("IDLETIMEOUT") seconds: #cmd("421 Idle timeout, closing connection").],
+    [#cmd("421")], [FTPD closes the connection. Either the session was idle
+      for #cmd("IDLETIMEOUT") seconds: #cmd("421 Idle timeout, closing connection"),
+      or the worker pool refused the new session: #cmd("421 Service not
+      available, closing control connection").],
     [#cmd("425")], [FTPD cannot open the data connection (@ref-reply-425).],
     [#cmd("426")], [The data connection broke during a transfer. The text says
       after how many bytes and, for data sets and UFS files, that the target is

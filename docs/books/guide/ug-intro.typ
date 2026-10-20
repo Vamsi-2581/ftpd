@@ -93,6 +93,9 @@ the book explains the subject:
       the data set like #cmd("STOR").], [@ug-data-appe],
     [A UFS file system without free inodes answers #cmd("552") instead of
       #cmd("452").], [@ug-other-ufs],
+    [A connection that the worker pool refuses is answered with
+      #cmd("421") and closed. Before, the control connection stayed open and
+      the session was never freed.], [@ug-ops-ses],
     [A listing that runs out of storage answers #cmd("451 Insufficient storage to list ...") instead of an empty list.], [@ug-data-list],
   )
 ] <ug-intro-new-tab>

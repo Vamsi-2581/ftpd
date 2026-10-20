@@ -272,6 +272,12 @@ connection at once, without a reply, and writes a warning to the log. The
 client sees a closed connection. Sessions that are in the login state count
 as well.
 
+FTPD hands each new session to a pool of worker threads. When the pool
+cannot take it, because it is shutting down or has no storage for the queue
+entry, FTPD answers #cmd("421 Service not available, closing control connection"),
+closes the connection, frees the session and writes a warning to the log. The
+next connection is served as usual.
+
 A session that sends nothing for #cmd("IDLETIMEOUT") seconds gets
 #cmd("421 Idle timeout, closing connection") and FTPD closes it. The default is
 300 seconds. A transfer is not idle time, but a client that waits between two

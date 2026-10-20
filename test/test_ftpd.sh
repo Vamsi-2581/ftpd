@@ -16,6 +16,8 @@
 #   6.  Cleanup (DELE/RMD)
 #   7.  Out of space (x37): permanent 552, no hang, data set scratched
 #   8.  Failed member STOR into a full PDS: 552, directory untouched
+#   9.  APPE: appends to a sequential data set, creates what is missing,
+#       refuses an existing PDS member (550, unchanged), 502 for UFS
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1188,6 +1190,179 @@ get '$DSN_FULL(M1)' $TMPDIR/full_m1back.txt" "$FTP_OUT"
 fi
 
 ftp_run "rmdir '$DSN_FULL'" "$TMPDIR/ftp_full_post.log"
+
+# ============================================================
+# TEST 9: APPE
+#
+# STOR replaces, APPE adds.  What each case has to show:
+#   - an existing sequential data set keeps its old records and gets the
+#     new ones after them (before the change APPE replaced them);
+#   - a data set or member that is not there yet is created;
+#   - an existing PDS member is refused with 550 and is unchanged afterwards
+#     (BPAM cannot extend a member; libc370#204);
+#   - UFS still answers 502.
+# ============================================================
+section "Test 9: APPE"
+
+DSN_APP="${HLQ}.TEST.APPESEQ"
+DSN_APPN="${HLQ}.TEST.APPENEW"
+DSN_APPP="${HLQ}.TEST.APPEPDS"
+APPRECS=23
+
+# mkapp <file> <tag>: APPRECS records, each starting with the tag
+mkapp() {
+    awk -v n=$APPRECS -v t="$2" \
+        'BEGIN{for(i=1;i<=n;i++) printf "%s%06d\n", t, i}' > "$1"
+}
+
+# fetch <dsn> <local>: RETR as text, trailing blanks of the FB records cut
+fetch() {
+    rm -f "$2.raw"
+    ftp_run "type ascii
+get '$1' $2.raw" "$TMPDIR/ftp_fetch.log"
+    if [ -f "$2.raw" ]; then
+        sed 's/[[:space:]]*$//' "$2.raw" | tr -d '\r' > "$2"
+    else
+        : > "$2"
+    fi
+}
+
+mkapp "$TMPDIR/app_a.txt" "FIRST-"
+mkapp "$TMPDIR/app_b.txt" "SECOND-"
+cat "$TMPDIR/app_a.txt" "$TMPDIR/app_b.txt" > "$TMPDIR/app_ab.txt"
+
+ftp_run "delete '$DSN_APP'
+delete '$DSN_APPN'
+rmdir '$DSN_APPP'" "$TMPDIR/ftp_app_pre.log"
+
+# --- 9a: existing sequential data set -------------------------------
+info "STOR then APPE -> '$DSN_APP'"
+FTP_OUT="$TMPDIR/ftp_app_seq.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=3120
+site primary=2
+site secondary=1
+site tracks
+type ascii
+put $TMPDIR/app_a.txt '$DSN_APP'
+append $TMPDIR/app_b.txt '$DSN_APP'
+CMDS
+)" "$FTP_OUT"
+APP_REPLY=$(xfer_reply "$FTP_OUT")
+if grep -q "^125 Appending to data set" "$FTP_OUT" && echo "$APP_REPLY" | grep -q "^2"; then
+    pass "APPE to an existing sequential data set answers 125 Appending, then 2xx"
+else
+    fail "APPE to an existing sequential data set: $APP_REPLY"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+fetch "$DSN_APP" "$TMPDIR/app_seq_back.txt"
+if diff -q "$TMPDIR/app_ab.txt" "$TMPDIR/app_seq_back.txt" > /dev/null 2>&1; then
+    pass "APPE kept the $APPRECS old records and added $APPRECS after them"
+else
+    OLD=$(grep -c "^FIRST-" "$TMPDIR/app_seq_back.txt")
+    NEW=$(grep -c "^SECOND-" "$TMPDIR/app_seq_back.txt")
+    fail "APPE to a sequential data set left $OLD old and $NEW new records (expected $APPRECS and $APPRECS, old first)"
+fi
+
+# A second APPE goes behind the first, not over it
+FTP_OUT="$TMPDIR/ftp_app_seq2.log"
+ftp_run "type ascii
+append $TMPDIR/app_a.txt '$DSN_APP'" "$FTP_OUT"
+fetch "$DSN_APP" "$TMPDIR/app_seq_back2.txt"
+cat "$TMPDIR/app_ab.txt" "$TMPDIR/app_a.txt" > "$TMPDIR/app_aba.txt"
+if diff -q "$TMPDIR/app_aba.txt" "$TMPDIR/app_seq_back2.txt" > /dev/null 2>&1; then
+    pass "A second APPE appends again ($((APPRECS * 3)) records)"
+else
+    fail "A second APPE left $(wc -l < "$TMPDIR/app_seq_back2.txt") records (expected $((APPRECS * 3)))"
+fi
+
+# --- 9b: data set that does not exist -------------------------------
+info "APPE -> '$DSN_APPN' (does not exist)"
+FTP_OUT="$TMPDIR/ftp_app_new.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=3120
+site primary=2
+site secondary=1
+site tracks
+type ascii
+append $TMPDIR/app_a.txt '$DSN_APPN'
+CMDS
+)" "$FTP_OUT"
+APP_REPLY=$(xfer_reply "$FTP_OUT")
+fetch "$DSN_APPN" "$TMPDIR/app_new_back.txt"
+if echo "$APP_REPLY" | grep -q "^2" \
+   && diff -q "$TMPDIR/app_a.txt" "$TMPDIR/app_new_back.txt" > /dev/null 2>&1; then
+    pass "APPE to a missing data set creates it with the $APPRECS records"
+else
+    fail "APPE to a missing data set: $APP_REPLY, $(wc -l < "$TMPDIR/app_new_back.txt") records back"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+# --- 9c/9d: PDS ------------------------------------------------------
+info "MKD '$DSN_APPP', STOR member OLD, APPE member NEW and OLD"
+FTP_OUT="$TMPDIR/ftp_app_pds.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=3120
+site tracks
+site primary=2
+site secondary=1
+site directory=5
+mkdir '$DSN_APPP'
+type ascii
+put $TMPDIR/app_a.txt '$DSN_APPP(OLD)'
+append $TMPDIR/app_b.txt '$DSN_APPP(NEW)'
+append $TMPDIR/app_b.txt '$DSN_APPP(OLD)'
+CMDS
+)" "$FTP_OUT"
+
+fetch "$DSN_APPP(NEW)" "$TMPDIR/app_mnew_back.txt"
+if diff -q "$TMPDIR/app_b.txt" "$TMPDIR/app_mnew_back.txt" > /dev/null 2>&1; then
+    pass "APPE to a missing PDS member creates it"
+else
+    fail "APPE to a missing PDS member: $(wc -l < "$TMPDIR/app_mnew_back.txt") records back"
+    tail -8 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+if grep -q "^550 .*OLD" "$FTP_OUT" && grep -qi "unchanged" "$FTP_OUT"; then
+    pass "APPE to an existing PDS member answers 550 and says the member is unchanged"
+else
+    fail "APPE to an existing PDS member did not answer the explanatory 550"
+    tail -8 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+fetch "$DSN_APPP(OLD)" "$TMPDIR/app_mold_back.txt"
+if diff -q "$TMPDIR/app_a.txt" "$TMPDIR/app_mold_back.txt" > /dev/null 2>&1; then
+    pass "The refused APPE left the member with its $APPRECS old records"
+else
+    fail "The refused APPE left OLD with $(grep -c "^FIRST-" "$TMPDIR/app_mold_back.txt") of its $APPRECS old records and $(grep -c "^SECOND-" "$TMPDIR/app_mold_back.txt") of the appended ones"
+fi
+
+# --- 9e: UFS ---------------------------------------------------------
+if [ "${UFS_AVAILABLE:-0}" = "1" ]; then
+    FTP_OUT="$TMPDIR/ftp_app_ufs.log"
+    ftp_run "cd /
+type ascii
+append $TMPDIR/app_a.txt /appe_probe" "$FTP_OUT"
+    if grep -q "^502" "$FTP_OUT"; then
+        pass "APPE in UFS mode still answers 502"
+    else
+        fail "APPE in UFS mode did not answer 502"
+        tail -4 "$FTP_OUT" | sed 's/^/    /'
+    fi
+else
+    info "UFSD not available -- UFS APPE check skipped"
+fi
+
+ftp_run "delete '$DSN_APP'
+delete '$DSN_APPN'
+rmdir '$DSN_APPP'" "$TMPDIR/ftp_app_post.log"
 
 # ============================================================
 # Summary

@@ -1908,11 +1908,19 @@ ftpd_mvs_scratch(ftpd_session_t *sess, const char *dsn)
 }
 
 /* --------------------------------------------------------------------
-** STOR — receive data from client, write to dataset/member
+** STOR and APPE — receive data from client, write to dataset/member
+**
+** One body for both: they differ in what happens to a data set that already
+** holds records.  STOR replaces them ("wb").  APPE keeps them and adds to the
+** end ("ab"), which only a sequential data set can do -- BPAM cannot extend a
+** member in place, so APPE to an existing member answers 550 and touches
+** nothing (appending to a member waits for libc370#204).  A data set or member
+** that does not exist yet is created by either command.
 ** ----------------------------------------------------------------- */
-int
-ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
+static int
+mvs_store(ftpd_session_t *sess, const char *arg, int append)
 {
+    const char *verb = append ? "APPE" : "STOR";
     char dsn[FTPD_MAX_DSN_LEN + 2];
     char member[FTPD_MAX_MBR_LEN + 1];
     char fname[FTPD_MAX_DSN_LEN + FTPD_MAX_MBR_LEN + 4];
@@ -1930,6 +1938,7 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
     int is_fixed;
     int io_err = 0;             /* uncorrectable write error on the data set */
     int io_errno = 0;           /* errno as of that error, before fclose()   */
+    const char *mode;
 
     if (!arg || !arg[0]) {
         ftpd_session_reply(sess, FTP_501, "Missing dataset name");
@@ -1958,6 +1967,27 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         ftpd_session_reply(sess, FTP_550,
             "%s(%s) requests a nonexistent partitioned data set. "
             "Use MKD command to create it.", dsn, member);
+        return 0;
+    }
+
+    /* APPE has nothing to append to in a PDS.  Refuse before anything is
+    ** allocated or opened, so the member cannot be touched whatever an "ab"
+    ** open of a member would do in the libc370 at hand.  A member that is not
+    ** there yet is created as STOR creates it. */
+    if (append && ds_exists && member[0] && member_exists(sess, dsn, member)) {
+        ftpd_log(LOG_INFO, "APPE: %s(%s) exists, refused", dsn, member);
+        ftpd_session_reply(sess, FTP_550,
+            "APPE cannot append to the existing member %s(%s): appending "
+            "to a PDS member is not supported, the member is unchanged. "
+            "Use STOR to replace it.", dsn, member);
+        return 0;
+    }
+
+    /* ...and a PDS named without a member has no end to append to either. */
+    if (append && ds_exists && !member[0] && ftpd_mvs_is_pds(dsn) == 1) {
+        ftpd_session_reply(sess, FTP_550,
+            "APPE needs a sequential data set or a new member: %s is a "
+            "partitioned data set.", dsn);
         return 0;
     }
 
@@ -1999,7 +2029,7 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
             snprintf(opts + n, sizeof(opts) - n, ";VOLSER=%s",
                      sess->alloc.volume);
 
-        ftpd_log(LOG_INFO, "STOR: __dsalcf opts='%s'", opts);
+        ftpd_log(LOG_INFO, "%s: __dsalcf opts='%s'", verb, opts);
 
         /* Allocate under the logged-in user's security environment, not
         ** the STC identity — the subsequent fopen()/OPEN runs under the
@@ -2021,7 +2051,7 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         ftpd_acee_leave(sess);
 
         if (rc != 0) {
-            ftpd_log(LOG_ERROR, "STOR: __dsalcf failed rc=%d", rc);
+            ftpd_log(LOG_ERROR, "%s: __dsalcf failed rc=%d", verb, rc);
             ftpd_session_reply(sess, FTP_550,
                 "Cannot allocate dataset %s", dsn);
             return 0;
@@ -2052,16 +2082,24 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
     ** Needs libc370 1.0.5 or later -- before that the mode keyword is simply
     ** not recognised, which is the quiet half of why the toolchain pin in
     ** project.toml moved with this change. */
-    ftpd_log(LOG_INFO, "STOR: fopen('%s', '%s') new=%d", fname,
-             allocated_new ? "wb,rlse" : "wb", allocated_new);
+    /* "ab" only where there is something to extend: an existing sequential
+    ** data set.  A new data set and a new member are written from the start,
+    ** and the PDS member case was refused above. */
+    mode = allocated_new ? "wb,rlse" : "wb";
+    if (append && ds_exists && !member[0])
+        mode = "ab";
+
+    ftpd_log(LOG_INFO, "%s: fopen('%s', '%s') new=%d", verb, fname,
+             mode, allocated_new);
 
     /* Switch to user's security environment for fopen */
     ftpd_acee_enter(sess);
-    fp = fopen(fname, allocated_new ? "wb,rlse" : "wb");
+    fp = fopen(fname, mode);
     ftpd_acee_leave(sess);
     if (fp == NULL) {
         ftpd_session_reply(sess, FTP_550,
-            "Cannot open dataset %s for writing", dsn);
+            "Cannot open dataset %s for %s", dsn,
+            append ? "appending" : "writing");
         return 0;
     }
 
@@ -2082,7 +2120,8 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         sess->cur_new_dsn[sizeof(sess->cur_new_dsn) - 1] = '\0';
     }
 
-    ftpd_session_reply(sess, FTP_125, "Storing data set %s",
+    ftpd_session_reply(sess, FTP_125, "%s data set %s",
+                       append ? "Appending to" : "Storing",
                        member[0] ? arg : dsn);
 
     if (ftpd_data_open(sess) != 0) {
@@ -2098,8 +2137,8 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
     recpos = 0;
     is_fixed = (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_F;
 
-    ftpd_log(LOG_INFO, "STOR: dsn=%s type=%c lrecl=%d blksize=%d recfm=0x%02X",
-             dsn, sess->type == XFER_TYPE_I ? 'I' :
+    ftpd_log(LOG_INFO, "%s: dsn=%s type=%c lrecl=%d blksize=%d recfm=0x%02X",
+             verb, dsn, sess->type == XFER_TYPE_I ? 'I' :
                   sess->type == XFER_TYPE_A ? 'A' : 'E',
              fp->lrecl, fp->blksize, fp->recfm);
 
@@ -2139,8 +2178,8 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         }
 
         ftpd_log(LOG_INFO,
-                 "STOR BIN: start eff_lrecl=%lu recfm=0x%02X%s",
-                 (unsigned long)eff_lrecl, fp->recfm,
+                 "%s BIN: start eff_lrecl=%lu recfm=0x%02X%s",
+                 verb, (unsigned long)eff_lrecl, fp->recfm,
                  is_undefined ? " (U)" : "");
 
         /* Recv directly into record_buffer, limited to space left */
@@ -2179,8 +2218,8 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         free(record_buffer);
 
         ftpd_log(LOG_INFO,
-                 "STOR BIN: done total=%ld records=%d eff_lrecl=%lu",
-                 total, recnum, (unsigned long)eff_lrecl);
+                 "%s BIN: done total=%ld records=%d eff_lrecl=%lu",
+                 verb, total, recnum, (unsigned long)eff_lrecl);
     }
     else if (sess->type == XFER_TYPE_A) {
         /* ---------------------------------------------------------------
@@ -2279,7 +2318,7 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
         }
     }
 
-    ftpd_log(LOG_INFO, "STOR: %s %s",
+    ftpd_log(LOG_INFO, "%s: %s %s", verb,
              io_err ? "write error on" : "closing", fname);
     sess->cur_file = NULL;
     /* Stop promising a scratch at the same point recovery stops promising
@@ -2331,8 +2370,8 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
     ** will delete its copy on a 250. */
     if (io_err) {
         ftpd_log(LOG_ERROR,
-                 "STOR: write error on %s after %ld bytes received "
-                 "(errno=%d)", fname, total, io_errno);
+                 "%s: write error on %s after %ld bytes received "
+                 "(errno=%d)", verb, fname, total, io_errno);
 
         /* A data set this STOR created and could not fill is removed.
         ** DISP=(NEW,CATLG,DELETE) already declares that, but the DD
@@ -2378,19 +2417,19 @@ ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
     return 0;
 }
 
+int
+ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
+{
+    return mvs_store(sess, arg, 0);
+}
+
 /* --------------------------------------------------------------------
 ** APPE — append to dataset (create if not exists)
 ** ----------------------------------------------------------------- */
 int
 ftpd_mvs_appe(ftpd_session_t *sess, const char *arg)
 {
-    /* For now, APPE behaves like STOR.
-    ** True append (DISP=MOD) requires fopen mode change.
-    ** fopen("wb") replaces content for sequential datasets,
-    ** but for PDS members it replaces the member — which is correct.
-    */
-    /* TODO: implement true append via DISP=MOD for sequential datasets */
-    return ftpd_mvs_stor(sess, arg);
+    return mvs_store(sess, arg, 1);
 }
 
 /* --------------------------------------------------------------------

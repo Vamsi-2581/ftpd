@@ -30,7 +30,7 @@ A full-featured FTP server for MVS 3.8j, built from the ground up on [libc370](h
 - FACILITY class `FTPAUTH` for FTP access control
 - Per-operation DATASET class authorization (READ/UPDATE/ALTER)
 - ACEE switching: dataset I/O runs under logged-in user's identity
-- STC runs as `FTPD/USER` via RACINIT (Principle of Least Privilege)
+- STC keeps the identity RAKF assigns it; map the STC name to a low-privilege identity (Principle of Least Privilege)
 - See [docs/FTPD_RAKF_SETUP.md](docs/FTPD_RAKF_SETUP.md) for setup instructions
 
 ### Client Compatibility

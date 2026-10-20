@@ -342,48 +342,40 @@ initialize(ftpd_server_t *server)
 {
     int rc;
 
-    /* STC identity switch: RACINIT ENVIR=CREATE for FTPD/USER
-    ** Replaces the default STC security environment (PROD/PRDGROUP)
-    ** with a dedicated FTPD identity.  Requires APF authorization.
-    ** Equivalent to the old FTPDXCTL.hlasm wrapper but done inline.
-    */
-    {
-        unsigned char savekey;
-        ACEE *old_acee;
-        ACEE *new_acee;
-        int racf_rc = 0;
-
-        if (__super(PSWKEY0, &savekey)) {
-            ftpd_log_wto("FTPD004W RACINIT FAILED: "
-                         "CANNOT ENTER SUPERVISOR STATE");
-        } else {
-            /* Delete current security environment */
-            old_acee = racf_get_acee();
-            if (old_acee)
-                racf_logout(&old_acee);
-
-            /* Create new ACEE: PASSCHK=NO (pass=NULL) */
-            new_acee = racf_login("FTPD", NULL, "USER", &racf_rc);
-            if (new_acee) {
-                racf_set_acee(new_acee);
-                ftpd_log_wto("FTPD004I STC IDENTITY SET TO "
-                             "FTPD/USER VIA RACINIT");
-            } else {
-                ftpd_log_wto("FTPD004W RACINIT ENVIR=CREATE "
-                             "FAILED RC=%d", racf_rc);
-            }
-
-            __prob(savekey, NULL);
-        }
-    }
-
-    /* Capture the STC identity ACEE now, before any worker subtask is
-    ** attached.  racf_set_acee() stores into the address-space-wide
-    ** ASXBSENV, so this is the AS's normal resting identity; ABEND
-    ** recovery resets ASXBSENV to it so a worker never continues under
-    ** a user (or freed) ACEE after an unexpected ABEND.  May be NULL if
-    ** RACINIT above failed — that is still the correct value to restore. */
+    /* The STC's resting identity is whatever RAKF assigned when the task
+    ** was created (by STC name on a RAKF that has a started-task table, the
+    ** default STC/STCGROUP account on an older one).  FTPD does not replace
+    ** it.  Capture it now, before any worker subtask is attached:
+    ** racf_set_acee() stores into the address-space-wide ASXBSENV, so this
+    ** is the AS's normal resting identity, and ABEND recovery and every
+    ** identity window put it back, so a worker never continues under a user
+    ** (or freed) ACEE.  NULL is never a valid value to restore -- RAKF
+    ** reads an empty ASXBSENV as "access permitted". */
     server->stc_acee = racf_get_acee();
+
+    if (server->stc_acee) {
+        char user[9];
+        char group[9];
+        ACEE *acee = server->stc_acee;
+        unsigned ulen = (unsigned char)acee->aceeuser[0];
+        unsigned glen = (unsigned char)acee->aceegrp[0];
+
+        /* aceeuser/aceegrp are IBM's length byte followed by the blank
+        ** padded name (ACEEUSRL/ACEEUSRI, ACEEGRPL/ACEEGRPN). */
+        if (ulen > 8) ulen = 8;
+        if (glen > 8) glen = 8;
+        while (ulen && acee->aceeuser[ulen] == ' ') ulen--;
+        while (glen && acee->aceegrp[glen] == ' ') glen--;
+        memcpy(user, acee->aceeuser + 1, ulen);
+        user[ulen] = '\0';
+        memcpy(group, acee->aceegrp + 1, glen);
+        group[glen] = '\0';
+
+        ftpd_log_wto("FTPD004I STC RUNS AS %s/%s", user, group);
+    } else {
+        ftpd_log_wto("FTPD004W NO SECURITY ENVIRONMENT FOR THE STC: "
+                     "RAKF PERMITS ANY ACCESS WITHOUT AN ACEE");
+    }
 
     /* Initialize trace ring buffer */
     ftpd_trace_init(512);

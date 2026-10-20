@@ -153,8 +153,9 @@ ftpd_acee_enter(ftpd_session_t *sess)
 ** failure the ENQ exists to prevent.  ABEND recovery resets and releases in
 ** the same order, for the same reason.
 **
-** stc_acee may be NULL if the startup RACINIT failed — that is still the
-** correct value to restore, and is the same value ABEND recovery writes.
+** The identity is the one RAKF gave the STC, never NULL on a system that
+** has a security environment (FTPD004W otherwise).  It is also the value
+** ABEND recovery writes.
 ** ----------------------------------------------------------------- */
 void
 ftpd_acee_leave(ftpd_session_t *sess)

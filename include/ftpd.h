@@ -131,7 +131,7 @@ struct ftpd_server {
     char            enq_rname[16];  /* "FTPD.PORT.nnnnn": the single
                                     ** instance ENQ, held by main's TCB
                                     ** for the life of the server      */
-    ACEE            *stc_acee;      /* STC identity ACEE, captured at
+    ACEE            *stc_acee;      /* identity RAKF gave the STC, read at
                                     ** init; recovery resets ASXBSENV
                                     ** to this after an ABEND          */
     int             acee_lock;      /* never read — its ADDRESS is the

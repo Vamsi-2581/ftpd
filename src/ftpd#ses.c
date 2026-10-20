@@ -376,9 +376,12 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     ** deliberately left alone.  Putting the STC identity back is therefore
     ** this handler's job and nobody else's.
     **
-    ** It is also the fail-closed direction: FTPD/USER is least-privilege, so
-    ** a concurrent session transiently pulled onto it can only lose
-    ** authority, never gain it.
+    ** It is also the fail-closed direction, provided the STC identity is
+    ** least-privilege: a concurrent session transiently pulled onto it can
+    ** then only lose authority, never gain it.  On a RAKF without a mapping
+    ** by STC name (TK5 before Update 6) the identity is STC/STCGROUP, which
+    ** is not least-privilege, and the switch is fail-open
+    ** (docs/FTPD_RAKF_SETUP.md, section 5).
     **
     ** This runs first because it must hold even if a later cleanup step
     ** re-ABENDs. */

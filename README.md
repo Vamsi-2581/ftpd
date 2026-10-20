@@ -99,7 +99,7 @@ ftp mvshost 2121
 | LIST/NLST | Directory listing (z/OS MVS format / Unix format) |
 | RETR | Download dataset, PDS member, or UFS file |
 | STOR | Upload (auto-allocates new datasets) |
-| APPE | Append to dataset |
+| APPE | Append to a sequential dataset (creates what is missing); an existing PDS member is refused with 550, UFS answers 502 |
 | DELE | Delete dataset, PDS member, or UFS file |
 | MKD/RMD | Create/remove PDS or UFS directory |
 | RNFR/RNTO | Rename dataset or UFS file |

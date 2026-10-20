@@ -74,7 +74,7 @@ fresh_session(void)
     server.config.defaults.blksize = 3120;
     server.config.defaults.primary = 100;
     server.config.defaults.secondary = 50;
-    strcpy(server.config.defaults.unit, "SYSDA");
+    strcpy(server.config.defaults.unit, "3380");
     strcpy(server.config.defaults.volume, "SYSRES");
     strcpy(sess.alloc.recfm, "FB");
     sess.alloc.lrecl = 80;
@@ -82,7 +82,7 @@ fresh_session(void)
     sess.alloc.primary = 100;
     sess.alloc.secondary = 50;
     strcpy(sess.alloc.spacetype, "TRK");
-    strcpy(sess.alloc.unit, "SYSDA");
+    strcpy(sess.alloc.unit, "3380");
     strcpy(sess.alloc.volume, "SYSRES");
     sess.filetype = FT_SEQ;
     sess.fsmode = FS_MVS;
@@ -119,6 +119,30 @@ snapshot(state_t *st)
     st->rdw = sess.rdw;
 }
 
+/* Member by member: a struct compare would also compare padding. */
+static int
+state_equal(const state_t *a, const state_t *b)
+{
+    return strcmp(a->alloc.recfm, b->alloc.recfm) == 0
+        && a->alloc.lrecl == b->alloc.lrecl
+        && a->alloc.blksize == b->alloc.blksize
+        && a->alloc.primary == b->alloc.primary
+        && a->alloc.secondary == b->alloc.secondary
+        && strcmp(a->alloc.spacetype, b->alloc.spacetype) == 0
+        && strcmp(a->alloc.volume, b->alloc.volume) == 0
+        && strcmp(a->alloc.unit, b->alloc.unit) == 0
+        && a->alloc.dirblks == b->alloc.dirblks
+        && a->filetype == b->filetype
+        && a->fsmode == b->fsmode
+        && a->prev_fsmode == b->prev_fsmode
+        && strcmp(a->jes_owner, b->jes_owner) == 0
+        && strcmp(a->jes_jobname, b->jes_jobname) == 0
+        && strcmp(a->jes_status, b->jes_status) == 0
+        && a->trailing == b->trailing
+        && a->truncate == b->truncate
+        && a->rdw == b->rdw;
+}
+
 /* Run one SITE argument string on a fresh session. */
 static void
 run(const char *arg, state_t *st, int *code, char *text, int textsz)
@@ -152,7 +176,7 @@ same(const char *canon, const char *variant)
 
     snprintf(msg, sizeof(msg), "\"%s\" leaves the same state as \"%s\"",
              variant, canon);
-    CHECK(memcmp(&a, &b, sizeof(a)) == 0, msg);
+    CHECK(state_equal(&a, &b), msg);
 }
 
 int

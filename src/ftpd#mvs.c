@@ -1632,9 +1632,9 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
         short           numparms;
         short           parm1_len;
         char            parm1[98];
-    } tu[14];
+    } tu[16];
 
-    void *tu_list[15];
+    void *tu_list[17];
     int idx = 0;
     int err;
 
@@ -1694,6 +1694,8 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
         else if (sess->alloc.recfm[0] == 'U') rf = 0xC0;
         if (strchr(sess->alloc.recfm, 'B')) rf |= 0x10;
         if (strchr(sess->alloc.recfm, 'A')) rf |= 0x04;
+        if (strchr(sess->alloc.recfm, 'M')) rf |= 0x02;
+        if (strchr(sess->alloc.recfm, 'S')) rf |= 0x08;
 
         tu_list[idx] = &tu[idx];
         tu[idx].key = 0x0049;   /* DALRECFM */
@@ -1803,7 +1805,7 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
 
     /* Directory blocks for PDS */
     if (is_pds) {
-        int d = sess->alloc.dirblks > 0 ? sess->alloc.dirblks : 10;
+        int d = sess->alloc.dirblks;
         tu_list[idx] = &tu[idx];
         tu[idx].key = 0x000C;   /* DALDIR */
         tu[idx].numparms = 1;
@@ -1811,6 +1813,19 @@ alloc_new_dataset(ftpd_session_t *sess, const char *dsn,
         tu[idx].parm1[0] = (char)((d >> 16) & 0xFF);
         tu[idx].parm1[1] = (char)((d >> 8) & 0xFF);
         tu[idx].parm1[2] = (char)(d & 0xFF);
+        idx++;
+    }
+
+    /* Retention period.  0 is "none" and sends nothing; the range is the
+    ** SITE RETPD one, which fits the two bytes DALRETPD carries. */
+    if (sess->alloc.retpd > 0) {
+        int r = sess->alloc.retpd;
+        tu_list[idx] = &tu[idx];
+        tu[idx].key = 0x0023;   /* DALRETPD */
+        tu[idx].numparms = 1;
+        tu[idx].parm1_len = 2;
+        tu[idx].parm1[0] = (char)((r >> 8) & 0xFF);
+        tu[idx].parm1[1] = (char)(r & 0xFF);
         idx++;
     }
 
@@ -1896,6 +1911,94 @@ free_ddname(const char *ddname)
 }
 
 /* --------------------------------------------------------------------
+** Helper: allocate an existing, still unretained data set DISP=OLD with a
+** retention period, and keep the DD.  Returns the ddname in ddout.
+**
+** SITE RETPD for STOR.  A data set that already carries a retention period
+** is not opened for output without the operator's say-so (IEC507D), so the
+** period cannot be given to the NEW allocation that STOR makes: the open
+** that follows would wait for a reply nobody sends.  OPEN output of an
+** unretained data set, with the period on the DD instead, does not ask, and
+** CLOSE writes the date from the DD's JFCB into the DSCB.  libc370's
+** __dsalc() has no RETPD keyword, hence the text units here.
+** Returns 0 on success, -1 on error.
+** ----------------------------------------------------------------- */
+static int
+alloc_old_retained(const char *dsn, int retpd, char *ddout)
+{
+    struct rb99_local {
+        char            len;
+        char            verb;
+        char            flag1;
+        char            flag2;
+        short           error;
+        short           info;
+        void            *txtptr;
+        void            *rbx99;
+        unsigned        flag3;
+    } rb;
+
+    struct tu99_local {
+        short           key;
+        short           numparms;
+        short           parm1_len;
+        char            parm1[48];
+    } tu[5];
+
+    void *tu_list[5];
+    int err;
+
+    memset(&rb, 0, sizeof(rb));
+    memset(tu, 0, sizeof(tu));
+
+    tu[0].key = 0x0055;         /* DALRTDDN */
+    tu[0].numparms = 1;
+    tu[0].parm1_len = 8;
+
+    tu[1].key = 0x0002;         /* DALDSNAM */
+    tu[1].numparms = 1;
+    tu[1].parm1_len = (short)strlen(dsn);
+    strncpy(tu[1].parm1, dsn, sizeof(tu[1].parm1) - 1);
+
+    tu[2].key = 0x0004;         /* DALSTATS */
+    tu[2].numparms = 1;
+    tu[2].parm1_len = 1;
+    tu[2].parm1[0] = 0x01;      /* OLD */
+
+    tu[3].key = 0x0023;         /* DALRETPD */
+    tu[3].numparms = 1;
+    tu[3].parm1_len = 2;
+    tu[3].parm1[0] = (char)((retpd >> 8) & 0xFF);
+    tu[3].parm1[1] = (char)(retpd & 0xFF);
+
+    tu[4].key = 0x000D;         /* DALRLSE: STOR guessed the size */
+    tu[4].numparms = 0;
+
+    tu_list[0] = &tu[0];
+    tu_list[1] = &tu[1];
+    tu_list[2] = &tu[2];
+    tu_list[3] = &tu[3];
+    tu_list[4] = (void *)((unsigned long)&tu[4] | 0x80000000);
+
+    rb.len = 20;
+    rb.verb = 0x01;             /* S99VRBAL = ALLOCATE */
+    rb.flag1 = 0x40 | 0x20;     /* S99NOCNV | S99NOMNT, as above */
+    rb.txtptr = tu_list;
+
+    err = __svc99(&rb);
+    if (err) {
+        ftpd_log(LOG_ERROR, "%s: SVC99 alloc failed for %s, rc=%d err=%d",
+                 __func__, dsn, err, rb.error);
+        return -1;
+    }
+
+    memcpy(ddout, tu[0].parm1, 8);
+    ddout[8] = '\0';
+
+    return 0;
+}
+
+/* --------------------------------------------------------------------
 ** Scratch a data set a failed transfer created.
 **
 ** Runs under the session's identity: the data set belongs to the logged-in
@@ -1926,7 +2029,7 @@ ftpd_mvs_scratch(ftpd_session_t *sess, const char *dsn)
     /* idcams() takes a format string and cmd is not a literal, which is
     ** safe only because the name came through resolve_dsn(): a valid MVS
     ** data set name cannot contain a '%'. */
-    snprintf(cmd, sizeof(cmd), " DELETE '%s'", dsn);
+    snprintf(cmd, sizeof(cmd), " DELETE '%s' PURGE", dsn);   /* PURGE: SITE RETPD */
 
     ftpd_acee_enter(sess);
     rc = idcams(cmd);
@@ -1962,6 +2065,8 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     char ddname[9];
     int ds_exists;
     int allocated_new;
+    int held_dd = 0;            /* DD that carries SITE RETPD, opened as "DD:" */
+    int scratch_new = 0;        /* the NEW allocation worked, the retained one did not */
     int rc;
     long total;
     char netbuf[FTPD_DATA_BUF_SIZE];
@@ -2081,7 +2186,20 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         rc = __dsalcf(ddname, "%s", opts);
         if (rc == 0)
             __dsfree(ddname);   /* release DD — fopen will re-allocate */
+        if (rc == 0 && sess->alloc.retpd > 0 && !member[0]) {
+            /* SITE RETPD: open through a DD that carries the period, see
+            ** alloc_old_retained(). */
+            if (alloc_old_retained(dsn, sess->alloc.retpd, ddname) == 0) {
+                held_dd = 1;
+            } else {
+                rc = -1;
+                scratch_new = 1;
+            }
+        }
         ftpd_acee_leave(sess);
+
+        if (scratch_new)
+            ftpd_mvs_scratch(sess, dsn);
 
         if (rc != 0) {
             ftpd_log(LOG_ERROR, "%s: __dsalcf failed rc=%d", verb, rc);
@@ -2094,7 +2212,9 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
 
     /* Step 2: Build fopen filename — single-quoted for fully qualified DSN.
     ** Always open with just "wb" — libc370 reads DCB from DSCB. */
-    if (member[0])
+    if (held_dd)
+        snprintf(fname, sizeof(fname), "DD:%s", ddname);
+    else if (member[0])
         snprintf(fname, sizeof(fname), "'%s(%s)'", dsn, member);
     else
         snprintf(fname, sizeof(fname), "'%s'", dsn);
@@ -2118,7 +2238,7 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     /* "ab" only where there is something to extend: an existing sequential
     ** data set.  A new data set and a new member are written from the start,
     ** and the PDS member case was refused above. */
-    mode = allocated_new ? "wb,rlse" : "wb";
+    mode = (allocated_new && !held_dd) ? "wb,rlse" : "wb";
     if (append && ds_exists && !member[0])
         mode = "ab";
 
@@ -2130,11 +2250,18 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     fp = fopen(fname, mode);
     ftpd_acee_leave(sess);
     if (fp == NULL) {
+        if (held_dd)
+            free_ddname(ddname);
         ftpd_session_reply(sess, FTP_550,
             "Cannot open dataset %s for %s", dsn,
             append ? "appending" : "writing");
         return 0;
     }
+
+    /* fclose() unallocates what it allocated; mark the DD this STOR made
+    ** the same way, so every close below -- and recovery's -- releases it. */
+    if (held_dd)
+        fp->flags |= _FILE_FLAG_DYNAMIC;
 
     /* Track the open handle so ABEND recovery can release it (DCB +
     ** fopen's dynalloc DD) if the transfer below ABENDs. */
@@ -2566,6 +2693,9 @@ ftpd_mvs_mkd(ftpd_session_t *sess, const char *arg)
             "%s already exists.", dsn);
         return 0;
     }
+
+    ftpd_log(LOG_INFO, "MKD: %s directory=%d retpd=%d", dsn,
+             sess->alloc.dirblks, sess->alloc.retpd);
 
     /* Allocate new PDS under user's security environment */
     ftpd_acee_enter(sess);

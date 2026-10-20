@@ -5,6 +5,8 @@
 ** transfer modifiers, and JES interface settings.
 **
 ** All recognized parameters return "200 SITE command was accepted".
+** A keyword may be abbreviated as far as z/OS allows (PRI=, SEC=, TR, CY,
+** REC=, LR=, BLK=, DIR=, ...); see site_keywords[].
 ** Unknown parameters return "200-Unrecognized parameter ... / 200 SITE ...".
 ** Bare SITE (no args) returns "202 SITE not necessary; you may proceed".
 */
@@ -57,6 +59,102 @@ parse_kv(const char *arg, char *key, int keysz, char *val, int valsz)
     }
 
     return 0;
+}
+
+/* --------------------------------------------------------------------
+** SITE keywords and their minimum abbreviations.
+**
+** min is the length of the capitalised part of the keyword in the z/OS
+** Communications Server IP User's Guide and Commands (SITE subcommand):
+** PRImary, SECondary, TRacks, CYlinders, RECfm, LRecl, BLKsize, Directory.
+** A token matches a keyword when it is a prefix of it at least min long, so
+** "PRI", "PRIM" and "PRIMARY" are one keyword while "PR" is none.  An exact
+** name always wins, which is what keeps BLOCKS apart from BLOCKSIZE.
+** Spellings FTPD took before this table (TRAILING, DATACLAS, STORCLAS,
+** MGMTCLAS) are prefixes of the z/OS names and still match.
+**
+** A token that fits more than one keyword is refused like an unknown one:
+** guessing which was meant would change a setting the client did not name.
+**
+** const on purpose: FTPD is AC(1), module data must not be written.
+** ----------------------------------------------------------------- */
+typedef struct site_keyword {
+    const char  *name;
+    int         min;
+} site_keyword_t;
+
+static const site_keyword_t site_keywords[] = {
+    { "BLKSIZE",         3 },
+    { "BLOCKSIZE",       7 },
+    { "BLOCKS",          2 },
+    { "CYLINDERS",       2 },
+    { "DATACLASS",       5 },
+    { "DIRECTORY",       1 },
+    { "FILETYPE",        4 },
+    { "JESJOBNAME",      7 },
+    { "JESOWNER",        4 },
+    { "JESSTATUS",       5 },
+    { "LRECL",           2 },
+    { "MGMTCLASS",       2 },
+    { "PRIMARY",         3 },
+    { "RDW",             3 },
+    { "RECFM",           3 },
+    { "RETPD",           3 },
+    { "SBSENDEOL",       9 },
+    { "SECONDARY",       3 },
+    { "STORCLASS",       3 },
+    { "TRACKS",          2 },
+    { "TRAILINGBLANKS",  5 },
+    { "TRUNCATE",        4 },
+    { "UNIT",            1 },
+    { "VOLUME",          3 },
+    { NULL,              0 }
+};
+
+/* Full keyword name for an upper-case token, or NULL when the token names
+** no keyword or more than one. */
+static const char *
+site_resolve(const char *key)
+{
+    const site_keyword_t *kw;
+    const char *hit = NULL;
+    int klen = (int)strlen(key);
+    int nmatch = 0;
+
+    if (klen == 0)
+        return NULL;
+
+    for (kw = site_keywords; kw->name; kw++) {
+        if (strcmp(key, kw->name) == 0)
+            return kw->name;
+        if (klen >= kw->min && strncmp(key, kw->name, klen) == 0) {
+            hit = kw->name;
+            nmatch++;
+        }
+    }
+
+    return nmatch == 1 ? hit : NULL;
+}
+
+/* A whole decimal number 0..max.  atoi() maps "abc" and "" to 0, which for
+** RETPD is a legitimate value, so the digits are checked here. */
+static int
+site_parse_range(const char *val, int max, int *out)
+{
+    long v = 0;
+    int i;
+
+    if (val[0] == '\0' || strlen(val) > 9)
+        return 0;
+    for (i = 0; val[i]; i++) {
+        if (val[i] < '0' || val[i] > '9')
+            return 0;
+        v = v * 10 + (val[i] - '0');
+    }
+    if (v > max)
+        return 0;
+    *out = (int)v;
+    return 1;
 }
 
 /* --------------------------------------------------------------------
@@ -114,10 +212,10 @@ site_apply_one(ftpd_session_t *sess,
     **
     ** A keyword given without a value cancels the setting on z/OS.  FTPD
     ** reads that as "back to the configured default", which is the same
-    ** thing here: DEFRECFM/DEFLRECL/DEFBLKSIZE/DEFPRIMARY/DEFSECONDARY are
-    ** what the session started with, so returning to them is the only
-    ** cancellation that has a meaning.  DIRECTORY has no DEF key and so
-    ** cancels to unset, as on z/OS.
+    ** thing here: DEFRECFM/DEFLRECL/DEFBLKSIZE/DEFPRIMARY/DEFSECONDARY/
+    ** DEFDIRECTORY are what the session started with, so returning to them
+    ** is the only cancellation that has a meaning.  RETPD has no DEF key
+    ** and cancels to no retention.
     **
     ** It also disposes of atoi("") == 0 without a special case: before
     ** #100 a bare SITE PRIMARY stored a primary quantity of zero and the
@@ -147,7 +245,7 @@ site_apply_one(ftpd_session_t *sess,
         return 0;
     }
 
-    if (strcmp(key, "BLKSIZE") == 0) {
+    if (strcmp(key, "BLKSIZE") == 0 || strcmp(key, "BLOCKSIZE") == 0) {
         int blk;
         if (val[0] == '\0') {
             sess->alloc.blksize = cfg->defaults.blksize;
@@ -204,19 +302,34 @@ site_apply_one(ftpd_session_t *sess,
     }
 
     if (strcmp(key, "DIRECTORY") == 0) {
-        /* No configured default to fall back to, so a bare DIRECTORY
-        ** clears the setting the way z/OS does. */
+        /* Bare DIRECTORY goes back to DEFDIRECTORY like every other
+        ** allocation keyword. */
         int v;
         if (val[0] == '\0') {
-            sess->alloc.dirblks = 0;
+            sess->alloc.dirblks = cfg->defaults.directory;
             return 0;
         }
-        v = atoi(val);
-        if (v < 1 || v > FTPD_SPACE_MAX)
+        if (!site_parse_range(val, FTPD_SPACE_MAX, &v) || v < 1)
             site_warn(warn, warnsz,
                 "DIRECTORY must be 1-16777215; keeping the current value");
         else
             sess->alloc.dirblks = v;
+        return 0;
+    }
+
+    if (strcmp(key, "RETPD") == 0) {
+        /* Days, 0-9999 as on z/OS.  0 is a real value (no retention), so
+        ** only a bare RETPD resets it. */
+        int v;
+        if (val[0] == '\0') {
+            sess->alloc.retpd = 0;
+            return 0;
+        }
+        if (!site_parse_range(val, FTPD_RETPD_MAX, &v))
+            site_warn(warn, warnsz,
+                "RETPD must be 0-9999; keeping the current value");
+        else
+            sess->alloc.retpd = v;
         return 0;
     }
 
@@ -317,7 +430,7 @@ site_apply_one(ftpd_session_t *sess,
 
     /* --- Transfer modifiers (toggles) --- */
 
-    if (strcmp(key, "TRAILING") == 0) {
+    if (strcmp(key, "TRAILINGBLANKS") == 0) {
         sess->trailing = !sess->trailing;
         return 0;
     }
@@ -365,9 +478,9 @@ site_apply_one(ftpd_session_t *sess,
 
     /* --- SMS classes (accepted silently, no SMS on MVS 3.8j) --- */
 
-    if (strcmp(key, "DATACLAS") == 0 ||
-        strcmp(key, "STORCLAS") == 0 ||
-        strcmp(key, "MGMTCLAS") == 0) {
+    if (strcmp(key, "DATACLASS") == 0 ||
+        strcmp(key, "STORCLASS") == 0 ||
+        strcmp(key, "MGMTCLASS") == 0) {
         return 0;
     }
 
@@ -392,6 +505,7 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
     char badmsg[160];
     const char *p;
     const char *end;
+    const char *full;
     int tlen;
     int n_tokens;
     int n_unrecognized;
@@ -467,7 +581,8 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
         tok[tlen] = '\0';
 
         parse_kv(tok, key, sizeof(key), val, sizeof(val));
-        if (site_apply_one(sess, key, val, warn, sizeof(warn)) != 0) {
+        full = site_resolve(key);
+        if (!full || site_apply_one(sess, full, val, warn, sizeof(warn)) != 0) {
             /* Keep the first offender verbatim for the reply — z/OS names it,
             ** and "which one?" is the only question the old wording left. */
             if (badtok[0] == '\0') {

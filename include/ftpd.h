@@ -96,6 +96,7 @@ typedef struct ftpd_alloc {
     char            volume[7];      /* target volume                  */
     char            unit[5];        /* device type                    */
     int             dirblks;        /* PDS directory blocks           */
+    int             retpd;          /* retention in days, 0 = none    */
 } ftpd_alloc_t;
 
 /* --- Forward declarations --- */

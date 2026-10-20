@@ -376,9 +376,9 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     ** deliberately left alone.  Putting the STC identity back is therefore
     ** this handler's job and nobody else's.
     **
-    ** It is also the fail-closed direction: FTPD/USER is least-privilege, so
-    ** a concurrent session transiently pulled onto it can only lose
-    ** authority, never gain it.
+    ** It is also the fail-closed direction: the STC identity is meant to be
+    ** least-privilege, so a concurrent session transiently pulled onto it
+    ** can only lose authority, never gain it.
     **
     ** This runs first because it must hold even if a later cleanup step
     ** re-ABENDs. */

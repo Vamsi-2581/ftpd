@@ -111,37 +111,42 @@ contents, which presents as "my change had no effect" rather than as a failure.
 
 ---
 
-## 2. The FTPD user
+## 2. The identity of the FTPD started task
 
-Add to `SYS1.SECURE.CNTL(USERS)`:
+FTPD does not choose its own identity. It runs under whatever RAKF assigned to
+the started task when it was created, and keeps that as its resting identity
+for as long as it lives. Section 5 explains why that identity matters.
 
-```
-         1         2         3
-1234567890123456789012345678901234
-FTPD     USER     Kf7Qw2Rt N
-```
+What RAKF assigns depends on the release:
 
-- **group `USER`** — FTPD requests this group by name when it switches identity
-  at startup. Whatever you put in columns 10–17 is *not* what it ends up with:
-  RAKF does not check the connection at RACINIT, so the group FTPD asks for is
-  the group it gets. Keeping them the same avoids a table that says one thing
-  while the console says another.
-- **A password is required.** RAKF 1.2.x rejects the line at reload if columns
-  19–26 are blank, and the reload then fails as a whole.
-- **Operations authority `N`** — see [section 5](#5-why-ftpd-switches-identity).
-  This one character is load-bearing.
+| RAKF | Identity of the started task `FTPD` |
+|------|-------------------------------------|
+| assigns by STC name | the identity the RAKF configuration maps the name `FTPD` to |
+| 1.2.x, 2.0.0 and any other without such a mapping | `STC` / `STCGROUP`, hardcoded in `ICHSFR00` |
 
-> **Pick a real password here.** FTPD never uses it — it signs on with
-> `PASSCHK=NO` — but the account is a normal RAKF user, so anyone who knows the
-> password can log in over FTP as `FTPD`. Treat it as a credential, not a
-> placeholder, and do not permit `FTPD` on `FTPAUTH` in the next section.
+The way a mapping is written is part of the RAKF release that provides it — see
+that release's documentation. FTPD needs two things from it:
 
-> **RAKF 2.0.0** blanks the password column and keeps the credential in
-> `SYS1.SECURE.SHADOW`. There, `ADDUSER FTPD DFLTGRP(USER)` does this step and a
-> blank column 19–26 is correct — the exact opposite of 1.2.x. Check which
-> release you are on before copying either form.
+- **Map the name `FTPD` to an identity with Operations authority `N`.** This one
+  character is load-bearing, see [section 5](#5-why-the-started-tasks-identity-matters).
+- **Keep that identity least-privilege.** It is an invariant, not a
+  recommendation, and it is spelled out in section 5.
 
-Then `S RAKF`.
+If the identity is a userid in `SYS1.SECURE.CNTL(USERS)`, it is a normal RAKF
+account like any other: RAKF 1.2.x requires a password in columns 19–26 and
+rejects the whole reload if it is blank, and anyone who knows that password can
+log in over FTP as that user. Pick a real password, treat it as a credential,
+and do not permit the userid on `FTPAUTH` in the next section. On RAKF 2.0.0
+the credential lives in `SYS1.SECURE.SHADOW` and the column is blank — check
+which release you are on before copying either form.
+
+After any change to the tables, `S RAKF`.
+
+> **Upgrading from FTPD 1.2.0 or earlier:** those releases logged on as
+> `FTPD`/`USER` themselves at startup. FTPD 1.3.0 does not. The `FTPD` user
+> line in `USERS` is no longer used by FTPD; on a RAKF without a mapping by STC
+> name the started task now runs as `STC`/`STCGROUP` again, with Operations
+> authority. Section 5 says what that means.
 
 ---
 
@@ -167,7 +172,7 @@ universal first, as above.
 **Define this profile.** It is tempting to skip it, because FTPD lets everyone
 in when it is absent — but that is not a permissive default, it is RAKF's
 behaviour of granting **ALTER to undefined resources**. Skipping it also means
-the `FTPD` account from section 2 can log in over FTP.
+the userid of the started task from section 2 can log in over FTP.
 
 ### Which group
 
@@ -182,7 +187,7 @@ If you would rather let every ordinary user in, permit the shared group instead:
 FACILITYFTPAUTH                                     USER    READ
 ```
 
-Either way, do not permit `FTPD` itself.
+Either way, do not permit the userid of the FTPD started task itself.
 
 ---
 
@@ -235,7 +240,7 @@ why RC 4 never occurs for the DATASET class there.
 
 ---
 
-## 5. Why FTPD switches identity
+## 5. Why the started task's identity matters
 
 `ICHSFR00` assigns work that carries no userid of its own:
 
@@ -246,45 +251,56 @@ why RC 4 never occurs for the DATASET class there.
 
 **The `STC` userid has Operations authority, hardcoded in `ICHSFR00`.**
 Operations means "always allow access unless explicitly denied by a rule" — so a
-started task that does nothing about it can reach every data set on the system.
+started task that keeps this default can reach every data set on the system
+whenever a check is made against the started task rather than a user.
 
-FTPD therefore performs an inline RACINIT at startup and drops from `STC` to its
-own identity:
-
-```
-FTPD004I STC IDENTITY SET TO FTPD/USER VIA RACINIT
-```
-
-That is what the `N` in column 28 of the `USERS` line is for: the identity FTPD
-lands on must not carry Operations authority, or the switch achieves nothing.
-
-If the RACINIT fails, FTPD reports it and **keeps running under `STC`**:
+FTPD no longer replaces the identity it starts with. At startup it reports the
+one it has:
 
 ```
-FTPD004W RACINIT ENVIR=CREATE FAILED RC=nn
+FTPD004I STC RUNS AS FTPD/USER
 ```
 
-Do not treat that as cosmetic. It means the server is running with Operations
-authority on every data set.
+On a RAKF that maps the STC name to a low-privilege identity, that is the
+identity you configured. On a RAKF without such a mapping it is
+`STC/STCGROUP`, and the server runs with Operations authority:
 
-### Security invariant — `FTPD/USER` must stay least-privilege
+```
+FTPD004I STC RUNS AS STC/STCGROUP
+```
+
+FTPD cannot tell the two situations apart by itself — read the message. If it
+names `STC`, either upgrade RAKF or accept that the started task is as
+privileged as the default account.
+
+If the address space has no security environment at all, FTPD says so:
+
+```
+FTPD004W NO SECURITY ENVIRONMENT FOR THE STC: RAKF PERMITS ANY ACCESS WITHOUT AN ACEE
+```
+
+Do not treat that as cosmetic. RAKF reads a missing ACEE as "access permitted",
+so nothing FTPD does outside a user's session is checked.
+
+### Security invariant — the started task's identity must stay least-privilege
 
 > **This is an invariant, not a recommendation.**
 >
-> `FTPD/USER` **must not** be granted broad data set authority — no
-> Operations-equivalent access, no wide `ID(FTPD) ACCESS(ALTER)` profiles. Its
-> only required authority is what the started task itself needs to run, never
-> access to user data. Per-user access is authorised against the **logged-in
-> user's** identity.
+> The identity of the started task **must not** be granted broad data set
+> authority — no Operations-equivalent access, no wide `ID(FTPD) ACCESS(ALTER)`
+> profiles. Its only required authority is what the started task itself needs to
+> run, never access to user data. Per-user access is authorised against the
+> **logged-in user's** identity.
 >
-> **Why it is an invariant:** the per-command ABEND recovery handler resets the
-> address-space-wide security environment (`ASXBSENV`) to the `FTPD/USER` ACEE
-> after an unexpected ABEND. Sessions run as concurrent subtasks sharing that
-> one field, so a concurrent session can be transiently pulled onto
-> `FTPD/USER`. That is fail-closed **only while `FTPD/USER` is minimally
-> privileged**: a session pulled onto it can lose authority, never gain it. Give
-> `FTPD/USER` broad authority and the same transient switch becomes
-> **fail-open** — a concurrent session's data set OPEN could momentarily
+> **Why it is an invariant:** after every operation that runs under a user's
+> identity, and after an unexpected ABEND in a session, FTPD puts the
+> address-space-wide security environment (`ASXBSENV`) back to the identity the
+> started task started with. Sessions run as concurrent subtasks sharing that
+> one field, so a concurrent session can be transiently pulled onto it. That is
+> fail-closed **only while that identity is minimally privileged**: a session
+> pulled onto it can lose authority, never gain it. Give it broad authority —
+> which is exactly what `STC/STCGROUP` is — and the same transient switch
+> becomes **fail-open**: a concurrent session's data set OPEN could momentarily
 > authorise with elevated access.
 
 ---
@@ -292,12 +308,14 @@ authority on every data set.
 ## 6. Verify
 
 1. `S RAKF` — expect `RAKFUIDS4  USER TABLE UPDATED`.
-2. `/S FTPD` — expect `FTPD004I STC IDENTITY SET TO FTPD/USER VIA RACINIT`.
+2. `/S FTPD` — expect `FTPD004I STC RUNS AS` followed by the identity you
+   configured for the started task. `STC/STCGROUP` there means no mapping
+   applies (section 5).
 3. Log in over FTP with an ordinary userid that is in the permitted group, and
    with one that is not. The second must be refused with `530`.
 
 Step 3 is the one worth doing. Steps 1 and 2 only prove the tables loaded and
-FTPD changed identity; they say nothing about whether `FTPAUTH` is actually
+which identity the started task has; they say nothing about whether `FTPAUTH` is actually
 gating anything.
 
 ---
@@ -309,8 +327,9 @@ gating anything.
 | `RAKFUIDS2  INPUT DATA INVALID OR OUT OF SEQ.` | A malformed line, or the table is not in ascending sort order. The utility terminates and the in-core table keeps its **previous** contents — which looks exactly like "my change had no effect". The echoed card masks the password as `********`, so it cannot tell you whether that was the problem |
 | Reload rejected and the echoed card looks fine | Most likely a blank password. RAKF 1.2.x requires columns 19–26 to be filled — section 2 |
 | `RAKF008W illegal operation -- access denied` | The `RAKFADM` FACILITY profile denies the table-update utility |
-| `FTPD004W RACINIT ENVIR=CREATE FAILED` | The `FTPD` user is not in `USERS`, or the table was never reloaded. FTPD is running under `STC` with Operations authority |
-| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. The RACINIT above cannot work either |
+| `FTPD004I STC RUNS AS STC/STCGROUP` | No mapping of the STC name `FTPD` applies — the RAKF release has none, or the name is not in its configuration. FTPD is running with Operations authority |
+| `FTPD004W NO SECURITY ENVIRONMENT` | The address space has no ACEE. RAKF permits any access without one |
+| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. Commands that need authorization fail |
 | `530 Login incorrect` for a valid user | Wrong password, or the user is not in `USERS`. A user added without `S RAKF` does not exist yet |
 | `530 Not authorized for FTP access` | `FTPAUTH` denies this user — check the group in columns 53–60 |
 | `550 Access denied to <dsn>` | A `DATASET` profile refuses the access under the **client's** identity, not FTPD's |

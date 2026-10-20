@@ -28,8 +28,16 @@ kind = "application"
 # libc370 whose CLOSE of a member that failed with an x37 skips the STOW
 # (mvslovers/libc370#524): before it, a STOR into a full PDS emptied the
 # member it was replacing. The IBM macros come from maclib370 since 2.8.0.
+# 2.24.1 with cc370 1.6.1: every libc370 2.x header accepts cc370 >= 1.6.0, < 2,
+# so the cc370 pin stays. 2.24.1 rather than 2.24.0 because from 2.15.0 to
+# 2.24.0 the library created its open-file list and the standard streams on
+# first use in the caller's storage key; an AC(1) module whose first fopen()
+# came inside a key-0 window got them in key-0 storage and abended S0C4 in its
+# own key (mvslovers/libc370#693, fixed in 2.24.1). 2.24.0 is also the first
+# libc370 whose send() passes at most one 256-byte X'75' segment per call
+# (mvslovers/libc370#160), which closes the send side of #137.
 cc370 = "1.6.1"
-libc370 = "2.10.3"
+libc370 = "2.24.1"
 mbt = "3.0"
 
 # ── Load module ──────────────────────────────────────────

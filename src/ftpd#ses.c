@@ -93,6 +93,29 @@ ftpd_session_free(ftpd_session_t *sess)
 }
 
 /* --------------------------------------------------------------------
+** Queue a session to the worker pool; release it if the pool says no.
+**
+** cthread_queue_add() answers -1 when the manager is quiescing or stopped
+** (libc370 2.19.0 and later; earlier versions returned 0 and dropped the
+** element) and when it has no storage for the queue element.  Nobody owns
+** the session then, so it is answered with 421 and freed here, which
+** closes the control socket.
+** ----------------------------------------------------------------- */
+int
+ftpd_session_queue(ftpd_server_t *server, ftpd_session_t *sess)
+{
+    if (cthread_queue_add(server->mgr, sess) == 0)
+        return 0;
+
+    ftpd_log(LOG_WARN, "%s: no worker for connection on socket %d, closed",
+             __func__, sess->ctrl_sock);
+    ftpd_session_reply(sess, FTP_421,
+                       "Service not available, closing control connection");
+    ftpd_session_free(sess);
+    return -1;
+}
+
+/* --------------------------------------------------------------------
 ** Write raw bytes to the control connection.
 **
 ** Every reply funnels through here so a failed write is noticed once,

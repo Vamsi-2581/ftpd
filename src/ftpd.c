@@ -685,6 +685,7 @@ accept_loop(ftpd_server_t *server, int sock)
             break;
 
         /* Try accept — non-blocking, returns <0 if no connection */
+        memset(&caddr, 0, sizeof(caddr));
         len = sizeof(caddr);
         rc = accept(sock, &caddr, &len);
         if (rc < 0)
@@ -712,7 +713,7 @@ accept_loop(ftpd_server_t *server, int sock)
                  ntohl(caddr.sin_addr.s_addr) & 0xFF,
                  ntohs(caddr.sin_port));
 
-        cthread_queue_add(server->mgr, sess);
+        ftpd_session_queue(server, sess);
     }
 }
 

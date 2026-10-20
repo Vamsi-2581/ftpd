@@ -107,14 +107,13 @@ FTPD has no user database of its own. Every `USER`/`PASS` is verified by RAKF
 `DATASET` class under the logged-in user's identity. **On a system without RAKF
 nobody can log in**, and no configuration option turns that off.
 
-The setup — the `FTPD` user, the `USER` group and the `FTPAUTH` FACILITY
+The setup — the identity of the started task and the `FTPAUTH` FACILITY
 profile — is step 8, and the full reference is
 [FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
 
 ### Authorisation
 
-FTPD is link-edited `AC(1)` and needs to be APF-authorised for two things: the
-startup RACINIT that gives the started task its own identity, and the ACEE
+FTPD is link-edited `AC(1)` and needs to be APF-authorised for the ACEE
 switch that makes each session's dataset I/O run under the client's identity
 rather than the server's.
 
@@ -188,11 +187,10 @@ Unlike UFSD, FTPD **warns and keeps running** when authorisation fails:
 
 ```
 FTPD003W APF SETUP FAILED RC=n
-FTPD004W RACINIT FAILED: CANNOT ENTER SUPERVISOR STATE
 ```
 
 The server starts and accepts connections, but the commands that need
-authorisation fail one by one and say so. Treat those two messages as an
+authorisation fail one by one and say so. Treat that message as an
 install that is not finished.
 
 ---
@@ -642,11 +640,12 @@ because a `#` anywhere else is data.
 
 Without this, FTPD starts and refuses every login. The short version:
 
-1. Add the `FTPD` user to `SYS1.SECURE.CNTL(USERS)`, default group `USER`:
-
-   ```
-   FTPD     USER  DEFAULT-GROUP(USER)
-   ```
+1. Give the started task `FTPD` a low-privilege identity in RAKF. FTPD does
+   not log on to one itself: it keeps the identity RAKF assigned when the task
+   was created. On a RAKF that assigns an identity by STC name, map the name
+   `FTPD` to a userid with Operations authority `N`; on any other RAKF the task
+   runs as `STC`/`STCGROUP`, which has Operations authority. `FTPD004I` at
+   startup names the identity you got — see step 9.
 
 2. Optionally define the `FTPAUTH` FACILITY profile, which controls who may use
    FTP at all. If it is **not** defined, RAKF answers "undefined resource" and
@@ -659,12 +658,20 @@ Without this, FTPD starts and refuses every login. The short version:
 
 3. Reload: `/F RAKF,RELOAD`
 
-**One security invariant:** `FTPD/USER` must stay least-privilege — no broad
-`ID(FTPD) ACCESS(ALTER)` dataset profiles. Per-user access is authorised
-against the *logged-in user's* identity, and the ABEND recovery path can
-transiently put a concurrent session on the `FTPD/USER` ACEE. While that
-identity is minimally privileged the switch can only lose authority; give it
-broad authority and the same switch becomes fail-open.
+**One security invariant:** the identity of the started task must stay
+least-privilege — no broad `ID(FTPD) ACCESS(ALTER)` dataset profiles. Per-user
+access is authorised against the *logged-in user's* identity, and the ABEND
+recovery path can transiently put a concurrent session on the started task's
+ACEE. While that identity is minimally privileged the switch can only lose
+authority; give it broad authority and the same switch becomes fail-open.
+`STC`/`STCGROUP` is such an identity.
+
+**Upgrading from 1.2.0 or earlier:** those releases logged on as `FTPD`/`USER`
+at startup, so the started task ran under that identity whatever RAKF assigned.
+FTPD 1.3.0 does not. On a system whose RAKF has no mapping by STC name, such as
+TK5 before Update 6 (which brings the RAKF that maps by STC name), the started
+task now runs as `STC`/`STCGROUP` again, with Operations authority.
+The `FTPD` line in `USERS` is no longer used by FTPD.
 
 The complete reference — dataset access levels per FTP command, per-user HLQ
 patterns, RAKFCL equivalents and the reasoning behind the invariant — is
@@ -684,12 +691,15 @@ A healthy start ends in `FTPD001I … READY`:
 
 ```
 FTPD000I FTPD <version> (A3F2C91) STARTING
-FTPD005I LIBC370 2.10.3 (A790DC4)
+FTPD005I LIBC370 2.24.1 (EF09210)
 FTPD008I AUTHORIZED BY LIBRARY (MODULE KEY 0)
-FTPD004I STC IDENTITY SET TO FTPD/USER VIA RACINIT
+FTPD004I STC RUNS AS <user>/<group>
 FTPD054I LISTENING ON 0.0.0.0 PORT 2121
 FTPD001I FTPD <version> READY
 ```
+
+`FTPD004I` names the identity RAKF gave the started task: the one you mapped
+the name `FTPD` to, or `STC`/`STCGROUP` where RAKF has no mapping (step 8).
 
 The two build stamps identify exactly what is running: `FTPD000I` gives the
 version and the commit it was built from, `FTPD005I` the libc370 it was linked
@@ -775,7 +785,9 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | SMP reports success, but the module is not where you expected | A ddname says nothing about the dataset behind it. Check the JCL, then look at the library itself |
 | `S806` (module not found) at `/S FTPD` | `STEPLIB` in the procedure does not name the LINKLIB the APPLY wrote to |
 | `/S FTPD` rejected — procedure not found | Procedure not copied into a PROCLIB in the started-task concatenation |
-| `FTPD003W APF SETUP FAILED` / `FTPD004W RACINIT FAILED` | No RAKF (so no SVC 244) and no APF entry — step 2 |
+| `FTPD003W APF SETUP FAILED` | No RAKF (so no SVC 244) and no APF entry — step 2 |
+| `FTPD004I STC RUNS AS STC/STCGROUP` | RAKF assigned the default started-task account, which has Operations authority — step 8 |
+| `FTPD004W NO SECURITY ENVIRONMENT FOR THE STC` | The address space has no ACEE, and RAKF permits any access without one — step 8 |
 | `FTPD002E FTPD IS ALREADY ACTIVE ON PORT n` | An older instance is still up. `/P FTPD` first |
 | `FTPD009E PARMLIB (DD:FTPDPRM) READ FAILED` | An I/O error on the parmlib data set, not a syntax error. FTPD refuses to start on a half-read configuration -- the member is unreadable where it stopped, so copy it in again |
 | `530 Login incorrect` for a valid user | RAKF user or password wrong — step 8 |

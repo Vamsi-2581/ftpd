@@ -362,13 +362,13 @@ ftpd_data_recv(ftpd_session_t *sess, void *buf, int len)
     ** therefore doing nothing the library was not already doing, while
     ** stating a fact about the emulator in a socket wrapper that has no
     ** business knowing it, and hiding any bulk path recv() might ever gain
-    ** (#124).  The toolchain pin is at 1.0.6, so the runtime this links
+    ** (#124).  The toolchain pin is at 2.24.1, so the runtime this links
     ** against has the library-side cap.
     **
-    ** NOTE the mirror is still open: libc370's send() has no cap at all and
-    ** the same exposure, deliberately, because capping it would change what
-    ** every caller sees per call.  ftpd_data_send() above is the choke point
-    ** for that side. */
+    ** The mirror, send(), is capped the same way since libc370 2.24.0
+    ** (libc370#160): one 256-byte segment per call and the short count
+    ** returned, so ftpd_data_send() above needs no cap of its own, only
+    ** the loop on partial writes it already has (#137). */
     rc = recv(sess->data_sock, buf, len, 0);
     if (rc < 0) {
         ftpd_log(LOG_ERROR, "%s: recv failed, errno=%d", __func__, errno);

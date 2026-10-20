@@ -782,9 +782,11 @@ STC identity.
 
 **STC identity:**
 
-At startup, FTPD switches from the default STC identity to `FTPD/USER`
-via an inline RACINIT (PASSCHK=NO).  This requires the FTPD user
-to be defined in RAKF.
+FTPD does not log on to an identity of its own.  The identity RAKF assigned
+to the started task is captured at startup (`server->stc_acee`) and is the
+identity every identity window, and ABEND recovery, restores.  It must be
+least-privilege; the startup message `FTPD004I` names it.  Before 1.3.0 FTPD
+replaced it with `FTPD/USER` via an inline RACINIT.
 
 See `docs/FTPD_RAKF_SETUP.md` for the complete RAKF configuration guide.
 

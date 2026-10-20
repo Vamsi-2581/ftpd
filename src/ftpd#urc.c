@@ -21,7 +21,9 @@ ftpd_ufs_rc_to_ftp(int rc)
     case UFSD_RC_NOTDIR:      return FTP_550;
     case UFSD_RC_ISDIR:       return FTP_550;
     case UFSD_RC_NOSPACE:     return FTP_452;
-    case UFSD_RC_NOINODES:    return FTP_452;
+    /* INODES is fixed at format time: a full table stays full until a
+    ** reformat, so this must not wear a code that invites a retry. */
+    case UFSD_RC_NOINODES:    return FTP_552;
     case UFSD_RC_IO:          return FTP_451;
     case UFSD_RC_BADFD:       return FTP_451;
     case UFSD_RC_NOTEMPTY:    return FTP_550;

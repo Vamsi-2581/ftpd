@@ -57,6 +57,11 @@ reus = false
 [test.TSTADR]
 sources = ["test/tstadr.c", "src/ftpd#adr.c"]
 
+# ftpd_ufs_rc_to_ftp() -- UFSD return code to FTP reply code (#151).  ftpd#urc.c
+# is free of ftpd.h and of MVS services, so this is DUAL like TSTADR.
+[test.TSTUER]
+sources = ["test/tstuer.c", "src/ftpd#urc.c"]
+
 # ftpd_list_nomem() -- a list builder's NULL with errno ENOMEM is a storage
 # shortage, not an empty result (#118).  ftpd#lse.c is free of project and MVS
 # headers, so this is DUAL like TSTADR.

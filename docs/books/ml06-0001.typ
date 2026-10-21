@@ -15,8 +15,9 @@
     MVS 3.8j (ftpd 1.3.0), and to all subsequent releases and modifications
     until otherwise indicated in new editions.
 
-    *Draft.* FTPD 1.3 is still in development, and so is this book: chapters
-    still to be written say so.
+    *Draft.* FTPD 1.3 is still in development, and so is this book. The
+    chapters on installing and removing FTPD were measured on release 1.2.0,
+    and are to be measured again on the release 1.3.0.
 
     Comments on this book may be addressed to the issue tracker of the
     mvslovers/ftpd repository on GitHub.
@@ -39,20 +40,21 @@ and how an operator runs the started task. Every command, reply code,
 parameter and message in full is the subject of the companion volume, the
 _FTPD Reference_.
 
-The book describes FTPD 1.3. Installing FTPD, upgrading it and removing it
-are described in the installation guide in the `docs/` directory of the
-repository, not here.
+The book describes FTPD 1.3: how to install it, upgrade it and take it off a
+system again, and how to use and run it afterwards.
 
 == How This Book Is Organized
 
 #deflist(width: 1.35in,
   [Chapter 1], [“Introducing FTPD”.],
-  [Chapter 2], [“A First Session”.],
-  [Chapter 3], [“Working with Data Sets”.],
-  [Chapter 4], [“Describing New Data Sets with SITE”.],
-  [Chapter 5], [“Security and Identity”.],
-  [Chapter 6], [“Running FTPD”.],
-  [Chapter 7], [“JES and UFS”.],
+  [Chapter 2], [“Installing FTPD”.],
+  [Chapter 3], [“A First Session”.],
+  [Chapter 4], [“Working with Data Sets”.],
+  [Chapter 5], [“Setting Up a Session with SITE”.],
+  [Chapter 6], [“Security”.],
+  [Chapter 7], [“Operating FTPD”.],
+  [Chapter 8], [“The JES and UFS Views”.],
+  [Chapter 9], [“Removing FTPD”.],
   [Appendix A], [“Glossary”.],
 )
 
@@ -71,12 +73,14 @@ repository, not here.
 #set page(numbering: "1")
 
 #part("ug-intro.html", include "guide/ug-intro.typ")
+#part("ug-install.html", include "guide/ug-install.typ")
 #part("ug-first.html", include "guide/ug-first.typ")
 #part("ug-data.html", include "guide/ug-data.typ")
 #part("ug-site.html", include "guide/ug-site.typ")
 #part("ug-security.html", include "guide/ug-security.typ")
 #part("ug-ops.html", include "guide/ug-ops.typ")
 #part("ug-other.html", include "guide/ug-other.typ")
+#part("ug-remove.html", include "guide/ug-remove.typ")
 
 #show: appendices
 #part("ug-glossary.html", include "guide/ug-glossary.typ")

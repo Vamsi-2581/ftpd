@@ -64,9 +64,14 @@ Before the tag:
    libc370 level and the FMID. `docs/uninstall.md` holds the FMID table, the
    `DELETE` list of the dummy function `TFTPDEL` and the `UCLIN` jobs: add the
    new id to the `DELETE` list, to both `UCLIN` jobs and to their `LIST`
-   statements. The jobs and captures there were measured on 1.2.0; run them
-   once on a throwaway container with the release candidate installed from
-   the SMP package, and compare the output with the text.
+   statements. The book chapters `ug-install` and `ug-remove` repeat the same
+   jobs: change them in the same commit, together with the FMID table, the
+   file names (`ftpd-X.Y.Z-*`) and the captures under `docs/books/ex/ug-install/`
+   and `docs/books/ex/ug-remove/`. The jobs and captures were measured on
+   1.2.0 (the edition notice says so); run them once on a throwaway container
+   with the release candidate installed from the SMP package, replace the
+   captures with that output, compare it with the text, and then remove the
+   sentence about 1.2.0 from the notice.
 
 After the tag, with the release page created by the workflow:
 

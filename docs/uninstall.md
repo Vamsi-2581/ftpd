@@ -331,8 +331,16 @@ job of the installation creates both with `DISP=(NEW,CATLG,DELETE)` and is
 meant for names that are free. Delete them in a job of your own:
 
 ```
+//FTPDSCR  JOB (SYS),'FTPD SCRATCH',
+//             CLASS=A,MSGCLASS=H,MSGLEVEL=(1,1),
+//             REGION=4096K
+//IDCAMS  EXEC PGM=IDCAMS
+//SYSPRINT DD  SYSOUT=*
+//SYSIN    DD  *
   DELETE FTPD.LINKLIB  NONVSAM SCRATCH PURGE
   DELETE FTPD.AFTPDLOD NONVSAM SCRATCH PURGE
+/*
+//
 ```
 
 Each statement ends with `IDC0550I ENTRY (A) ... DELETED`.

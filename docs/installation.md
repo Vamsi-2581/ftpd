@@ -147,9 +147,9 @@ Nothing reports the mismatch, because FTPD recovers from it: `clib_apf_setup()`
 falls back to SVC 244 and the server comes up authorised anyway. The only place
 the two are distinguishable is the startup message below — which is why
 `AUTHORIZED BY SVC` **on a system where you added an APF entry** is not a site
-decision but a symptom. Measured on mvsdev 2026-09-14 by the UFSD install,
-which walked into exactly this: an `IEAAPF00` entry for a data set that did not
-exist yet, and an allocation job free to put it anywhere.
+decision but a symptom. Measured on a test system with an `IEAAPF00` entry for
+a data set that did not exist yet and an allocation job free to put it
+anywhere.
 
 The two routes are not equivalent in one respect that matters if you ever have
 to debug FTPD. An **APF entry** authorises the job step *before* program fetch,
@@ -284,10 +284,10 @@ HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
 `FTPD.V1R0M2.LINKLIB` is never opened. It keeps its copy of the old, still
 APF-authorised `FTPD` module, and nothing in the job log mentions it.
 
-Measured on mvsdev 2026-09-14 with throwaway ids and a throwaway module name,
-in exactly this shape — same ddnames, different data sets (`TTMPDINS JOB00323`
-installs the predecessor, `TTMPEINS JOB00325` upgrades over it, `TTMPECHK
-JOB00326` reads the result). The upgrade completed: the new SYSMOD `REC APP
+Measured on a test system with throwaway ids and a throwaway module name,
+in exactly this shape — same ddnames, different data sets (one job installs
+the predecessor, a second upgrades over it, a third reads the result). The
+upgrade completed: the new SYSMOD `REC APP
 ACC` in both zones, `MOD` carrying the new `FMID` and `RMID`, both new
 libraries holding the module — **and the old target library still holding its
 own copy.**

@@ -7,7 +7,7 @@ FTPD runs as a started task. The operator starts it, asks it questions and
 stops it from the console. This chapter covers the daily work: starting and
 stopping, the messages at start, the configuration file, the console
 commands, and what FTPD does when a command ends in an ABEND. The
-installation is in `docs/installation.md`. The message texts and the
+installation is in @ug-install and the removal in @ug-remove. The message texts and the
 parameters are listed in full in the _FTPD Reference_.
 
 == Starting and Stopping <ug-ops-start>
@@ -28,7 +28,7 @@ these DD statements:
       to it.],
     [#cmd("SYSUDUMP")], [A dump, if the address space abends.],
     [#cmd("HASPCKPT"), #cmd("HASPACE1")], [The JES2 checkpoint and spool data
-      sets, for the JES view (@ug-other-jes). `docs/installation.md` has the
+      sets, for the JES view (@ug-other-jes). @ug-install-jes has the
       statements.],
   )
 ]

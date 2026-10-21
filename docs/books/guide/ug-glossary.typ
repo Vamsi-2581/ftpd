@@ -22,9 +22,14 @@ its own.
     chooses between the data set view and the _UFS_ view (@ug-other-ufs).],
   [data connection], [The TCP connection that carries the content of a
     file or a list. A command opens one for each transfer.],
+  [dummy function], [A function SYSMOD without elements that names the ids of
+    earlier releases in a #cmd("DELETE") operand. #cmd("TFTPDEL") is the one
+    that removes FTPD (@ug-remove-dummy).],
   [FACILITY class], [A resource class of the security product. FTPD checks the
     resource #cmd("FTPAUTH") in it to decide who may log in
     (@ug-security-ftpauth).],
+  [FMID], [The id of a function SYSMOD in SMP, for example #cmd("TFTP130"). One
+    release of FTPD has one FMID, and an id is used once (@ug-remove-what).],
   [FTPD], [The FTP server for MVS 3.8j.],
   [HFS], [The name that FTP replies use for a file system with directories.
     In FTPD it is _UFS_.],
@@ -44,6 +49,9 @@ its own.
     directory. FTPD shows it as a directory (@ug-data-pds).],
   [RAKF], [The security product that FTPD uses on MVS 3.8j. It checks user ID
     and password, and the access to data sets (@ug-security).],
+  [SMP], [The System Modification Program, release 4, that comes with MVS 3.8j.
+    It installs FTPD from a SYSMOD and keeps the inventory that the removal
+    edits (@ug-install).],
   [spool], [The storage of JES2 for the input and output of jobs.],
   [started task], [A program that the operator starts with #cmd("S")
     and that runs without a user. FTPD runs as one (@ug-ops-start).],

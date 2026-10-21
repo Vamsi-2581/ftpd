@@ -184,7 +184,9 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
     [Command], [Behaviour],
     [#cmd("RETR")], [MVS: #cmd("125 Sending data set NAME FIXrecfm 80") (the
       record format and length are those of the data set), the data, and
-      #cmd("250 Transfer completed successfully."). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
+      #cmd("250 Transfer completed successfully."). In #cmd("TYPE A") one
+      record is one line, also for the record formats #cmd("V"), #cmd("VB") and
+      #cmd("VBA") (_FTPD User's Guide_, "Fetching"). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
       of a job (@ref-cmd-jes).],
     [#cmd("STOR")], [MVS: #cmd("125 Storing data set NAME"), the data, and
       #cmd("250 Transfer completed successfully."). Creates the data set or
@@ -195,7 +197,9 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       partitioned data set gets a #cmd("552") (@ref-reply-552). In #cmd("TYPE A")
       a line that is longer than the record gets a #cmd("451"), or with
       #cmd("SITE TRUNCATE") is cut and reported in the #cmd("250")
-      (@ref-site-truncate).
+      (@ref-site-truncate). In #cmd("TYPE A") an empty line in a data set of
+      a variable or undefined record format is stored as a record of one blank
+      (_FTPD User's Guide_, "Storing").
       UFS: #cmd("150 Opening data connection for PATH") and
       #cmd("226 Transfer complete"). A file that exists is replaced. JES:
       submits the data as a job.],

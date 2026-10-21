@@ -178,7 +178,10 @@ of the full names, and still work.
       JES view and keeps the view that was active. Any other value, or none,
       ends the JES view and returns to the kept view.],
     [#cmd("TRAILINGBLANKS")], [A switch. Each use turns on or off the sending of the
-      blanks at the end of a record in text mode.],
+      blanks at the end of a record in text mode. A record of one blank, as
+      #cmd("STOR") writes for an empty line in a variable data set, is sent as
+      an empty line with the blanks dropped and as a single blank with
+      them kept (_FTPD User's Guide_, "Fetching").],
     [#cmd("JESJOBNAME=n")], [The job name for the job list. Upper case.
       #cmd("JESJOBNAME=") with no value ends the filter and
       lists all job names.],

@@ -725,6 +725,17 @@ Without this, FTPD starts and refuses every login. The short version:
    runs as `STC`/`STCGROUP`, which has Operations authority. `FTPD004I` at
    startup names the identity you got — see step 9.
 
+   **RAKF 2.0.0 maps by STC name:** the mapping is a userid `FTPD` in
+   `SYS1.SECURE.CNTL(USERS)`, and its group has to be allowed `READ` on the
+   `FACILITY` profile `SVC244`, or FTPD ends in `FTPD003W APF SETUP FAILED`
+   (FTPD asks for its authorization with SVC 244). Use a group that holds
+   nothing else, such as `STARTED` in the `PROFILES` that come with RAKF 2.0.0
+   — not `STCGROUP`, which has ALTER on all datasets there. Create the user
+   with `ADDUSER FTPD PASSWORD(pw) DFLTGRP(STARTED)`; `ADDUSER` and `PERMIT`
+   need the SPECIAL authority, which is column 30 of the `USERS` line (a `Y`),
+   and a `USERS` table from an earlier RAKF has none. The setup guide, sections
+   1 and 2, has the details.
+
 2. Define the `FTPAUTH` FACILITY profile, which controls who may use FTP at
    all: make sure it exists in `SYS1.SECURE.CNTL(PROFILES)` and that the group
    of your FTP users may read it. If it is **not** defined, RAKF answers
@@ -766,9 +777,11 @@ authority; give it broad authority and the same switch becomes fail-open.
 **Upgrading from 1.2.0 or earlier:** those releases logged on as `FTPD`/`USER`
 at startup, so the started task ran under that identity whatever RAKF assigned.
 FTPD 1.3.0 does not. On a system whose RAKF has no mapping by STC name, such as
-TK5 before Update 6 (which brings the RAKF that maps by STC name), the started
-task now runs as `STC`/`STCGROUP` again, with Operations authority.
-The `FTPD` line in `USERS` is no longer used by FTPD.
+TK5 before Update 6, the started task now runs as `STC`/`STCGROUP` again, with
+Operations authority, and the `FTPD` line in `USERS` is no longer used by FTPD.
+On RAKF 2.0.0 that line is the mapping, and its group must be allowed SVC 244
+(above). The group `USER` of the FTPD 1.2.0 guide is not one that the shipped
+`SVC244` profile allows.
 
 The complete reference — dataset access levels per FTP command, per-user HLQ
 patterns, RAKFCL equivalents and the reasoning behind the invariant — is

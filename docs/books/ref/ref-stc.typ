@@ -130,9 +130,9 @@ FTPD has three kinds of tasks:
   the console once each second.
 - The socket thread opens the listener, accepts the connections and hands each
   to a worker. It looks once each second, and at each look it accepts every
-  connection that waits. A stop request ends the wait at once and ends the
-  accepting after the connection in hand. Before FTPD 1.3.0, it accepted one
-  connection at each look.
+  connection that waits. Once the main task has read a stop request, the
+  socket thread ends its wait at once and takes no further connection after
+  the one in hand. Before FTPD 1.3.0, it accepted one connection at each look.
 - The worker threads run the sessions. FTPD creates the pool with
   #cmd("MAXSESSIONS") as its size, but with at least 4 threads. One worker serves
   one session until the client quits or the connection closes.

@@ -2,6 +2,7 @@
 ** TSTPRM -- ftpd#119: a read error on DD:FTPDPRM must abandon the start,
 **           not come up on half a configuration.
 **           ftpd#100: the space defaults parse, and are range checked.
+**           ftpd#207: settings without effect are reported, not swallowed.
 **
 ** Since libc370 1.0.4 an uncorrectable I/O error is ferror() + errno EIO
 ** instead of ABEND S001, and feof() is deliberately NOT set.  That turns
@@ -79,6 +80,10 @@ static const char * const parmlines[] = {
     "MAXRETPD=-5",              /* negative: must be refused              */
     "MAXRETPD=abc",             /* not a number, not 0: must be refused   */
     "MAXRETPD=10000",           /* above what SITE RETPD takes: refused   */
+    "AUTHUSER=IBMUSER",         /* #207: read, never used: ignored        */
+    "JESINTERFACELEVEL=1",      /* #207: likewise                         */
+    "PUB001,3350  volumes",     /* #207: the old DASD table: likewise     */
+    "BANNER=Ready, set, go",    /* a comma in a value is not a volume line */
     NULL
 };
 
@@ -160,6 +165,7 @@ main(int argc, char **argv)
 
     ftpdcfg_defaults(&cfg);
     CHECK_EQ(cfg.max_retpd, 365, "MAXRETPD defaults to 365 days");
+    CHECK_EQ(cfg.ignored, 0, "a fresh configuration ignored nothing");
 
     if (write_parmlib(dsn) != 0) {
         /* No vector, no verdict -- say so loudly rather than pass on a
@@ -199,6 +205,16 @@ main(int argc, char **argv)
 
         CHECK_EQ(cfg.max_retpd, 90,
                  "healthy FTPDPRM: MAXRETPD parsed, -5, abc and 10000 refused");
+
+        /* #207.  AUTHUSER, JESINTERFACELEVEL and a "VOLSER,UNIT" line were
+        ** stored and never read.  They are still recognised, so an old
+        ** member keeps loading, but each is counted (and logged) as having
+        ** no effect; the line after them still parses. */
+        CHECK_EQ(cfg.ignored, 3,
+                 "healthy FTPDPRM: AUTHUSER, JESINTERFACELEVEL and a volume "
+                 "line are counted as ignored");
+        CHECK(strcmp(cfg.banner, "Ready, set, go") == 0,
+              "healthy FTPDPRM: a comma in a value is not a volume line");
 
         __dsfree("FTPDPRM");
     } else {

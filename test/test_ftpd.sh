@@ -26,6 +26,8 @@
 #       (needs FTPD_CONSOLE, see below)
 #   14. FEAT, SIZE and MDTM in the MVS and in the UFS view: one FEAT reply
 #       in both, 502 for SIZE/MDTM on data sets, 213 for UFS
+#   15. Settings that took effect nowhere: SITE TRUNCATE on STOR, SITE RDW and
+#       SBSENDEOL refused, SITE JESSTATUS filters the JES listing
 #
 # Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
 # reach.  Set FTPD_CONSOLE to a command that sends one operator command and
@@ -1917,6 +1919,177 @@ else
     info "UFS not available, skipping the UFS half of Test 14"
 fi
 
+# ============================================================
+# TEST 15: Settings that took effect nowhere (#207)
+#
+# SITE TRUNCATE, SITE RDW, SITE SBSENDEOL, SITE JESSTATUS were accepted with
+# 200 and did nothing.  Now:
+#   - TRUNCATE decides what STOR does with a text line longer than the
+#     record: off, the transfer fails with 451 and a new data set is
+#     scratched; on, the line is cut and the 250 says (data was truncated);
+#   - RDW and SBSENDEOL other than CRLF are refused with 501;
+#   - JESSTATUS filters LIST, RETR and DELE in JES mode.
+# The per-keyword replies are in test/tstsit.c; this section is what the
+# settings do to a transfer.
+# ============================================================
+section "Test 15: Settings that took effect nowhere"
+
+DSN_TRN="${HLQ}.TEST.TRUNC"
+printf 'short\n0123456789ABCDEF\nlast\n' > "$TMPDIR/trn_long.txt"
+printf 'short\n0123456789\nlast\n' > "$TMPDIR/trn_cut.txt"
+printf 'short\n0123456789\nlast\n' > "$TMPDIR/trn_fit.txt"
+
+ftp_run "delete '$DSN_TRN'" /dev/null
+
+info "STOR of a 16 byte line into LRECL=10, TRUNCATE off"
+FTP_OUT="$TMPDIR/ftp_trn_off.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=10
+site blksize=100
+site primary=1
+site secondary=1
+site tracks
+type ascii
+put $TMPDIR/trn_long.txt '$DSN_TRN'
+CMDS
+)" "$FTP_OUT"
+if grep -q "^451 File transfer failed. File contains records that are longer than the LRECL" "$FTP_OUT"; then
+    pass "an overlong line fails the STOR with 451"
+else
+    fail "an overlong line without TRUNCATE: $(xfer_reply "$FTP_OUT")"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+fetch "$DSN_TRN" "$TMPDIR/trn_back0.txt"
+if [ ! -s "$TMPDIR/trn_back0.txt" ]; then
+    pass "the data set the failed STOR created is gone"
+else
+    fail "the failed STOR left a data set behind"
+fi
+
+info "the same STOR after SITE TRUNCATE"
+FTP_OUT="$TMPDIR/ftp_trn_on.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=10
+site blksize=100
+site primary=1
+site secondary=1
+site tracks
+site truncate
+type ascii
+put $TMPDIR/trn_long.txt '$DSN_TRN'
+CMDS
+)" "$FTP_OUT"
+if grep -q "^250 .*(data was truncated)" "$FTP_OUT"; then
+    pass "with TRUNCATE the STOR answers 250 (data was truncated)"
+else
+    fail "an overlong line with TRUNCATE: $(xfer_reply "$FTP_OUT")"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+fetch "$DSN_TRN" "$TMPDIR/trn_back1.txt"
+if diff -q "$TMPDIR/trn_cut.txt" "$TMPDIR/trn_back1.txt" > /dev/null 2>&1; then
+    pass "the long line was cut to the LRECL, its neighbours are intact"
+else
+    fail "TRUNCATE stored: $(tr '\n' '|' < "$TMPDIR/trn_back1.txt")"
+fi
+
+info "lines that fit, TRUNCATE on"
+FTP_OUT="$TMPDIR/ftp_trn_fit.log"
+ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=10
+site blksize=100
+site truncate
+type ascii
+put $TMPDIR/trn_fit.txt '$DSN_TRN'
+CMDS
+)" "$FTP_OUT"
+if grep -q "^250 Transfer completed successfully\.\s*$" "$FTP_OUT" \
+   && ! grep -q "truncated" "$FTP_OUT"; then
+    pass "lines of exactly LRECL fit: plain 250, no truncation reported"
+else
+    fail "lines that fit: $(xfer_reply "$FTP_OUT")"
+fi
+ftp_run "delete '$DSN_TRN'" /dev/null
+
+info "RDW, SBSENDEOL and JESSTATUS"
+FTP_OUT="$TMPDIR/ftp_site_dead.log"
+ftp_run "$(cat <<CMDS
+quote SITE RDW
+quote SITE SBSENDEOL=LF
+quote SITE SBSENDEOL=CRLF
+quote SITE JESSTATUS=HELD
+CMDS
+)" "$FTP_OUT"
+if grep -q "^501 SITE RDW is not supported" "$FTP_OUT"; then
+    pass "SITE RDW is refused with 501"
+else
+    fail "SITE RDW"; tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+# The 200 for SBSENDEOL=CRLF must come right after the 501 for =LF; the
+# multi-line JESSTATUS reply further down ends in the same 200 line.
+if grep -A1 "^501 SBSENDEOL=LF is not supported" "$FTP_OUT" \
+   | grep -q "^200 SITE command was accepted"; then
+    pass "SITE SBSENDEOL=LF is refused with 501, SBSENDEOL=CRLF is accepted"
+else
+    fail "SITE SBSENDEOL"; tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+if grep -q "^200-JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT" "$FTP_OUT"; then
+    pass "SITE JESSTATUS=HELD is refused with a warning"
+else
+    fail "SITE JESSTATUS=HELD"; tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+info "JESSTATUS filters the JES listing"
+printf '//FTPD14 JOB (ACCT),'"'"'FTPD TEST'"'"',CLASS=A,MSGCLASS=X\n//STEP1 EXEC PGM=IEFBR14\n' \
+    > "$TMPDIR/jfl_job.jcl"
+FTP_OUT="$TMPDIR/ftp_jfl_sub.log"
+ftp_run "site filetype=jes
+type ascii
+put $TMPDIR/jfl_job.jcl jfl_job.jcl" "$FTP_OUT"
+JFL_ID=$(grep -o 'JOB[0-9][0-9][0-9][0-9][0-9]' "$FTP_OUT" | head -1)
+sleep 8
+FTP_OUT="$TMPDIR/ftp_jfl_all.log"
+ftp_run "site filetype=jes
+site jesowner=*
+ls" "$FTP_OUT"
+FTP_OUT2="$TMPDIR/ftp_jfl_act.log"
+ftp_run "site filetype=jes
+site jesowner=*
+site jesstatus=active
+ls
+quote RETR $JFL_ID
+quote DELE $JFL_ID" "$FTP_OUT2"
+FTP_OUT3="$TMPDIR/ftp_jfl_out.log"
+ftp_run "site filetype=jes
+site jesowner=*
+site jesstatus=output
+ls" "$FTP_OUT3"
+if [ -n "$JFL_ID" ] && grep -q "$JFL_ID" "$FTP_OUT" \
+   && grep -q "JESSTATUS=ALL" "$FTP_OUT"; then
+    pass "JESSTATUS=ALL (the default) lists the job, the 125 says ALL"
+else
+    fail "JESSTATUS=ALL did not list $JFL_ID"; tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+if ! grep -v "^550" "$FTP_OUT2" | grep -q "$JFL_ID" \
+   && grep -q "List started OK.*JESSTATUS=ACTIVE" "$FTP_OUT2"; then
+    pass "JESSTATUS=ACTIVE does not list a finished job, the 125 says ACTIVE"
+else
+    fail "JESSTATUS=ACTIVE listed the finished job"; tail -8 "$FTP_OUT2" | sed 's/^/    /'
+fi
+if [ "$(grep -c "^550 Jobid $JFL_ID not found for .*JESSTATUS=ACTIVE" "$FTP_OUT2")" -eq 2 ]; then
+    pass "RETR and DELE of the finished job answer 550 under JESSTATUS=ACTIVE"
+else
+    fail "RETR/DELE under JESSTATUS=ACTIVE"; tail -8 "$FTP_OUT2" | sed 's/^/    /'
+fi
+if grep -q "$JFL_ID" "$FTP_OUT3" && grep -q "JESSTATUS=OUTPUT" "$FTP_OUT3"; then
+    pass "JESSTATUS=OUTPUT lists the finished job"
+else
+    fail "JESSTATUS=OUTPUT did not list $JFL_ID"; tail -6 "$FTP_OUT3" | sed 's/^/    /'
+fi
+[ -n "$JFL_ID" ] && ftp_run "site filetype=jes
+quote DELE $JFL_ID" /dev/null
 
 # ============================================================
 # Summary

@@ -8,6 +8,7 @@
 ** - RETR/STOR/DELE/MKD/RMD/RNFR/RNTO/APPE: dataset I/O
 */
 #include "ftpd.h"
+#include "ftpd#rec.h"
 #include "ftpd#ses.h"
 #include "ftpd#aut.h"
 #include "ftpd#dat.h"
@@ -2077,6 +2078,10 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     int is_fixed;
     int io_err = 0;             /* uncorrectable write error on the data set */
     int io_errno = 0;           /* errno as of that error, before fclose()   */
+    int maxdata = 0;            /* TYPE A: data bytes one record holds       */
+    long over = 0;              /* TYPE A: bytes of this line past maxdata   */
+    long cut = 0;               /* TYPE A: lines cut to fit a record         */
+    int too_long = 0;           /* TYPE A: a line did not fit, no TRUNCATE   */
     const char *mode;
 
     if (!arg || !arg[0]) {
@@ -2411,6 +2416,20 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         /* ---------------------------------------------------------------
         ** ASCII mode: buffer until CRLF, translate, write records.
         ** --------------------------------------------------------------- */
+        /* A line is one record.  One longer than the record holds used to
+        ** be cut without a word and answered 250; now it fails the transfer,
+        ** or -- with SITE TRUNCATE, as on z/OS -- is cut and the 250 says so
+        ** (#207).  recbuf only ever holds maxdata bytes of a line; the rest
+        ** is counted in `over`.  A data set with no usable length keeps the
+        ** old limit of the buffer. */
+        maxdata = ftpd_rec_maxdata(
+            (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V ? FTPD_REC_V :
+            (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_U ? FTPD_REC_U :
+                                                              FTPD_REC_F,
+            fp->lrecl, fp->blksize, (int)sizeof(recbuf) - 1);
+        if (maxdata < 0)
+            maxdata = (int)sizeof(recbuf) - 1;
+
         while ((nread = ftpd_data_recv(sess, netbuf, sizeof(netbuf))) > 0) {
             int i;
             total += nread;
@@ -2420,6 +2439,16 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
                     continue;   /* Skip CR, LF triggers record write */
                 }
                 if (netbuf[i] == ASCII_LF) {
+                    if (over > 0) {
+                        if (!sess->truncate) {
+                            too_long = 1;
+                            io_err = 1;
+                            break;
+                        }
+                        cut++;
+                        over = 0;
+                    }
+
                     /* End of record — translate ASCII→EBCDIC (CP037) */
                     ftpd_xlat_mvs_a2e((unsigned char *)recbuf, recpos);
 
@@ -2438,12 +2467,24 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
                         break;
                     continue;
                 }
-                if (recpos < (int)sizeof(recbuf) - 1)
+                if (recpos < maxdata)
                     recbuf[recpos++] = netbuf[i];
+                else
+                    over++;
             }
 
             if (io_err)
                 break;
+        }
+
+        /* The last line may end without a line end, and be too long too */
+        if (!io_err && over > 0) {
+            if (!sess->truncate) {
+                too_long = 1;
+                io_err = 1;
+            } else {
+                cut++;
+            }
         }
 
         /* Flush any remaining partial record */
@@ -2505,6 +2546,7 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     }
 
     ftpd_log(LOG_INFO, "%s: %s %s", verb,
+             too_long ? "record too long for" :
              io_err ? "write error on" : "closing", fname);
 
     /* Stop promising a scratch here.  Past this point an ABEND in the final
@@ -2563,9 +2605,15 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     ** the client is the only party that still holds the whole file, and it
     ** will delete its copy on a 250. */
     if (io_err) {
-        ftpd_log(LOG_ERROR,
-                 "%s: write error on %s after %ld bytes received "
-                 "(errno=%d)", verb, fname, total, io_errno);
+        if (too_long)
+            ftpd_log(LOG_ERROR,
+                     "%s: a line is longer than the %d data bytes of one "
+                     "record of %s after %ld bytes received", verb, maxdata,
+                     fname, total);
+        else
+            ftpd_log(LOG_ERROR,
+                     "%s: write error on %s after %ld bytes received "
+                     "(errno=%d)", verb, fname, total, io_errno);
 
         /* A data set this STOR created and could not fill is removed.
         ** DISP=(NEW,CATLG,DELETE) already declares that, but the DD
@@ -2593,7 +2641,13 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         **
         ** The 552 says nothing about a byte count on purpose: total counts
         ** what arrived from the client, not what reached DASD. */
-        if (io_errno == ENOSPC)
+        if (too_long)
+            ftpd_session_reply(sess, FTP_451,
+                               "File transfer failed. File contains records "
+                               "that are longer than the LRECL (%d data "
+                               "bytes). Use SITE TRUNCATE to cut them; the "
+                               "data set is incomplete.", maxdata);
+        else if (io_errno == ENOSPC)
             ftpd_session_reply(sess, FTP_552,
                                "Requested file action aborted: out of space "
                                "on the data set. Allocate more space with "
@@ -2603,6 +2657,15 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
             ftpd_session_reply(sess, FTP_451,
                                "Write error on data set after %ld bytes "
                                "received: the data set is incomplete.", total);
+        return 0;
+    }
+
+    if (cut > 0) {
+        ftpd_log(LOG_WARN, "%s: %ld line(s) cut to %d data bytes in %s",
+                 verb, cut, maxdata, fname);
+        ftpd_session_reply(sess, FTP_250,
+                           "Transfer completed successfully "
+                           "(data was truncated).");
         return 0;
     }
 

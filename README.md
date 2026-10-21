@@ -127,8 +127,13 @@ ftp mvshost 2121
 | FILETYPE=JES / SEQ | Switch to JES or dataset mode |
 | JESOWNER=*name* | JES job owner filter |
 | JESJOBNAME=*name* | JES job name filter |
-| JESSTATUS=*status* | JES job status filter (OUTPUT, ALL) |
+| JESSTATUS=*status* | JES job status filter: ALL (default), INPUT, ACTIVE or OUTPUT; applies to listing, retrieving and deleting |
 | TRAILING | Toggle trailing blanks in text transfers |
+| TRUNCATE | Toggle cutting of text lines longer than the record: off, the upload fails with `451`; on, the line is cut and the `250` says so. A failed upload scratches a data set it created, but leaves an existing one incomplete |
+
+`SITE RDW` and `SITE SBSENDEOL=` with anything but `CRLF` are answered `501`
+(`SITE SBSENDEOL` alone returns to the default, `CRLF`):
+FTPD keeps no record descriptor words and only handles CRLF line ends.
 
 A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the

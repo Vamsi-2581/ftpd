@@ -6,14 +6,6 @@
 
 #include "ftpd#adr.h"               /* address parameter parsing     */
 
-/* --- DASD volume entry --- */
-typedef struct ftpd_dasd {
-    char            volser[7];      /* volume serial                 */
-    char            unit[5];        /* device type (3350, 3380, etc) */
-} ftpd_dasd_t;
-
-#define FTPD_MAX_DASD       32      /* max configured DASD volumes   */
-
 /* Largest space quantity SVC 99 can carry: DALPRIME / DALSECND / DALDIR
 ** are 3-byte binary fields, so 2^24-1 units.  Same ceiling z/OS documents
 ** for SITE PRIMARY / SECONDARY (1-16777215).                          */
@@ -72,15 +64,11 @@ typedef struct ftpd_config {
                                     ** 0 = no retention at all        */
 
     /* Security */
-    char            authuser[9];    /* user allowed to TERM server   */
     int             sslproxy;       /* 1 = acknowledge PBSZ/PROT with
                                     ** 200 although FTPD encrypts
                                     ** nothing.  Only correct behind a
                                     ** TLS terminating proxy -- see
                                     ** SSLPROXY in the sample config  */
-
-    /* JES */
-    int             jes_level;      /* default JES interface level   */
 
     /* Default allocation parameters.
     **
@@ -107,9 +95,9 @@ typedef struct ftpd_config {
                                     ** directory blocks of a new PDS   */
     } defaults;
 
-    /* DASD volumes for VTOC scanning */
-    int             num_dasd;
-    ftpd_dasd_t     dasd[FTPD_MAX_DASD];
+    /* Lines of DD:FTPDPRM that name a setting FTPD no longer has (AUTHUSER,
+    ** JESINTERFACELEVEL, "VOLSER,UNIT" volume lines) and were skipped */
+    int             ignored;
 } ftpd_config_t;
 
 /*

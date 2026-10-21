@@ -2,7 +2,7 @@
 ** FTPD Configuration Parser
 **
 ** Reads key=value configuration from DD:FTPDPRM (the FTPDPRM DD card
-** in the STC JCL procedure). Supports comments (#) and DASD volume lines.
+** in the STC JCL procedure). Supports comments (#).
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,11 +61,7 @@ ftpdcfg_defaults(ftpd_config_t *cfg)
     cfg->max_retpd = FTPD_MAXRETPD_DEFAULT;
 
     /* Security */
-    memset(cfg->authuser, 0, sizeof(cfg->authuser));
     cfg->sslproxy = 0;              /* off: PBSZ/PROT stay unimplemented */
-
-    /* JES */
-    cfg->jes_level = 2;
 
     /* Default allocation parameters.
     ** TRK(10,5) is what every session used to get hardcoded (#100); keeping
@@ -88,8 +84,7 @@ ftpdcfg_defaults(ftpd_config_t *cfg)
     cfg->defaults.unit[0] = '\0';
     cfg->defaults.volume[0] = '\0';
 
-    /* DASD */
-    cfg->num_dasd = 0;
+    cfg->ignored = 0;
 }
 
 /* --------------------------------------------------------------------
@@ -115,18 +110,37 @@ trim(char *s)
 }
 
 /* --------------------------------------------------------------------
-** Try to parse a DASD volume line: "VOLSER,UNIT  comment"
-** Returns 1 if parsed successfully, 0 if not a DASD line.
+** Settings that have no effect.
+**
+** AUTHUSER, JESINTERFACELEVEL and the "VOLSER,UNIT" volume lines were read
+** into the configuration and never looked at again (#207).  Reading them
+** without a word let an installation believe it had restricted who may
+** terminate the server, or scoped the JES interface, or told FTPD which
+** volumes to scan.  They are still recognised -- so an old FTPDPRM keeps
+** loading -- but each one is reported, and ftpdcfg_load() adds up the count
+** in a console message.
+** ----------------------------------------------------------------- */
+static void
+ignore_setting(ftpd_config_t *cfg, const char *what)
+{
+    ftpd_log(LOG_WARN, "%s: %s has no effect in this release and is "
+             "ignored", __func__, what);
+    cfg->ignored++;
+}
+
+/* --------------------------------------------------------------------
+** Is this a "VOLSER,UNIT  comment" volume line (the old DASD table)?
+** Returns 1 if it looks like one, 0 if not.  Nothing is stored: FTPD scans
+** the VTOCs of the volumes the catalog and the UCBs name, not a table from
+** the configuration.
 ** ----------------------------------------------------------------- */
 static int
-parse_dasd_line(ftpd_config_t *cfg, const char *line)
+is_volume_line(const char *line)
 {
-    char volser[7];
-    char unit[5];
     const char *p;
     int i;
 
-    /* DASD lines start with a letter and contain a comma */
+    /* Volume lines start with a letter and contain a comma */
     if (!isalpha((unsigned char)line[0]))
         return 0;
 
@@ -134,34 +148,13 @@ parse_dasd_line(ftpd_config_t *cfg, const char *line)
     if (!p)
         return 0;
 
-    /* Extract volser (before comma) */
     i = (int)(p - line);
     if (i < 1 || i > 6)
         return 0;
-    memcpy(volser, line, i);
-    volser[i] = '\0';
 
-    /* Extract unit (after comma, up to whitespace) */
     p++;
-    i = 0;
-    while (*p && *p != ' ' && *p != '\t' && i < 4) {
-        unit[i++] = *p++;
-    }
-    unit[i] = '\0';
-
-    if (i == 0)
+    if (*p == '\0' || *p == ' ' || *p == '\t')
         return 0;
-
-    /* Add to DASD table */
-    if (cfg->num_dasd >= FTPD_MAX_DASD) {
-        ftpd_log(LOG_WARN, "%s: DASD table full, ignoring volume %s",
-                 __func__, volser);
-        return 1;
-    }
-
-    strcpy(cfg->dasd[cfg->num_dasd].volser, volser);
-    strcpy(cfg->dasd[cfg->num_dasd].unit, unit);
-    cfg->num_dasd++;
 
     return 1;
 }
@@ -307,7 +300,7 @@ parse_keyvalue(ftpd_config_t *cfg, const char *key, const char *value)
         strncpy(cfg->banner, value, sizeof(cfg->banner) - 1);
     }
     else if (strcmp(key, "AUTHUSER") == 0) {
-        strncpy(cfg->authuser, value, sizeof(cfg->authuser) - 1);
+        ignore_setting(cfg, "AUTHUSER");
     }
     else if (strcmp(key, "SSLPROXY") == 0) {
         /* YES makes FTPD answer PBSZ/PROT with 200 without encrypting
@@ -324,9 +317,7 @@ parse_keyvalue(ftpd_config_t *cfg, const char *key, const char *value)
         }
     }
     else if (strcmp(key, "JESINTERFACELEVEL") == 0) {
-        cfg->jes_level = atoi(value);
-        if (cfg->jes_level < 1 || cfg->jes_level > 2)
-            cfg->jes_level = 2;
+        ignore_setting(cfg, "JESINTERFACELEVEL");
     }
     else if (strcmp(key, "DEFRECFM") == 0) {
         strncpy(cfg->defaults.recfm, value, sizeof(cfg->defaults.recfm) - 1);
@@ -408,9 +399,11 @@ parse_line(ftpd_config_t *cfg, char *line)
     if (*p == '\0' || *p == '#')
         return;
 
-    /* Try DASD volume line first */
-    if (parse_dasd_line(cfg, p))
+    /* An old "VOLSER,UNIT" volume line */
+    if (is_volume_line(p)) {
+        ignore_setting(cfg, "a VOLSER,UNIT volume line");
         return;
+    }
 
     /* Look for key=value */
     key = p;
@@ -550,8 +543,8 @@ ftpdcfg_load(ftpd_config_t *cfg)
     ** NOT set -- so a bad track ends the loop above exactly like a clean end
     ** of member.  Left
     ** unchecked that starts FTPD on whatever was parsed before the error,
-    ** with the rest silently back at ftpdcfg_defaults(): DASD volumes
-    ** missing from the list, SITE and JES settings at their default.  A
+    ** with the rest silently back at ftpdcfg_defaults(): ports, limits and
+    ** allocation defaults at their built-in values.  A
     ** server that looks healthy and is not configured is worse than one
     ** that does not come up, so abandon the start (ftpd.c turns the
     ** non-zero return into RC 4). */
@@ -579,9 +572,12 @@ ftpdcfg_load(ftpd_config_t *cfg)
 
     check_placement(cfg);
 
-    ftpd_log(LOG_INFO, "%s: loaded, port=%d, max_sessions=%d, "
-             "DASD volumes=%d", __func__,
-             cfg->port, cfg->max_sessions, cfg->num_dasd);
+    if (cfg->ignored > 0)
+        ftpd_log_wto("FTPD062W %d SETTING(S) IN DD:FTPDPRM HAVE NO EFFECT "
+                     "AND WERE IGNORED -- SEE THE LOG", cfg->ignored);
+
+    ftpd_log(LOG_INFO, "%s: loaded, port=%d, max_sessions=%d", __func__,
+             cfg->port, cfg->max_sessions);
 
     return 0;
 }
@@ -592,8 +588,6 @@ ftpdcfg_load(ftpd_config_t *cfg)
 void
 ftpdcfg_dump(const ftpd_config_t *cfg)
 {
-    int i;
-
     ftpd_log_wto("FTPD040I CONFIGURATION:");
     ftpd_log_wto("FTPD041I   SRVPORT=%d SRVBIND=%s%s", cfg->port,
                  cfg->bind_ip,
@@ -626,9 +620,4 @@ ftpdcfg_dump(const ftpd_config_t *cfg)
                  "DEFDIRECTORY=%d",
                  cfg->defaults.primary, cfg->defaults.secondary,
                  cfg->defaults.spacetype, cfg->defaults.directory);
-    ftpd_log_wto("FTPD047I   DASD VOLUMES=%d:", cfg->num_dasd);
-    for (i = 0; i < cfg->num_dasd; i++) {
-        ftpd_log_wto("FTPD048I     %s,%s",
-                     cfg->dasd[i].volser, cfg->dasd[i].unit);
-    }
 }

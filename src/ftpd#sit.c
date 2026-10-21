@@ -4,7 +4,9 @@
 ** z/OS-compatible SITE subcommands for allocation parameters,
 ** transfer modifiers, and JES interface settings.
 **
-** All recognized parameters return "200 SITE command was accepted".
+** Recognized parameters return "200 SITE command was accepted" and take
+** effect; a parameter FTPD cannot honour (RDW, a SBSENDEOL other than CRLF)
+** returns 501 instead of being accepted and ignored (#207).
 ** A keyword may be abbreviated as far as z/OS allows (PRI=, SEC=, TR, CY,
 ** REC=, LR=, BLK=, DIR=, ...); see site_keywords[].
 ** Unknown parameters return "200-Unrecognized parameter ... / 200 SITE ...".
@@ -14,6 +16,7 @@
 #include "ftpd.h"
 #include "ftpd#ses.h"
 #include "ftpd#sit.h"
+#include "ftpd#jfl.h"
 #ifdef FTPD_DEBUG_ABEND
 #include "ftpd#aut.h"            /* ftpd_acee_enter() — ABEND=LOCK  */
 #endif
@@ -447,17 +450,41 @@ site_apply_one(ftpd_session_t *sess,
         return 0;
     }
 
+    /* Toggles the TRUNCATE flag that STOR/APPE read: with it a text line
+    ** longer than the record is cut and the 250 says so, without it the
+    ** transfer fails (#207). */
     if (strcmp(key, "TRUNCATE") == 0) {
         sess->truncate = !sess->truncate;
         return 0;
     }
 
+    /* RDW is refused: a client asking for it wants binary V records
+    ** with their record descriptor words kept on STOR and RETR, and FTPD's
+    ** transfer paths know no such mode.  Accepting the toggle and doing
+    ** nothing would hand the client a data set with the RDWs missing or
+    ** doubled (#207). */
     if (strcmp(key, "RDW") == 0) {
-        sess->rdw = !sess->rdw;
+        if (deny[0] == '\0')
+            snprintf(deny, denysz,
+                "SITE RDW is not supported: FTPD does not keep record "
+                "descriptor words");
         return 0;
     }
 
+    /* The only line end FTPD writes and reads is CRLF, and CRLF is also the
+    ** z/OS default.  The other values (SBSENDEOL=LF, CR, NL, LFCR) change
+    ** how a text file is cut into lines, which FTPD does not do. */
     if (strcmp(key, "SBSENDEOL") == 0) {
+        int i;
+        char uval[8];
+
+        strncpy(uval, val, sizeof(uval) - 1);
+        uval[sizeof(uval) - 1] = '\0';
+        for (i = 0; uval[i]; i++)
+            uval[i] = (char)toupper((unsigned char)uval[i]);
+        if (uval[0] != '\0' && strcmp(uval, "CRLF") != 0 && deny[0] == '\0')
+            snprintf(deny, denysz,
+                "SBSENDEOL=%s is not supported: FTPD only handles CRLF", val);
         return 0;
     }
 
@@ -466,12 +493,10 @@ site_apply_one(ftpd_session_t *sess,
     /* JESINTERFACELEVEL is deliberately NOT accepted here.  On z/OS it is a
     ** server setting in FTP.DATA, not something a client may change per
     ** session, and z/OS answers a client that tries with "Unrecognized
-    ** parameter".  Accepting it was worse than either: ftpd stored the value
-    ** in sess->jes_level and no code has ever read it, so the 200 reply
-    ** promised a scoping level that does not exist.  What that level governs
-    ** on z/OS -- who may see and fetch another user's spool -- is tracked as
-    ** its own piece of work; until it exists, say so honestly by falling
-    ** through to the unrecognized-parameter path below. */
+    ** parameter".  FTPD does the same by falling through to the
+    ** unrecognized-parameter path below.  What the level governs on z/OS --
+    ** who may see and fetch another user's spool -- is tracked as its own
+    ** piece of work. */
 
     if (strcmp(key, "JESJOBNAME") == 0) {
         site_copy_upper(sess->jes_jobname, sizeof(sess->jes_jobname), val);
@@ -483,8 +508,18 @@ site_apply_one(ftpd_session_t *sess,
         return 0;
     }
 
+    /* ALL, INPUT, ACTIVE or OUTPUT.  LIST, RETR and DELE in JES mode show
+    ** only the jobs in that state; an empty value goes back to ALL (#207). */
     if (strcmp(key, "JESSTATUS") == 0) {
-        site_copy_upper(sess->jes_status, sizeof(sess->jes_status), val);
+        const char *name = ftpd_jfl_name(val);
+
+        if (name == NULL)
+            site_warn(warn, warnsz,
+                "JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT; "
+                "keeping the current value");
+        else
+            site_copy_upper(sess->jes_status, sizeof(sess->jes_status),
+                            name);
         return 0;
     }
 
@@ -625,7 +660,7 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
             ftpd_session_reply_multi(sess, FTP_501, deny,
                 "Other parameters on this command were applied.");
         else
-            ftpd_session_reply(sess, FTP_501, deny);
+            ftpd_session_reply(sess, FTP_501, "%s", deny);
     } else if (n_unrecognized > 0) {
         snprintf(badmsg, sizeof(badmsg),
                  "Unrecognized parameter '%s' on SITE command.", badtok);

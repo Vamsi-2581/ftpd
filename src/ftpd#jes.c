@@ -302,10 +302,7 @@ ftpd_jes_submit(ftpd_session_t *sess)
             "Transfer completed successfully.");
     }
 
-    sess->bytes_recv += total;
     sess->xfer_count++;
-    if (sess->server)
-        sess->server->total_bytes_in += total;
 
     return 0;
 

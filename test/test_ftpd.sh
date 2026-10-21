@@ -21,6 +21,14 @@
 #   10. SITE in any spelling: verb, keywords and values (quote form)
 #   11. Member STOR into a PDS with a full directory: 552 + SITE DIRECTORY=
 #   12. STOR and APPE on a retained data set: 550 with the date, no IEC507D
+#   13. Byte counters: F FTPD,STATS counts every transferred byte once
+#       (needs FTPD_CONSOLE, see below)
+#
+# Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
+# reach.  Set FTPD_CONSOLE to a command that sends one operator command and
+# prints the system's answer, for example
+#     FTPD_CONSOLE='mbt target console env --' ./test_ftpd.sh ...
+# Without it Test 13 is reported as SKIPPED, not as passed.
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1656,6 +1664,122 @@ if [ "$(grep -c "^250 .* deleted" "$FTP_OUT")" -eq 2 ]; then
 else
     fail "DELE/RMD of retained data sets"
     tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+# ============================================================
+# Test 13: Byte counters (#206)
+#
+# F FTPD,STATS (BYTES IN / BYTES OUT) and the sent= / recv= of the
+# "session ended" line are the same numbers: ftpd#ses.c adds the session's
+# counters to the server totals when the session ends.  Each byte has to be
+# counted once, by the data connection functions.  MVS data set transfers were
+# counted three times (the session counter twice) until #206.
+#
+# One session per path, so the change of the totals is exactly what that one
+# session transferred: STOR then RETR of a known number of bytes, on an MVS
+# data set and on a UFS file.  Each file is a multiple of the record length
+# for the MVS case, so RETR sends back the bytes STOR received.
+# ============================================================
+section "Test 13: Byte counters"
+
+# BYTES IN and BYTES OUT from F FTPD,STATS, as "in out"
+ftpd_stats() {
+    $FTPD_CONSOLE "F FTPD,STATS" 2>&1 | awk '
+        /FTPD012I/ { in_ = $NF }
+        /FTPD013I/ { out = $NF }
+        END { print in_, out }'
+}
+
+# The server adds a session's bytes when the session thread ends, which can
+# be a moment after the client has quit: ask until the totals settle on the
+# wanted change or the time is up.  Sets STATS_IN / STATS_OUT to the change
+# since "$1 $2".
+stats_delta() {
+    local base_in="${1%% *}" base_out="${1##* }"
+    local want_in="$2" want_out="$3" i cur
+
+    STATS_IN=""; STATS_OUT=""
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        cur=$(ftpd_stats)
+        STATS_IN=$(( ${cur%% *} - base_in ))
+        STATS_OUT=$(( ${cur##* } - base_out ))
+        if [ "$STATS_IN" -eq "$want_in" ] && [ "$STATS_OUT" -eq "$want_out" ]; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+if [ -z "$FTPD_CONSOLE" ]; then
+    info "SKIPPED: FTPD_CONSOLE is not set, F FTPD,STATS cannot be read"
+else
+    # MVS data set: 600 records of 1024 bytes
+    DSN_CNT="${HLQ}.TEST.BYTECNT"
+    CNT_MVS=614400
+    dd if=/dev/urandom of="$TMPDIR/cnt_mvs.dat" bs=1024 count=600 2>/dev/null
+    ftp_run "delete '$DSN_CNT'" /dev/null
+    CNT_BASE=$(ftpd_stats)
+    info "STATS before: BYTES IN/OUT = $CNT_BASE"
+    case "$CNT_BASE" in
+        *[!0-9\ ]*|""|" "*|*" ") fail "F FTPD,STATS: no byte counters in the answer ('$CNT_BASE')" ;;
+    esac
+
+    FTP_OUT="$TMPDIR/ftp_cnt_mvs.log"
+    ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=1024
+site blksize=6144
+site primary=100
+site secondary=50
+site tracks
+type binary
+put $TMPDIR/cnt_mvs.dat '$DSN_CNT'
+get '$DSN_CNT' $TMPDIR/cnt_mvs.back
+CMDS
+)" "$FTP_OUT"
+    if [ "$(stat -c%s "$TMPDIR/cnt_mvs.back" 2>/dev/null || stat -f%z "$TMPDIR/cnt_mvs.back" 2>/dev/null)" = "$CNT_MVS" ]; then
+        if stats_delta "$CNT_BASE" "$CNT_MVS" "$CNT_MVS"; then
+            pass "MVS data set: $CNT_MVS bytes each way counted once (IN $STATS_IN, OUT $STATS_OUT)"
+        else
+            fail "MVS data set: sent and received $CNT_MVS bytes each way, STATS counted IN $STATS_IN, OUT $STATS_OUT"
+        fi
+    else
+        fail "MVS data set: the $CNT_MVS bytes did not make the round trip"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+    ftp_run "delete '$DSN_CNT'" /dev/null
+
+    # UFS file: an odd size on purpose
+    UFS_CNTDIR="/tmp/ftpdcnt$$"
+    CNT_UFS=300001
+    dd if=/dev/urandom of="$TMPDIR/cnt_ufs.dat" bs=1 count=$CNT_UFS 2>/dev/null
+    ftp_run "cd /
+mkdir $UFS_CNTDIR" /dev/null
+    CNT_BASE=$(ftpd_stats)
+
+    FTP_OUT="$TMPDIR/ftp_cnt_ufs.log"
+    ftp_run "$(cat <<CMDS
+cd $UFS_CNTDIR
+type binary
+put $TMPDIR/cnt_ufs.dat cnt.bin
+get cnt.bin $TMPDIR/cnt_ufs.back
+CMDS
+)" "$FTP_OUT"
+    if [ "$(stat -c%s "$TMPDIR/cnt_ufs.back" 2>/dev/null || stat -f%z "$TMPDIR/cnt_ufs.back" 2>/dev/null)" = "$CNT_UFS" ]; then
+        if stats_delta "$CNT_BASE" "$CNT_UFS" "$CNT_UFS"; then
+            pass "UFS file: $CNT_UFS bytes each way counted once (IN $STATS_IN, OUT $STATS_OUT)"
+        else
+            fail "UFS file: sent and received $CNT_UFS bytes each way, STATS counted IN $STATS_IN, OUT $STATS_OUT"
+        fi
+    else
+        fail "UFS file: the $CNT_UFS bytes did not make the round trip"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+    ftp_run "cd $UFS_CNTDIR
+delete cnt.bin
+cd /
+rmdir $UFS_CNTDIR" /dev/null
 fi
 
 # ============================================================

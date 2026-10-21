@@ -143,6 +143,17 @@ sources = ["test/tstque.c", "src/ftpd#*.c"]
 host = false
 sources = ["test/tstsit.c", "src/ftpd#sit.c", "src/ftpd#jfl.c"]
 
+# ftpd_mvs_retr() -- the FILE stays reachable through sess->cur_file until
+# fclose() has returned, so ABEND recovery can still abandon it and release
+# fopen's DD when the CLOSE itself ABENDs (#233, as #223 for STOR).  MVS-only:
+# the test includes ftpd#mvs.c with fclose() replaced, stubs the data
+# connection and reads a real data set.  ftpd#log.c needs no GRT anchor here (see TSTPRM).
+[test.TSTRCL]
+host = false
+sources = ["test/tstrcl.c", "src/ftpd#log.c",
+           "src/ftpd#dsn.c", "src/ftpd#lse.c", "src/ftpd#rec.c",
+           "src/ftpd#ret.c", "src/ftpd#xlt.c"]
+
 # ── Dependencies ─────────────────────────────────────────
 # Only ufsd is a declared dependency: libufs.h / libufs.a are ufsd-specific.
 # The C runtime -- sockets, threads, JES2, RACF, dynalloc -- is libc370, the

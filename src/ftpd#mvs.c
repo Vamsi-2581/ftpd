@@ -1503,11 +1503,7 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     fclose(fp);
     ftpd_data_close(sess);
 
-    sess->bytes_sent += total;
     sess->xfer_count++;
-    if (sess->server) {
-        sess->server->total_bytes_out += total;
-    }
 
     /* An aborted transfer must not be reported as a completed one -- the
     ** client is left with an incomplete data set and has to know.  total
@@ -2549,11 +2545,7 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     }
     ftpd_data_close(sess);
 
-    sess->bytes_recv += total;
     sess->xfer_count++;
-    if (sess->server) {
-        sess->server->total_bytes_in += total;
-    }
 
     /* An incomplete data set on DASD must not be reported as a stored one:
     ** the client is the only party that still holds the whole file, and it

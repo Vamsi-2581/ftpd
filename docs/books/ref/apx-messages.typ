@@ -38,7 +38,9 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD005I text")], [The version of the C library that FTPD contains.],
     [#cmd("FTPD006W BUILT FROM A MODIFIED WORKING TREE")], [The program was built
       from sources with changes that were not committed. The commit in
-      #cmd("FTPD000I") does not describe the code. Not for production.],
+      #cmd("FTPD000I") does not describe the code. Not for production. FTPD
+      writes the message at the start and again for the console command
+      #cmd("VERSION") (@ref-con).],
     [#cmd("FTPD007W SSLPROXY=YES: PBSZ/PROT ARE ACKNOWLEDGED BUT FTPD ENCRYPTS NOTHING")], [The first of two messages at every start with
       #cmd("SSLPROXY=YES").],
     [#cmd("FTPD007W A TLS TERMINATING PROXY MUST BE IN FRONT OF PORT n")], [FTPD

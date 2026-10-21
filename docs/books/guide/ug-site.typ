@@ -109,8 +109,9 @@ Site Lrecl=80
 This includes the values of #cmd("JESJOBNAME"), #cmd("JESOWNER") and
 #cmd("JESSTATUS"). Before FTPD 1.3.0 FTPD kept these three as the client had
 typed them, so #cmd("jesowner=ibmuser") and #cmd("JESOWNER=IBMUSER") were two
-different settings, and a job list for the first one found no jobs. Since FTPD
-1.3.0 the filter is upper case whatever the client typed.
+different settings, and the #cmd("550") reply for a job that is not found
+showed the owner in lower case. Since FTPD 1.3.0 the filter is upper case
+whatever the client typed.
 
 #note[*The command line client may refuse the word SITE.* The BSD
 #cmd("ftp") client and tnftp, the #cmd("ftp") of many Linux, BSD and macOS

@@ -330,8 +330,12 @@ directory blocks:
   the value of #cmd("SITE DIRECTORY") you used, or #cmd("DEFDIRECTORY") of the
   server if you set none (@ug-site).
 + Choose a name for the new partitioned data set that is free. #cmd("MKD")
-  answers #cmd("550") for a name that exists, so give the new data set
-  another name than the full one.
+  answers #cmd("550") for a name that exists, so either give the new data set
+  another name than the full one, or rename the full one first with
+  #cmd("RNFR") and #cmd("RNTO") (@ug-data-manage) and create the new one under
+  the old name. Before FTPD 1.3.0 the second way failed: after the failed
+  #cmd("STOR") the old name stayed allocated to the started task, and #cmd("MKD") of it was
+  answered with #cmd("550").
 + Set a number higher than that of the full data set with
   #cmd("SITE DIRECTORY=n"), and create the new data set with #cmd("MKD").
   #cmd("SITE DIRECTORY") acts on #cmd("MKD") only. A #cmd("STOR") that creates

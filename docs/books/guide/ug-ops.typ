@@ -367,6 +367,9 @@ The data set stays in that case too.
 #cmd("FTPD076W") tells that FTPD could not clean up the file after the ABEND.
 With the text #cmd("CLOSE ABENDED, DD STILL HELD") the data set stays allocated
 to the started task, and a scratch of it is refused until FTPD ends.
+A #cmd("STOR") into a partitioned data set with a full directory (ABEND SB14)
+can write #cmd("FTPD076W") after #cmd("FTPD070E"), when the cleanup of the
+file ends in an ABEND again (@ug-data-dirfull).
 
 If a session ends in an ABEND three times in a row, with no good command in
 between, FTPD gives up on that session. It writes #cmd("FTPD071E SESSION SOCKET=3 CLOSED AFTER 3 CONSECUTIVE ABENDS") and closes the connection. Other

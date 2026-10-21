@@ -180,7 +180,8 @@ again unless something changes. FTPD sends it in these cases:
       found no room for the entry of the member. "Most likely" because FTPD does
       not get the reason code, which is in message #cmd("IEC217I")
       (#cmd("B14-0C")). The directory cannot be extended: create a new data set
-      under another name with #cmd("SITE DIRECTORY=n") and #cmd("MKD"), and
+      with #cmd("SITE DIRECTORY=n") and #cmd("MKD"), under another name or
+      under the old name after a rename of the full one, and
       copy the members with #cmd("RETR") and #cmd("STOR"). The member that
       failed is not in the data set. See "When the Directory Is Full" in the
       _FTPD User's Guide_.],

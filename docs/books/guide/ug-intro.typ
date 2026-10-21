@@ -141,5 +141,15 @@ the book explains the subject:
       one second. Before, it took one connection per look, and ten clients
       that connected together were greeted over about ten seconds.],
       [@ug-ops-ses],
+    [#cmd("STOR") or #cmd("APPE") of a data set under the expiration date
+      #cmd("99000") answers #cmd("550") with the expiration date, like a retained data
+      set. Before, the session waited for an operator reply to
+      #cmd("IEC507D").], [@ug-data-retained],
+    [After a #cmd("STOR") failed on a full directory of a partitioned data set,
+      the data set can be renamed and its old name created again with #cmd("MKD"),
+      and #cmd("P FTPD") ends without the abend SA0A. Before, the old name
+      stayed allocated to the started task, #cmd("MKD") of it was answered
+      with #cmd("550"), and the stop ended with the abend SA0A.],
+      [@ug-data-dirfull],
   )
 ] <ug-intro-new-tab>

@@ -2506,15 +2506,13 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
 
     ftpd_log(LOG_INFO, "%s: %s %s", verb,
              io_err ? "write error on" : "closing", fname);
-    sess->cur_file = NULL;
-    /* Stop promising a scratch at the same point recovery stops promising
-    ** an fclose.  Past here the FILE is being closed, and an ABEND in the
-    ** final flush or CLOSE -- where a B37 can genuinely still land -- leaves
-    ** fopen's DD allocated with no handle to release it.  Scratching under
-    ** that DD would mean opening an identity window while holding a data set
-    ** ENQ, which ftpd#aut.h forbids for deadlock freedom.  So the close
-    ** window keeps the residual it already had rather than trading it for a
-    ** worse one. */
+
+    /* Stop promising a scratch here.  Past this point an ABEND in the final
+    ** flush or CLOSE leaves fopen's DD allocated until recovery has run
+    ** __fabandon(), and scratching a data set under a DD that still holds
+    ** its ENQ would mean opening an identity window while holding a data set
+    ** ENQ, which ftpd#aut.h forbids for deadlock freedom.  So a data set
+    ** this STOR created is not scratched when the close itself ABENDs. */
     sess->cur_new_dsn[0] = '\0';
 
     /* stor_put() flushed every record, so this normally has nothing left to
@@ -2537,8 +2535,22 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
     ** inside CLOSE, and an x37 there is reported by fclose() alone (EOF,
     ** ENOSPC).  A STOR into a full PDS answered 250 for a member that was
     ** never stored.  Read errno before ftpd_data_close() issues services of
-    ** its own. */
-    if (fclose(fp) != 0) {
+    ** its own.
+    **
+    ** cur_file stays set across the flush and the CLOSE, and is cleared the
+    ** moment fclose() returns -- not before it.  A CLOSE that ABENDs does not
+    ** return: SB14 for a PDS directory with no room for the member (STOW
+    ** inside CLOSE), and fclose() leaves the DCB open and fopen's DD
+    ** allocated.  Recovery reaches them only through cur_file, and with it
+    ** cleared first the DD stayed allocated to the old data set name for the
+    ** life of the address space: a rename of the full PDS followed by an MKD
+    ** of the old name was refused, and the shutdown ended with SA0A (#223,
+    ** #194).  Clearing right after the return keeps what the early clear was
+    ** for: once fclose() has freed the FILE, a later ABEND (in
+    ** ftpd_data_close(), the reply) must not close it a second time. */
+    rc = fclose(fp);
+    sess->cur_file = NULL;
+    if (rc != 0) {
         if (!io_err)
             io_errno = errno;
         io_err = 1;

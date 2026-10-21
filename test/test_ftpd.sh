@@ -19,7 +19,8 @@
 #   9.  APPE: appends to a sequential data set, creates what is missing,
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
 #   10. SITE in any spelling: verb, keywords and values (quote form)
-#   11. Member STOR into a PDS with a full directory: 552 + SITE DIRECTORY=
+#   11. Member STOR into a PDS with a full directory: 552 + SITE DIRECTORY=;
+#       the full PDS can then be renamed, its old name reused and deleted
 #   12. STOR and APPE on a retained data set: 550 with the date, no IEC507D
 #   13. Byte counters: F FTPD,STATS counts every transferred byte once
 #       (needs FTPD_CONSOLE, see below)
@@ -1447,21 +1448,27 @@ fi
 # code, so a client retried into the same full directory.  A directory
 # cannot be extended, so the answer is the permanent 552, with the one
 # thing the client can do about it: SITE DIRECTORY= when the PDS is
-# created.  Four things must hold:
+# created.  Five things must hold:
 #
 #   - the STOR that failed answered 552 and names SITE DIRECTORY=;
 #   - the member it was storing is not in the directory;
 #   - the members that were stored are intact;
-#   - the server carries on: the same failure again answers 552 again,
-#     and the PDS can still be deleted afterwards.
+#   - the server carries on: the same failure again answers 552 again;
+#   - the failed CLOSE left no DD behind (#223): the full PDS can be
+#     renamed (RNFR/RNTO), its old name can be created again (MKD) and
+#     deleted (RMD), and the renamed PDS can be deleted too.  A DD still
+#     holding the data set makes the MKD answer 550 (SVC 99 0448).
 # ============================================================
 section "Test 11: Member STOR into a PDS with a full directory"
 
 DSN_DIR="${HLQ}.TEST.FULLDIR"
+DSN_DIR_OLD="${HLQ}.TEST.FULLDOLD"
+DSN_DIR_FULL="$DSN_DIR"     # the full PDS, under whichever name it has now
 
 info "MKD '$DSN_DIR' (FB 80, BLKSIZE 19040, TRK(5,0), 1 directory block)"
 FTP_OUT="$TMPDIR/ftp_dir_mkd.log"
 ftp_run "$(cat <<CMDS
+rmdir '$DSN_DIR_OLD'
 rmdir '$DSN_DIR'
 site recfm=fb
 site lrecl=80
@@ -1554,15 +1561,54 @@ put $TMPDIR/dir_again.txt '$DSN_DIR(M$DFULL)'" "$FTP_OUT"
         else
             fail "The retry answered: ${AGAIN_REPLY:-no reply}"
         fi
+
+        # The remedy the 552 offers: move the full PDS away and MKD a bigger
+        # one under the old name (#223).  The recovered SB14 used to leave the
+        # DD of the abended CLOSE allocated to the old name, and the new
+        # allocation of that name was refused (SVC 99 0448) until FTPD was
+        # restarted.  Its own sessions, after the 552s above.
+        FTP_OUT="$TMPDIR/ftp_dir_ren.log"
+        ftp_run "rename '$DSN_DIR' '$DSN_DIR_OLD'" "$FTP_OUT"
+        if grep -q "^250" "$FTP_OUT"; then
+            pass "RNFR/RNTO of the full PDS after the failure answers 250"
+            DSN_DIR_FULL="$DSN_DIR_OLD"
+
+            FTP_OUT="$TMPDIR/ftp_dir_mkd2.log"
+            ftp_run "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=19040
+site tracks
+site primary=5
+site secondary=0
+site directory=5
+mkdir '$DSN_DIR'
+CMDS
+)" "$FTP_OUT"
+            if grep -q "^257" "$FTP_OUT"; then
+                pass "MKD of the old name after the rename answers 257"
+                FTP_OUT="$TMPDIR/ftp_dir_rmd2.log"
+                ftp_run "rmdir '$DSN_DIR'" "$FTP_OUT"
+                if grep -q "^250" "$FTP_OUT"; then
+                    pass "The PDS created under the old name can be deleted"
+                else
+                    fail "RMD of the new PDS: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
+                fi
+            else
+                fail "MKD of the old name after the rename: $(grep -E '^[45][0-9][0-9] ' "$FTP_OUT" | tail -1)"
+            fi
+        else
+            fail "RNFR/RNTO of the full PDS: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
+        fi
     fi
 fi
 
 FTP_OUT="$TMPDIR/ftp_dir_post.log"
-ftp_run "rmdir '$DSN_DIR'" "$FTP_OUT"
+ftp_run "rmdir '$DSN_DIR_FULL'" "$FTP_OUT"
 if grep -q "^250" "$FTP_OUT"; then
-    pass "The PDS can be deleted after the failure (no DD left allocated)"
+    pass "The full PDS can be deleted after the failure (no DD left allocated)"
 else
-    fail "RMD of the PDS after the failure: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
+    fail "RMD of the full PDS after the failure: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
 fi
 
 # ============================================================

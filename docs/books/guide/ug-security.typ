@@ -122,11 +122,15 @@ What the message shows depends on the RAKF release:
 
 - *RAKF maps the name of the started task to an identity:* the message shows
   that identity. This is what you want, with an identity that has no
-  Operations authority.
+  Operations authority. RAKF 2.0.0 does this: the identity is the user ID in
+  the table of users that is named like the started procedure,
+  #cmd("FTPD"), with the group and the Operations flag of its entry.
+  @ug-install-rakfsetup says what the group of that user needs.
 - *RAKF has no such mapping:* the message shows #cmd("STC/STCGROUP"), the
   identity that RAKF gives every started task. #cmd("STC") has Operations
-  authority. This is the case on TK5 before Update 6, and on RAKF 1.2.x and
-  2.0.0.
+  authority. This is the case on TK5 before Update 6 and on RAKF 1.2.x. On
+  RAKF 2.0.0 it is the case when the table of users has no user ID
+  #cmd("FTPD").
 - *The address space has no security environment:* the message is
   #cmd("FTPD004W NO SECURITY ENVIRONMENT FOR THE STC: RAKF PERMITS ANY ACCESS WITHOUT AN ACEE"). RAKF treats the missing environment as "access permitted",
   so the checks that do not run in a user's session permit everything. Do not

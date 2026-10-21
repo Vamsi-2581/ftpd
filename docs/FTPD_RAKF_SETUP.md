@@ -10,11 +10,13 @@ one is the RAKF User's Guide that ships with RAKF itself.
 
 ## Which RAKF this assumes
 
-**RAKF 1.2.x**, which is what TK4- and TK5 ship; the current MVS/CE image
-ships **RAKF 2.0.0** (`S RAKF` reports `RAKF V2R0M0`). There is **no
-administration tooling** at that level: the tables are plain text members you
-edit by hand and then reload. Where RAKF 2.0.0 changes something, this guide
-says so in a box.
+**RAKF 1.2.x** and **RAKF 2.0.0** (the release `v2.0.0` of the RAKF
+repository). At 1.2.x there is **no administration tooling**: the tables are
+plain text members you edit by hand and then reload. RAKF 2.0.0 keeps the two
+tables and adds TSO commands for them (`ADDUSER`, `ALTUSER`, `DELUSER`,
+`LISTUSER`, `ADDSD`, `RDEFINE`, `PERMIT`, `RDELETE`), a password file
+`SYS1.SECURE.SHADOW`, and the mapping of a started task by its name
+(section 2). Where RAKF 2.0.0 changes something, this guide says so in a box.
 
 > Some systems (MVS/CE) add a `RAKFCL` command processor that wraps table
 > editing in RACF-like syntax. It is a distribution extension, not part of RAKF,
@@ -49,7 +51,17 @@ IBMUSER  ADMIN   *SYS1     Y
 | 18 | `*` if the userid has more than one group entry |
 | 19 – 26 | password |
 | 28 | Operations authority, `Y` or `N` |
+| 30 | Special authority, `Y` or `N` — RAKF 2.0.0 only, see the box below |
 | 31 – 50 | comment |
+
+> **RAKF 2.0.0:** column 30 is the SPECIAL authority. A user needs it to run
+> `ADDUSER`, `ALTUSER`, `DELUSER`, `LISTUSER`, `ADDSD`, `RDEFINE`, `PERMIT` and
+> `RDELETE`; RAKF turns it on only for `Y`, so a blank column means no. A
+> `USERS` table that you keep from an earlier RAKF has no entries in column 30:
+> before you use these commands, put a `Y` in column 30 of every line of the
+> administrator's entries and reload (`S RAKF`). The commands cannot do this
+> for you, because they need the flag themselves. The password column 19 – 26
+> is not used; the password is kept as a hash in `SYS1.SECURE.SHADOW`.
 
 ### PROFILES
 
@@ -122,11 +134,11 @@ What RAKF assigns depends on the release:
 
 | RAKF | Identity of the started task `FTPD` |
 |------|-------------------------------------|
-| assigns by STC name | the identity the RAKF configuration maps the name `FTPD` to |
-| 1.2.x, 2.0.0 and any other without such a mapping | `STC` / `STCGROUP`, hardcoded in `ICHSFR00` |
+| 2.0.0 | the userid in `SYS1.SECURE.CNTL(USERS)` that is named like the started procedure, `FTPD`, with the group and the Operations flag of its entry; `STC` / `STCGROUP` if there is no such userid |
+| 1.2.x and any other without a mapping by STC name | `STC` / `STCGROUP`, hardcoded in `ICHSFR00` |
 
-The way a mapping is written is part of the RAKF release that provides it — see
-that release's documentation. FTPD needs two things from it:
+For a release other than these, the way a mapping is written is part of that
+release — see its documentation. FTPD needs two things from it:
 
 - **Map the name `FTPD` to an identity with Operations authority `N`.** This one
   character is load-bearing, see [section 5](#5-why-the-started-tasks-identity-matters).
@@ -143,12 +155,45 @@ which release you are on before copying either form.
 
 After any change to the tables, `S RAKF`.
 
+> **RAKF 2.0.0: the group of the `FTPD` user has to be allowed SVC 244.** At
+> startup FTPD asks for its authorization with SVC 244, and it does so under
+> the identity of the started task. SVC 244 checks the
+> group of that identity against the `FACILITY` profile `SVC244`. If the group
+> is refused, FTPD starts and reports `FTPD003W APF SETUP FAILED`.
+>
+> - In the `PROFILES` that come with RAKF 2.0.0, `SVC244` has the universal
+>   entry `NONE` and READ for the groups `ADMIN`, `STARTED` and `STCGROUP`.
+>   Check your own table: it is the one that counts.
+> - **Do not use `STCGROUP` for the user.** In that same table `STCGROUP` has
+>   ALTER on `DATASET *` and `DASDVOL *`, which is the broad authority that
+>   section 5 forbids. RAKF's own seed files put the `FTPD` user into the group
+>   `STARTED`, which holds nothing but READ on `SVC244`.
+> - A group of your own needs its own `SVC244` line, in ascending group order
+>   between the existing group lines:
+>
+>   ```
+>            1         2         3         4         5         6
+>   123456789012345678901234567890123456789012345678901234567890123456
+>   FACILITYSVC244                                      STARTED READ
+>   ```
+>
+>   or `PERMIT SVC244 CLASS(FACILITY) ID(STARTED) ACCESS(READ)`.
+> - The user is created with `ADDUSER FTPD PASSWORD(pw) DFLTGRP(STARTED)`.
+>   Do not code `OPERATIONS`. `LISTUSER FTPD` shows the authority it got.
+>   Both commands need the SPECIAL authority (section 1). Then `S RAKF`.
+
 > **Upgrading from FTPD 1.2.0 or earlier:** those releases logged on as
-> `FTPD`/`USER` themselves at startup. FTPD 1.3.0 does not. The `FTPD` user
-> line in `USERS` is no longer used by FTPD; on a RAKF without a mapping by STC
-> name the started task now runs as `STC`/`STCGROUP` again, with Operations
-> authority. This is the case on TK5 before Update 6, whose RAKF is the one
-> that maps by STC name. Section 5 says what that means.
+> `FTPD`/`USER` themselves at startup. FTPD 1.3.0 does not. On a RAKF without a
+> mapping by STC name the started task now runs as `STC`/`STCGROUP` again, with
+> Operations authority; section 5 says what that means. On RAKF 2.0.0 the
+> `FTPD` line in `USERS` is used again, now as the mapping: its group decides
+> the identity of the started task and has to be allowed SVC 244 (the box
+> above). The documentation of FTPD 1.2.0 says `ADDUSER FTPD DFLTGRP(USER)`.
+> FTPD 1.2.0 asks for SVC 244 before it logs on as `FTPD`/`USER`, so on RAKF
+> 2.0.0 the group in the `FTPD` line of `USERS` is the group that is checked,
+> and `USER` is not one of the groups that the shipped `SVC244` profile allows.
+> Give the `FTPD` user a group that holds `SVC244`, such
+> as `STARTED`, also if you stay on 1.2.0.
 
 ---
 
@@ -339,9 +384,10 @@ gating anything.
 | `RAKFUIDS2  INPUT DATA INVALID OR OUT OF SEQ.` | A malformed line, or the table is not in ascending sort order. The utility terminates and the in-core table keeps its **previous** contents — which looks exactly like "my change had no effect". The echoed card masks the password as `********`, so it cannot tell you whether that was the problem |
 | Reload rejected and the echoed card looks fine | Most likely a blank password. RAKF 1.2.x requires columns 19–26 to be filled — section 2 |
 | `RAKF008W illegal operation -- access denied` | The `RAKFADM` FACILITY profile denies the table-update utility |
-| `FTPD004I STC RUNS AS STC/STCGROUP` | No mapping of the STC name `FTPD` applies — the RAKF release has none, or the name is not in its configuration. FTPD is running with Operations authority |
+| `FTPD004I STC RUNS AS STC/STCGROUP` | No mapping of the STC name `FTPD` applies — the RAKF release has none, or the name is not in its configuration (on RAKF 2.0.0: no userid `FTPD` in `USERS`). FTPD is running with Operations authority |
 | `FTPD004W NO SECURITY ENVIRONMENT` | The address space has no ACEE. RAKF permits any access without one |
-| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. Commands that need authorization fail |
+| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. Commands that need authorization fail. On RAKF 2.0.0 the group of the `FTPD` user may lack READ on `FACILITY` `SVC244` — section 2 |
+| `ADDUSER`, `PERMIT` and the other RAKF commands refuse to run | The user lacks the SPECIAL authority (column 30 of `USERS`, RAKF 2.0.0) — section 1 |
 | `530 Login incorrect` for a valid user | Wrong password, or the user is not in `USERS`. A user added without `S RAKF` does not exist yet |
 | `530 Not authorized for FTP access` | `FTPAUTH` denies this user — check the group in columns 53–60 |
 | `550 Access denied to <dsn>` | A `DATASET` profile refuses the access under the **client's** identity, not FTPD's |

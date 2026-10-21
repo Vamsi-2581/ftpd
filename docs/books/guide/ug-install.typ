@@ -471,6 +471,30 @@ two pieces; the short version for the installation:
   authority N. On any other RAKF the task runs as #cmd("STC") in the group
   #cmd("STCGROUP"), which has Operations authority. #cmd("FTPD004I") at the
   start names the identity that you got (@ug-security-stc).
+
+  RAKF 2.0.0 assigns by that name. The mapping is a user ID #cmd("FTPD") in
+  #cmd("SYS1.SECURE.CNTL(USERS)"), and the group of that user must be allowed
+  READ on the profile #cmd("SVC244") in the class #cmd("FACILITY"). FTPD asks
+  for its authority with SVC 244 under the identity of the started task
+  (@ug-install-auth). If the group is not allowed, FTPD starts and reports
+  #cmd("FTPD003W APF SETUP FAILED"). In the table of profiles that comes with
+  RAKF 2.0.0 the groups #cmd("ADMIN"), #cmd("STARTED") and #cmd("STCGROUP")
+  are allowed, and the seed files of RAKF put the user #cmd("FTPD") into
+  #cmd("STARTED"), a group that has nothing else. Do not use #cmd("STCGROUP"):
+  in the same table it has ALTER on all data sets and volumes, which is the
+  broad authority that the note below rules out. A group of your own needs its
+  own line for #cmd("SVC244"), in the ascending order of the groups.
+  Create the user with #cmd("ADDUSER FTPD PASSWORD(pw) DFLTGRP(STARTED)") and
+  without #cmd("OPERATIONS"), and show it with #cmd("LISTUSER FTPD"). Your
+  table of profiles is the one that counts.
+
+  #note[*RAKF 2.0.0: SPECIAL.* #cmd("ADDUSER"), #cmd("PERMIT") and the other
+  RAKF commands run only for a user with the SPECIAL authority. It is the
+  flag #cmd("Y") in column 30 of the lines of that user in
+  #cmd("SYS1.SECURE.CNTL(USERS)"), and a blank column means no. A table of
+  users that you keep from an earlier RAKF has nothing in column 30. Put the
+  #cmd("Y") on every line of your administrator, then reload with
+  #cmd("S RAKF"). The commands cannot set it for you, because they need it.]
 + Define the profile #cmd("FTPAUTH") in the class #cmd("FACILITY"). It
   controls who may use FTP at all (@ug-security-ftpauth). Look first whether it
   is already in #cmd("SYS1.SECURE.CNTL(PROFILES)"): MVS/CE has it, with the
@@ -506,7 +530,12 @@ the group #cmd("USER") at the start, whatever RAKF assigned. FTPD 1.3.0 does
 not. On a system whose RAKF has no mapping by the name of the started task,
 such as TK5 before Update 6, the task now runs as #cmd("STC") in
 #cmd("STCGROUP") again, with Operations authority. The line for #cmd("FTPD")
-in the table of users is no longer used.
+in the table of users is no longer used. On RAKF 2.0.0 the line is the
+mapping again, and its group decides the identity of the started task. The
+group #cmd("USER") of the FTPD 1.2.0 guide is not one that the profile
+#cmd("SVC244") allows in the table that comes with RAKF 2.0.0. FTPD 1.2.0
+asks for SVC 244 before it logs on as #cmd("FTPD") in #cmd("USER"), so the
+group of the line is the group that is checked there too.
 
 == Starting FTPD and Checking the Start <ug-install-start>
 

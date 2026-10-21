@@ -19,3 +19,7 @@ build/
 
 .cache/
 .DS_Store
+
+# The manuals build here (docs/books); only the sources are committed.
+docs/books/*.pdf
+docs/books/site/

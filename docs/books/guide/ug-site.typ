@@ -34,8 +34,15 @@ command:
 
 A keyword without a value takes the setting back to the value it had at the
 start of the session. So #cmd("SITE PRIMARY") undoes #cmd("SITE PRIMARY=200").
-For #cmd("DIRECTORY") there is no start value, and the bare keyword clears
-the setting.
+For #cmd("DIRECTORY") that is the value of #cmd("DEFDIRECTORY"). #cmd("RETPD")
+has no such parameter. A session starts without retention, and the bare
+keyword switches it off.
+
+A keyword may be shortened: #cmd("SITE PRI=5 SEC=2 CY") is
+#cmd("SITE PRIMARY=5 SECONDARY=2 CYLINDERS"). Every keyword has a shortest form, and a form that is
+too short is not a keyword. The word #cmd("PR=5") gets
+#cmd("Unrecognized parameter 'PR=5' on SITE command.") and sets nothing. The
+_FTPD Reference_ lists the shortest forms in "The SITE Command".
 
 == The Keywords <ug-site-keys>
 
@@ -46,7 +53,7 @@ the setting.
       #cmd("FB"), #cmd("VB") or #cmd("U"). FTPD folds it to upper case and
       does not check it.],
     [#cmd("LRECL=n")], [the record length.],
-    [#cmd("BLKSIZE=n")], [the block size. For a fixed record format that
+    [#cmd("BLKSIZE=n")], [the block size, also written #cmd("BLOCKSIZE=n"). For a fixed record format that
       is not a multiple of the record length, FTPD rounds it down to one,
       and the reply says so with #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB").],
     [#cmd("PRIMARY=n")], [the primary space quantity, 1 to 16777215. Another
@@ -58,13 +65,31 @@ the setting.
       block size is zero: #cmd("BLOCKS needs a non-zero BLKSIZE; allocation unit unchanged").],
     [#cmd("DIRECTORY=n")], [the number of directory blocks of a partitioned
       data set that #cmd("MKD") creates, 1 to 16777215. Without it #cmd("MKD")
-      uses 10.],
+      uses #cmd("DEFDIRECTORY"), which is 10 unless the administrator changed
+      it.],
+    [#cmd("RETPD=n")], [the retention period in days of a data set that
+      #cmd("MKD") or #cmd("STOR") creates, 0 to 9999. 0 is no retention.
+      A member of a partitioned data set and a data set that exists keep what
+      they have. See the note below.],
     [#cmd("UNIT=u")], [the unit for a new data set. Without it the system
       chooses.],
     [#cmd("VOLUME=v")], [the volume for a new data set. FTPD refuses a volume
       that is not mounted: #cmd("VOLUME is not mounted; keeping the current value"). Without it the system chooses.],
   )
 ]
+
+#note[*A retained data set is not stored into.* A #cmd("STOR") or #cmd("APPE")
+to a data set whose retention period has not expired is answered with
+#cmd("550 NAME is retained until YYYY-MM-DD (YYYY.DDD) and is not opened for writing before then.")
+(#cmd("appending") for #cmd("APPE")). For a permanent retention the reply is
+#cmd("550 NAME has a permanent retention period and is not opened for writing.").
+FTPD looks at the data set before it opens it, so the session does not wait
+for the operator. After #cmd("SITE RETPD") a script that stores the same name
+twice gets this reply on the second #cmd("STOR"). A member is judged by the
+partitioned data set that holds it: a data set that #cmd("MKD") created while
+#cmd("SITE RETPD") was set refuses every #cmd("STOR") of a member with this
+#cmd("550") until the period has expired. Store under a new name, or set
+#cmd("SITE RETPD") back to 0 before #cmd("MKD").]
 
 FTPD does not check #cmd("LRECL") and #cmd("RECFM") itself. It passes them to
 the allocation, and a combination that the system rejects shows when
@@ -76,7 +101,7 @@ the allocation, and a combination that the system rejects shows when
     [#cmd("FILETYPE=JES")], [switch to the JES view (@ug-other-jes).],
     [#cmd("FILETYPE=SEQ")], [back to the view that was active before. Any
       other value does the same.],
-    [#cmd("TRAILING")], [switch the blanks at the end of a record in text
+    [#cmd("TRAILINGBLANKS")], [switch the blanks at the end of a record in text
       transfers between kept and dropped. Each use of the keyword switches
       again. A session starts with the blanks dropped.],
     [#cmd("JESJOBNAME=n"), #cmd("JESOWNER=n")], [the filters of the JES job

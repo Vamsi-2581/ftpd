@@ -169,7 +169,7 @@ with its default and its range.
       #cmd("SSLPROXY").],
     [New data sets], [#cmd("DEFRECFM"), #cmd("DEFLRECL"), #cmd("DEFBLKSIZE"),
       #cmd("DEFPRIMARY"), #cmd("DEFSECONDARY"), #cmd("DEFSPACETYPE"),
-      #cmd("DEFUNIT"), #cmd("DEFVOLUME"). The attributes and the space that a
+      #cmd("DEFDIRECTORY"), #cmd("DEFUNIT"), #cmd("DEFVOLUME"). The attributes and the space that a
       new data set gets when the client says nothing. The client can change them
       for its session with #cmd("SITE") (@ug-site).],
   )

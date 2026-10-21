@@ -121,6 +121,9 @@ with no value goes back to the value of the parameter.
     [#cmd("DEFSECONDARY")], [5], [The secondary quantity, 0 to 16777215. Another
       value keeps the value before and gives a warning. 0 means no secondary
       extent.],
+    [#cmd("DEFDIRECTORY")], [10], [The directory blocks of a partitioned data
+      set that #cmd("MKD") creates, 1 to 16777215. Another value keeps the
+      value before and gives the warning #cmd("DEFDIRECTORY must be 1..16777215, keeping N"). The parameter is new in FTPD 1.3.0. Before, #cmd("MKD") used 10 unless the client sent #cmd("SITE DIRECTORY").],
     [#cmd("DEFSPACETYPE")], [TRACK], [The unit of the quantities: #cmd("TRACK"),
       #cmd("CYLINDER") or #cmd("BLOCK"). In any case; the short forms
       #cmd("TRK"), #cmd("CYL"), #cmd("BLK") and the plurals are taken as well.

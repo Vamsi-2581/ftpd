@@ -79,8 +79,9 @@ with the replacement.
       #cmd("DEFBLKSIZE").],
     [#cmd("FTPD046I")], [#cmd("DEFUNIT") and #cmd("DEFVOLUME"). An empty value
       shows as #cmd("(SYSTEM CHOOSES)").],
-    [#cmd("FTPD058I")], [#cmd("DEFPRIMARY"), #cmd("DEFSECONDARY") and
-      #cmd("DEFSPACETYPE") as #cmd("TRK"), #cmd("CYL") or #cmd("BLK").],
+    [#cmd("FTPD058I")], [#cmd("DEFPRIMARY"), #cmd("DEFSECONDARY"),
+      #cmd("DEFSPACETYPE") as #cmd("TRK"), #cmd("CYL") or #cmd("BLK"), and
+      #cmd("DEFDIRECTORY").],
     [#cmd("FTPD047I")], [#cmd("DASD VOLUMES=n:"), the number of volume lines.],
     [#cmd("FTPD048I")], [One message for each volume line, as
       #cmd("VOLSER,UNIT").],

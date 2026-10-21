@@ -79,31 +79,8 @@ Naming convention follows UFSD: `ftpd#xxx.c` / `ftpd#xxx.h` with 3-letter domain
 4. **Polish** — Console commands, timeouts, error handling, packaging
 5. **SITE XMIT** — TRANSMIT-format dataset transfer
 
-## SMP4 FMID — one per release
+## Releasing
 
-The id is the release: `T` + three product letters + the three version digits.
-One id per release, **spent exactly once**, and each release's SYSMOD deletes
-its predecessor:
-
-```toml
-[distribution.smp]
-fmid   = "TFTP120"
-delete = ["TFTP110"]
-```
-
-**No version component may ever exceed 9** — a 7-character id has no room for
-a second digit. At patch 9 cut the next minor, at minor 9 the next major;
-ftpd 1.2.10 cannot be expressed and must not be released.
-
-Current: `main` is 1.3.0-dev, so mbt 3 derives **`TFTP130`**, deleting
-`TFTP120`; not yet checked on any stand. `TFTP111` was assigned to a 1.1.1 that
-was never cut (the libc370 2.0 port made the next release 1.2.0) and is unspent
-and unassigned. Burned: `TFTP100` (1.0.0–1.0.2), `TFTP110` (1.1.0, released
-2026-09-14) and `TFTP120` (1.2.0, released 2026-10-13; free on the maintainer's
-word, no `LIST` was run on any stand before it shipped). `docs/uninstall.md`
-names every spent id; add `TFTP130` there with 1.3.0.
-
-Never re-spend an id, and never install a test package under the real one: a
-test needs a throwaway id **and** throwaway module names, because SMP keys
-element ownership on `MOD(name)`, not on the target library. See the root
-`CLAUDE.md` for the full rule and the measurements behind it.
+The SMP4 FMID (one id per release, spent once), the burned ids and the books
+step are in `internals/releasing.md`. Read it, and
+`~/repos/mvs/.workspace/context/smp.md`, before cutting a release.

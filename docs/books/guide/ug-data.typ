@@ -180,23 +180,29 @@ The data depends on the transfer type:
   [#cmd("TYPE E")], [EBCDIC. The same bytes as for binary.],
 )
 
-#idx("record format", "variable")#idx("empty line")
+#idx("record format", "variable")#idx("record format", "undefined")#idx("empty line")
 In #cmd("TYPE A") one record is one line for the fixed record formats and for
-the variable record formats #cmd("V"), #cmd("VB") and #cmd("VBA"). For a
-variable data set FTPD reads one record at a time, so the line ends where the
-record ends. Other record formats, such as #cmd("U") and the spanned formats,
-are not covered by this rule. A record
+the variable record formats #cmd("V"), #cmd("VB") and #cmd("VBA"). For record
+format #cmd("U") one block is one line. For a variable or undefined data set
+FTPD reads one record or block at a time, so the line ends where the record or
+block ends. A record or block
 that holds nothing but blanks is sent as an empty line. So a line that was
 empty when it was stored (@ug-data-stor) comes back empty. With
 #cmd("SITE TRAILING") the blanks are kept, and such a line comes back as a
-single blank. Each NL byte (#cmd("X'15'")) in a record ends a line, so a record
-with one NL byte gives two lines, and an NL byte at the end of the record
-gives an extra empty line.
+single blank. Each NL byte (#cmd("X'15'")) in a record or block ends a line,
+so a record with one NL byte gives two lines, and an NL byte at the end of the
+record gives an extra empty line.
 
-Before FTPD 1.3.0 FTPD read a variable data set as a stream of bytes across
-the record boundaries. A text transfer joined the records and cut the result
-again every #cmd("LRECL") bytes, so the client got no line ends where the
-records ended. Fixed record formats were not affected.
+#idx("load module")
+Load modules have record format #cmd("U") and belong in #cmd("TYPE I").
+#cmd("TYPE A") translates the bytes as text, and a #cmd("X'00'") byte ends the
+line at that byte.
+
+Before FTPD 1.3.0 FTPD read a variable or undefined data set as a stream of
+bytes across the record or block boundaries. A text transfer joined the
+records or blocks and cut the result again every #cmd("LRECL") bytes (every
+block size for record format #cmd("U")), so the client got no line ends where
+the records ended. Fixed record formats were not affected.
 
 The error replies are:
 

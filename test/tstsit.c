@@ -314,6 +314,10 @@ main(void)
     same("BLKSIZE=6240", "BLOCKSI=6240");
     same("DIRECTORY=20", "DIR=20");
     same("UNIT=3390", "UNI=3390");
+    same("DIRECTORY=20", "D=20");
+    same("DIRECTORY=20", "DI=20");
+    same("UNIT=3390", "U=3390");
+    same("UNIT=3390", "UN=3390");
     same("VOLUME=PUB001", "VOL=PUB001");
     same("FILETYPE=JES", "FILE=JES");
     same("TRAILING", "TRAIL");
@@ -361,10 +365,6 @@ main(void)
     refused("DCBDSN=A.B");
     refused("DSNTYPE=LARGE");
     refused("DIRECTORYMODE=X");
-    refused("D=20");
-    refused("DI=20");
-    refused("U=3390");
-    refused("UN=3390");
 
     /* --- RETPD (#130) ------------------------------------------------ */
     run("", &st, &code, text, sizeof(text));

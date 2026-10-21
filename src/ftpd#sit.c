@@ -66,10 +66,11 @@ parse_kv(const char *arg, char *key, int keysz, char *val, int valsz)
 **
 ** min is the shortest accepted abbreviation.  PRI, SEC, TR, CY, RECF, LREC,
 ** BLK and DIR are the forms z/OS scripts are known to send (#130); the other
-** lengths are the shortest ones that are unique among the keywords FTPD has
-** (DIRECTORY and UNIT are held to 3 so that a single letter stays free for
-** keywords z/OS has and FTPD does not yet), and have not been checked
-** against the z/OS manual.
+** lengths are the shortest ones that are unique among the keywords FTPD has.
+** DIRECTORY and UNIT take a single letter (D=, U=), as the z/OS SITE syntax
+** diagram writes them; DCBDSN needs two (DCbdsn), so D stays unambiguous.
+** The lengths other than those listed above have not been checked against the
+** z/OS manual.
 ** A token matches a keyword when it is a prefix of it at least min long, so
 ** "PRI", "PRIM" and "PRIMARY" are one keyword while "PR" is none.  An exact
 ** name always wins, which is what keeps BLOCKS apart from BLOCKSIZE.
@@ -92,7 +93,7 @@ static const site_keyword_t site_keywords[] = {
     { "BLOCKS",          2 },
     { "CYLINDERS",       2 },
     { "DATACLASS",       5 },
-    { "DIRECTORY",       3 },
+    { "DIRECTORY",       1 },
     { "FILETYPE",        4 },
     { "JESJOBNAME",      7 },
     { "JESOWNER",        4 },
@@ -109,7 +110,7 @@ static const site_keyword_t site_keywords[] = {
     { "TRACKS",          2 },
     { "TRAILINGBLANKS",  5 },
     { "TRUNCATE",        4 },
-    { "UNIT",            3 },
+    { "UNIT",            1 },
     { "VOLUME",          3 },
     { NULL,              0 }
 };

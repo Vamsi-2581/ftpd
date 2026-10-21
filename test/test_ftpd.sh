@@ -1738,7 +1738,7 @@ put $TMPDIR/cnt_mvs.dat '$DSN_CNT'
 get '$DSN_CNT' $TMPDIR/cnt_mvs.back
 CMDS
 )" "$FTP_OUT"
-    if [ "$(stat -c%s "$TMPDIR/cnt_mvs.back" 2>/dev/null)" = "$CNT_MVS" ]; then
+    if [ "$(stat -c%s "$TMPDIR/cnt_mvs.back" 2>/dev/null || stat -f%z "$TMPDIR/cnt_mvs.back" 2>/dev/null)" = "$CNT_MVS" ]; then
         if stats_delta "$CNT_BASE" "$CNT_MVS" "$CNT_MVS"; then
             pass "MVS data set: $CNT_MVS bytes each way counted once (IN $STATS_IN, OUT $STATS_OUT)"
         else
@@ -1766,7 +1766,7 @@ put $TMPDIR/cnt_ufs.dat cnt.bin
 get cnt.bin $TMPDIR/cnt_ufs.back
 CMDS
 )" "$FTP_OUT"
-    if [ "$(stat -c%s "$TMPDIR/cnt_ufs.back" 2>/dev/null)" = "$CNT_UFS" ]; then
+    if [ "$(stat -c%s "$TMPDIR/cnt_ufs.back" 2>/dev/null || stat -f%z "$TMPDIR/cnt_ufs.back" 2>/dev/null)" = "$CNT_UFS" ]; then
         if stats_delta "$CNT_BASE" "$CNT_UFS" "$CNT_UFS"; then
             pass "UFS file: $CNT_UFS bytes each way counted once (IN $STATS_IN, OUT $STATS_OUT)"
         else

@@ -334,8 +334,7 @@ ftpd_data_send(ftpd_session_t *sess, const void *buf, int len)
         sent += rc;
     }
 
-    /* The only place bytes are counted, here and in ftpd_data_recv(); the
-    ** transfer routines must not add them again (#206). */
+    /* The only place bytes are counted (with ftpd_data_recv). */
     sess->bytes_sent += sent;
     return sent;
 }

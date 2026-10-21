@@ -19,6 +19,7 @@
 #   9.  APPE: appends to a sequential data set, creates what is missing,
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
 #   10. SITE in any spelling: verb, keywords and values (quote form)
+#   11. Member STOR into a PDS with a full directory: 552 + SITE DIRECTORY=
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1424,6 +1425,135 @@ if [ "$OWN_ANY" -eq 2 ] && [ "$OWN_UP" -eq 2 ]; then
 else
     fail "JESOWNER spelling: $OWN_UP of $OWN_ANY JES replies named JESOWNER=$HLQ"
     grep "^550" "$FTP_OUT" | sed 's/^/    /'
+fi
+
+# ============================================================
+# TEST 11: A member STOR into a PDS whose DIRECTORY is full (#173)
+#
+# Test 8 keeps the directory out of the way on purpose; this is the
+# opposite shape: one directory block (20 members) and room for far
+# more members than that, so the 21st STOR fails on the directory and
+# on nothing else.  The system ABENDs the CLOSE with SB14-0C (STOW finds
+# no room), which is not an x37 and used to answer 451 -- a transient
+# code, so a client retried into the same full directory.  A directory
+# cannot be extended, so the answer is the permanent 552, with the one
+# thing the client can do about it: SITE DIRECTORY= when the PDS is
+# created.  Four things must hold:
+#
+#   - the STOR that failed answered 552 and names SITE DIRECTORY=;
+#   - the member it was storing is not in the directory;
+#   - the members that were stored are intact;
+#   - the server carries on: the same failure again answers 552 again,
+#     and the PDS can still be deleted afterwards.
+# ============================================================
+section "Test 11: Member STOR into a PDS with a full directory"
+
+DSN_DIR="${HLQ}.TEST.FULLDIR"
+
+info "MKD '$DSN_DIR' (FB 80, BLKSIZE 19040, TRK(5,0), 1 directory block)"
+FTP_OUT="$TMPDIR/ftp_dir_mkd.log"
+ftp_run "$(cat <<CMDS
+rmdir '$DSN_DIR'
+site recfm=fb
+site lrecl=80
+site blksize=19040
+site tracks
+site primary=5
+site secondary=0
+site directory=1
+mkdir '$DSN_DIR'
+CMDS
+)" "$FTP_OUT"
+
+if ! grep -q "^257" "$FTP_OUT"; then
+    fail "MKD '$DSN_DIR' failed"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+else
+    DFULL=0
+    DFULL_REPLY=""
+    m=1
+    while [ "$m" -le 60 ]; do
+        mkmem "$TMPDIR/dir_m$m.txt" "MEMBER$m-"
+        FTP_OUT="$TMPDIR/ftp_dir_m$m.log"
+        ftp_run "type ascii
+put $TMPDIR/dir_m$m.txt '$DSN_DIR(M$m)'" "$FTP_OUT"
+        if ! grep -q "^226\|^250" "$FTP_OUT"; then
+            DFULL=$m
+            DFULL_REPLY=$(xfer_reply "$FTP_OUT")
+            break
+        fi
+        m=$((m + 1))
+    done
+
+    if [ "$DFULL" -eq 0 ]; then
+        fail "The directory did not fill within 60 members (or every failure answered 2xx)"
+    elif [ "$DFULL" -eq 1 ]; then
+        fail "The first member into the empty PDS failed: $DFULL_REPLY"
+    else
+        info "Filled: M1..M$((DFULL - 1)) stored, M$DFULL answered: $DFULL_REPLY"
+
+        if echo "$DFULL_REPLY" | grep -q "^552"; then
+            pass "A member STOR into the PDS with a full directory answers 552"
+        else
+            fail "A member STOR into the PDS with a full directory answered: $DFULL_REPLY"
+        fi
+        if echo "$DFULL_REPLY" | grep -q "SITE DIRECTORY="; then
+            pass "The 552 names SITE DIRECTORY="
+        else
+            fail "The reply does not name SITE DIRECTORY=: $DFULL_REPLY"
+        fi
+
+        FTP_OUT="$TMPDIR/ftp_dir_absent.log"
+        rm -f "$TMPDIR/dir_absent.txt"
+        ftp_run "type ascii
+get '$DSN_DIR(M$DFULL)' $TMPDIR/dir_absent.txt" "$FTP_OUT"
+        if grep -q "^550" "$FTP_OUT"; then
+            pass "The member whose STOR failed (M$DFULL) is not in the directory"
+        else
+            fail "The member whose STOR failed (M$DFULL) is in the directory"
+            tail -3 "$FTP_OUT" | sed 's/^/    /'
+        fi
+
+        # The members before it, first and last, still hold their records
+        DINTACT=1
+        for k in 1 $((DFULL - 1)); do
+            FTP_OUT="$TMPDIR/ftp_dir_back$k.log"
+            rm -f "$TMPDIR/dir_back$k.txt"
+            ftp_run "type ascii
+get '$DSN_DIR(M$k)' $TMPDIR/dir_back$k.txt" "$FTP_OUT"
+            GOT=$(grep -c "^MEMBER$k-" "$TMPDIR/dir_back$k.txt" 2>/dev/null)
+            if [ "${GOT:-0}" -ne "$MEMRECS" ]; then
+                DINTACT=0
+                info "M$k has ${GOT:-0} of $MEMRECS records"
+            fi
+        done
+        if [ "$DINTACT" -eq 1 ]; then
+            pass "The members stored before the failure are intact"
+        else
+            fail "A member stored before the failure lost records"
+        fi
+
+        # The same failure again, on a new session: the server survived the
+        # first one, and the retry meets the same permanent answer.
+        mkmem "$TMPDIR/dir_again.txt" "AGAIN-"
+        FTP_OUT="$TMPDIR/ftp_dir_again.log"
+        ftp_run "type ascii
+put $TMPDIR/dir_again.txt '$DSN_DIR(M$DFULL)'" "$FTP_OUT"
+        AGAIN_REPLY=$(xfer_reply "$FTP_OUT")
+        if echo "$AGAIN_REPLY" | grep -q "^552"; then
+            pass "The retry answers 552 again and the server is still serving"
+        else
+            fail "The retry answered: ${AGAIN_REPLY:-no reply}"
+        fi
+    fi
+fi
+
+FTP_OUT="$TMPDIR/ftp_dir_post.log"
+ftp_run "rmdir '$DSN_DIR'" "$FTP_OUT"
+if grep -q "^250" "$FTP_OUT"; then
+    pass "The PDS can be deleted after the failure (no DD left allocated)"
+else
+    fail "RMD of the PDS after the failure: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
 fi
 
 # ============================================================

@@ -340,6 +340,24 @@ space_abend(unsigned abcode)
 }
 
 /* --------------------------------------------------------------------
+** Is this a member write that ABENDed SB14, i.e. a PDS directory with no
+** room for the entry?
+**
+** The STOW in CLOSE finds no room and the CLOSE ABENDs SB14-0C (IEC217I,
+** module IGG0201Z), measured with a member STOR into a PDS of one directory
+** block.  libc370 2.24.1 does not turn it into a return code the way it does
+** an x37, so the ESTAE sees it.  try() reports 0x00B14000 -- the reason code
+** is not in it, only in the console message -- so SB14 during a write is all
+** there is to go on, and the reply says "most likely".
+** ----------------------------------------------------------------- */
+static int
+directory_full_abend(unsigned abcode, const char *verb)
+{
+    return ((abcode >> 12) & 0xFFF) == 0xB14
+        && (strcmp(verb, "STOR") == 0 || strcmp(verb, "APPE") == 0);
+}
+
+/* --------------------------------------------------------------------
 ** Scratch the data set a STOR created for a transfer that then ABENDed.
 **
 ** The work is ftpd_mvs_scratch()'s; this exists to be the thing the session
@@ -467,6 +485,15 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
             "(ABEND S%03X). Allocate more space with SITE PRIMARY/SECONDARY "
             "and CYLINDERS, or ask the administrator to raise DEFPRIMARY.",
             (abcode >> 12) & 0xFFF);
+    else if (directory_full_abend(abcode, verb))
+        /* Permanent for the same reason, and no SITE can grow a directory:
+        ** the blocks are fixed when the PDS is created, so the hint is for
+        ** the next MKD. */
+        ftpd_session_reply(sess, FTP_552,
+            "Requested file action aborted: the directory of the PDS is "
+            "most likely full (ABEND SB14). It cannot be extended; "
+            "create the PDS with more directory blocks (SITE DIRECTORY=n, "
+            "then MKD) and copy the members.");
     else
         ftpd_session_reply(sess, FTP_451,
             "Requested action aborted: local error in processing.");

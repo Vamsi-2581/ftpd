@@ -2218,7 +2218,20 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         ** normal disposition, leave an empty catalogued dataset behind.
         ** The window is a few instructions (two SVC 99 calls) and is not
         ** instrumented; total_recover in the operator log makes any such
-        ** accumulation observable. */
+        ** accumulation observable.
+        **
+        ** With SITE RETPD the window is wider and its consequence is
+        ** different.  alloc_old_retained() below keeps its DD, DISP=OLD, and
+        ** that DD is not reachable from recovery until the fopen() further
+        ** down has succeeded and sess->cur_file = fp has run.  An ABEND in
+        ** between -- in the rest of this block, or in the OPEN inside
+        ** fopen() -- leaves the DD allocated and the data set exclusively
+        ** enqueued until the FTPD started task ends: every later open of it,
+        ** by any session or job, waits or fails.  The data set is the one
+        ** this STOR just created, and recovery does not scratch it either, so
+        ** it stays catalogued and empty.  Only the logged-in user's own data
+        ** set is affected.  A failing (not ABENDing) fopen() frees
+        ** the DD itself. */
         ftpd_acee_enter(sess);
         rc = __dsalcf(ddname, "%s", opts);
         if (rc == 0)

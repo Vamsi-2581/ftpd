@@ -87,7 +87,7 @@ Standard FTP commands that MUST be supported:
 | `LIST` / `NLST` | Directory listing / name list |
 | `RETR` | Retrieve/download file |
 | `STOR` | Store/upload file |
-| `APPE` | Append to file (creates dataset if nonexistent) |
+| `APPE` | Append to file (creates dataset if nonexistent; existing PDS member: `550`) |
 | `DELE` | Delete file |
 | `RNFR` / `RNTO` | Rename file |
 | `MKD` / `RMD` | Make/remove directory (UFS) or allocate/scratch PDS (MVS) |
@@ -242,7 +242,7 @@ This is lenient behavior for forward compatibility — clients that send z/OS-sp
 - `LIST` on PDS — Members (with ISPF stats if available; blanks for members without stats)
 - `RETR` — Read sequential dataset or PDS member
 - `STOR` — Write sequential dataset or PDS member (replaces content if existing)
-- `APPE` — Append to dataset; **creates the dataset** if nonexistent (uses current SITE allocation params)
+- `APPE` — Append to an existing sequential dataset; **creates the dataset** (or a new PDS member) if nonexistent (uses current SITE allocation params). **Exception:** APPE to an *existing PDS member* answers `550` and leaves the member unchanged, because BPAM cannot extend a member in place (until libc370#204); so does APPE to a PDS named without a member. Use `STOR` to replace a member.
 - `DELE` — Delete dataset (including entire PDS with members) or PDS member
 - `MKD` — Allocate a new PDS (using current SITE allocation params, DSORG=PO)
 - `RMD` — Scratch a PDS (same as DELE for datasets)
@@ -1139,7 +1139,7 @@ The following behaviors were confirmed from z/OS 3.1 FTP server protocol capture
 13. **TRAILING default: blanks NOT removed.** Matches z/OS default. See §2.2.
 14. **REST requires MODE B or C:** `504` in MODE S (Stream). REST STREAM removed from FEAT. See Appendix C.
 15. **Pre-auth commands allowed:** SYST, FEAT, HELP, NOOP, STAT, SITE, QUIT work before USER/PASS. See §2.6.
-16. **APPE creates nonexistent datasets.** See §2.3.
+16. **APPE creates nonexistent datasets** and appends to existing sequential ones; an existing PDS member is refused with `550`. See §2.3.
 17. **MKD in MVS mode allocates PDS.** RMD scratches PDS (same as DELE). See §2.3.
 18. **RNFR state cleared on any non-RNTO command.** Stricter than z/OS (which has a stale-RNFR bug). See §2.3.
 19. **Spool DD separator:** ` !! END OF JES SPOOL FILE !!` (space-prefixed, exact string). DD numbering starts at 1. See §2.5.

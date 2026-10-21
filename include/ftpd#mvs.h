@@ -51,7 +51,11 @@ int ftpd_mvs_stor(ftpd_session_t *sess, const char *arg)
                                                     asm("FTPMVSTO");
 
 /*
-** APPE — append data to existing dataset (create if not exists).
+** APPE — append data to an existing sequential dataset; a dataset or member
+** that does not exist yet is created, as STOR creates it.
+** Exception: APPE to an existing PDS member answers 550 and changes nothing
+** (BPAM cannot extend a member in place; waits for libc370#204).  APPE to a
+** PDS named without a member answers 550 as well.
 */
 int ftpd_mvs_appe(ftpd_session_t *sess, const char *arg)
                                                     asm("FTPMVAPP");

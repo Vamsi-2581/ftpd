@@ -167,11 +167,21 @@ sees are the reply codes in @ref-reply.
       incomplete data set.],
     [#cmd("FTPD075E ABEND WHILE SCRATCHING dsn -- IDENTITY RESTORED, DATA SET LEFT")], [The delete itself ended in an ABEND. The identity of the started
       task is back. The data set stays. Delete it by hand.],
-    [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- CLOSE ABENDED, DD STILL HELD")], [The close of the file ended in an ABEND. The data set stays
-      allocated to the started task, and a delete of it is refused until FTPD
-      ends.],
+    [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- CLOSE ABENDED, DD STILL HELD")], [The close of the file ended in an ABEND, and the task I/O table of
+      the started task still holds a DD of the name of the file (n is greater
+      than 0). The data set stays allocated to the started task, and a delete
+      of it is refused until FTPD ends. The name is also found when another
+      session has allocated a DD of the same name in the meantime.],
+    [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- CLOSE ABENDED, DD RELEASED")], [The close of the file ended in an ABEND, but the task I/O table no longer
+      holds the DD (n is greater than 0). The data set is free. No action is
+      needed. Since FTPD 1.3.0. Earlier releases wrote #cmd("DD STILL HELD") in
+      this case too.],
+    [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- CLOSE ABENDED, DD STATE UNKNOWN")], [The close of the file ended in an ABEND (n is greater than 0), but FTPD had
+      no DD name to look for or no task I/O table to look in. It cannot tell
+      whether the data set is held. If a delete of the data set is refused, it
+      is. Since FTPD 1.3.0.],
     [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- SEE __fabandon() IN CLIBIO.H")], [The cleanup of the file returned an error code that the
-      header #cmd("clibio.h") of the C library describes.],
+      header #cmd("clibio.h") of the C library describes (n is less than 0).],
   )
 ]
 

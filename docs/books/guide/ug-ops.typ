@@ -362,9 +362,20 @@ When a #cmd("STOR") had just created the data set, FTPD scratches it, because
 what is left is incomplete. #cmd("FTPD074I SCRATCHED dsn AFTER A FAILED TRANSFER") tells that it worked. #cmd("FTPD073W COULD NOT SCRATCH dsn, IDCAMS RC=n") means that the data set stays, and the user or the operator has to
 delete it. #cmd("FTPD075E") means that the scratch itself ended in an ABEND.
 The data set stays in that case too.
-#cmd("FTPD076W") tells that FTPD could not clean up the file after the ABEND.
-With the text #cmd("CLOSE ABENDED, DD STILL HELD") the data set stays allocated
-to the started task, and a scratch of it is refused until FTPD ends.
+#cmd("FTPD076W") tells that the cleanup of the file after the ABEND did not go
+cleanly. When the close of the file ended in an ABEND, FTPD looks in the task
+I/O table of the started task for the DD of the file and says what it found:
+
+- #cmd("CLOSE ABENDED, DD STILL HELD"): the DD is still in the table. The data
+  set stays allocated to the started task, and a scratch of it is refused until
+  FTPD ends.
+- #cmd("CLOSE ABENDED, DD RELEASED"): the DD is gone. The close ended in an
+  ABEND, but the data set is free. The operator has nothing to do. FTPD 1.3.0
+  writes this text. Before, it said #cmd("DD STILL HELD") in this case too.
+- #cmd("CLOSE ABENDED, DD STATE UNKNOWN"): FTPD had no DD name to look for, or
+  no table to look in, and cannot tell. If a delete of the data set is refused,
+  the DD is held.
+
 A #cmd("STOR") into a partitioned data set with a full directory (ABEND SB14)
 can write #cmd("FTPD076W") after #cmd("FTPD070E"), when the cleanup of the
 file ends in an ABEND again (@ug-data-dirfull).

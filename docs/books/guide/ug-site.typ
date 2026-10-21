@@ -131,10 +131,11 @@ ask. The reply is a #cmd("501"), and nothing changes:
   kept in the transfer. FTPD does not keep them. The reply is
   #cmd("501 SITE RDW is not supported: FTPD does not keep record descriptor words").
 - #cmd("SBSENDEOL=value") sets the line end of text files. FTPD handles the
-  line end CRLF only. #cmd("SBSENDEOL=CRLF") in any case is answered with
-  #cmd("200"). Any other value, and the keyword with no value, is answered
-  with #cmd("501 SBSENDEOL=LF is not supported: FTPD only handles CRLF"). The
-  text names the value as the client typed it, or #cmd("(none)").
+  line end CRLF only. #cmd("SBSENDEOL=CRLF") in any case, and the keyword with
+  no value, are answered with #cmd("200") and change nothing. Any other value
+  is answered with
+  #cmd("501 SBSENDEOL=LF is not supported: FTPD only handles CRLF"). The text
+  names the value as the client typed it.
 
 A script that sets one of them must read the code of the reply. Before FTPD
 1.3.0 the reply was #cmd("200") for both, and the setting did nothing.

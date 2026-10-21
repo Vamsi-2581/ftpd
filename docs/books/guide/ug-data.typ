@@ -233,8 +233,10 @@ bytes:
 - *Record format U:* the block size.
 
 A line of exactly this many bytes fits. The count is of the bytes that the
-client sent, without the line end and without any CR. A data set with no
-usable length takes lines of up to 32767 bytes.
+client sent, without the line end and without any CR. A data set that reports
+no length takes lines of up to 32767 bytes. A variable data set with a record
+length of 4 or less has no data bytes, so every line that is not empty is too
+long.
 
 A longer line makes the upload fail. FTPD stops the transfer at that line and
 answers:

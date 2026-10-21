@@ -54,8 +54,8 @@ SITE [keyword[=value] ...]
       [The word #cmd("RDW") is on the line, and it is the only word
       (@ref-site-keys).],
     [#cmd("501 SBSENDEOL=value is not supported: FTPD only handles CRLF")],
-      [#cmd("SBSENDEOL") has a value other than #cmd("CRLF"), or none (the text
-      then says #cmd("SBSENDEOL=(none)")), and it is the only word.],
+      [#cmd("SBSENDEOL") has a value other than #cmd("CRLF"), and it is the
+      only word. The text names the value as the client typed it.],
     [#cmd("501-text") and
       #cmd("501 Other parameters on this command were applied.")], [One of the
       three #cmd("501") cases above, with more than one word on the line.],
@@ -196,8 +196,9 @@ of the full names, and still work.
     [#cmd("RDW")], [Refused with a #cmd("501"). FTPD does not keep record
       descriptor words in a transfer. Nothing changes.],
     [#cmd("SBSENDEOL=v")], [#cmd("CRLF"), in any case, is accepted and changes
-      nothing: it is the only line end that FTPD writes and reads. Any other
-      value, and no value, is refused with a #cmd("501"). Nothing changes.],
+      nothing: it is the only line end that FTPD writes and reads. No value is
+      accepted in the same way. Any other value is refused with a #cmd("501").
+      Nothing changes.],
     [#cmd("DATACLASS"), #cmd("STORCLASS"), #cmd("MGMTCLASS")], [Accepted and
       ignored, with any value. MVS 3.8j has no SMS.],
   )
@@ -224,8 +225,10 @@ data set in the MVS view. The data bytes that one record holds:
   )
 ]
 
-If the value is zero (a data set with no record length), the limit is 32767
-bytes, the size of the buffer. FTPD counts the bytes of the line as they come
+If the data set reports no length at all (the record length is zero, or the
+block size is zero for format U), the limit is 32767 bytes, the size of the
+buffer. A variable data set with a record length of 4 or less has no data
+bytes: every line that is not empty is too long. FTPD counts the bytes of the line as they come
 from the client, without the line end and without any CR. A line that has
 exactly the number fits.
 

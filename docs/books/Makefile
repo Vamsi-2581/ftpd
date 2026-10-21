@@ -10,7 +10,7 @@ BOOKS := ml06-0001-0.pdf ml06-0002-0.pdf
 
 all: $(BOOKS)
 
-ml06-0001-%.pdf: ml06-0001.typ $(wildcard guide/*.typ) $(BM)/bookmaster.typ
+ml06-0001-%.pdf: ml06-0001.typ $(wildcard guide/*.typ) $(wildcard ex/*/*.txt) $(BM)/bookmaster.typ
 	$(TYPST) compile --root . --font-path $(BM)/fonts --ignore-system-fonts $< $@
 
 ml06-0002-%.pdf: ml06-0002.typ $(wildcard ref/*.typ) $(BM)/bookmaster.typ

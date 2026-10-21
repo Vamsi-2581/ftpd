@@ -70,8 +70,7 @@ FTPD runs on MVS 3.8j with these parts:
 FTPD 1.3 is built against LIBC/370 2.24.1, and its load module is
 link-edited authorized (AC(1)). Which libraries to install, how to
 authorize them and how to upgrade from an earlier release is the subject of
-the installation guide in the #cmd("docs/") directory of the repository
-(#cmd("docs/installation.md")).
+@ug-install.
 
 == What Is New in FTPD 1.3 <ug-intro-new>
 

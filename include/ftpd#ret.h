@@ -17,6 +17,7 @@ typedef struct ftpd_ret_date {
     int day;                /* 1-31                                        */
     int yday;               /* day of the year, 1-366                      */
     int permanent;          /* 99365/99366: the data set never expires     */
+    int open_ended;         /* 99000: no date, retained all the same       */
 } ftpd_ret_date_t;
 
 /*
@@ -34,8 +35,11 @@ typedef struct ftpd_ret_date {
 ** Returns 1 when OPEN for output would ask the operator, 0 otherwise.  A data
 ** set expires ON its expiration date: measured on MVS 3.8j, an expdt equal to
 ** today opens without a reply and one day later does not.  Year 99 with day
-** 365 or 366 is the permanent retention that never expires.  An expdt with a
-** day outside 1-366 is not a date; it counts as "no expiration date" so that
+** 365 or 366 is the permanent retention that never expires.  Year 99 with day 0
+** (99000) is no date either, but OPEN asks the operator for it all the same
+** (IEC507D, measured on MVS/CE, #204): it counts as retained, open_ended is
+** set, and month and day of *until are 0.  An expdt with a day outside 1-366
+** is otherwise not a date; it counts as "no expiration date" so that
 ** the check never refuses on bytes it cannot read.
 */
 int ftpd_ret_unexpired(const unsigned char expdt[3], int cur_year,

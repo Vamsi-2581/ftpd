@@ -2142,9 +2142,17 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         ftpd_ret_date_t until;
 
         if (retention_active(dsn, &lw, &until)) {
-            ftpd_log(LOG_INFO, "%s: %s retained until %04d.%03d, refused",
-                     verb, dsn, until.year, until.yday);
-            if (until.permanent)
+            if (until.open_ended)
+                ftpd_log(LOG_INFO, "%s: %s has the expiration date 99000, "
+                         "refused", verb, dsn);
+            else
+                ftpd_log(LOG_INFO, "%s: %s retained until %04d.%03d, refused",
+                         verb, dsn, until.year, until.yday);
+            if (until.open_ended)
+                ftpd_session_reply(sess, FTP_550,
+                    "%s has the expiration date 99000 and is not opened "
+                    "for %s.", dsn, append ? "appending" : "writing");
+            else if (until.permanent)
                 ftpd_session_reply(sess, FTP_550,
                     "%s has a permanent retention period and is not opened "
                     "for %s.", dsn, append ? "appending" : "writing");

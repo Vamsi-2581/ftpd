@@ -50,19 +50,30 @@ SITE [keyword[=value] ...]
     [#cmd("501-RETPD=n exceeds the server limit of N days; keeping the current value") and
       #cmd("501 Other parameters on this command were applied.")], [The same,
       with more than one word on the line.],
+    [#cmd("501 SITE RDW is not supported: FTPD does not keep record descriptor words")],
+      [The word #cmd("RDW") is on the line, and it is the only word
+      (@ref-site-keys).],
+    [#cmd("501 SBSENDEOL=value is not supported: FTPD only handles CRLF")],
+      [#cmd("SBSENDEOL") has a value other than #cmd("CRLF"), and it is the
+      only word. The text names the value as the client typed it.],
+    [#cmd("501-text") and
+      #cmd("501 Other parameters on this command were applied.")], [One of the
+      three #cmd("501") cases above, with more than one word on the line.],
     [#cmd("202 SITE not necessary; you may proceed")], [No word.],
   )
 ]
 
 The code is #cmd("200") in the first three cases, #cmd("501") when #cmd("RETPD")
-is above the limit, and #cmd("202") for no word. A script must read the first
+is above the limit or when the line has #cmd("RDW") or a #cmd("SBSENDEOL") that
+FTPD does not handle, and #cmd("202") for no word. A script must read the first
 line.
 
 The #cmd("501") takes the place of the other replies. If the same line has a
-refused #cmd("RETPD") and also a wrong value or a word that is not a keyword,
+refused word and also a wrong value or a word that is not a keyword,
 the reply is the #cmd("501"), and the text about the other word is not sent.
-The other words are applied in every case. The #cmd("501") names the first
-#cmd("RETPD") that was refused.
+The other words are applied in every case. If more than one word is refused,
+the #cmd("501") names the first of them, counted from the left, whichever of
+#cmd("RETPD"), #cmd("RDW") and #cmd("SBSENDEOL") it is.
 
 == Abbreviations <ref-site-abbr>
 
@@ -173,11 +184,21 @@ of the full names, and still work.
       lists all job names.],
     [#cmd("JESOWNER=n")], [The owner for the job list. Upper case. #cmd("*")
       means all owners. Without it the owner is the user of the session.],
-    [#cmd("JESSTATUS=s")], [Accepted and stored in upper case. The job list does
-      not use it.],
-    [#cmd("TRUNCATE"), #cmd("RDW")], [Switches that are accepted. No part of
-      FTPD reads them.],
-    [#cmd("SBSENDEOL")], [Accepted. It does nothing.],
+    [#cmd("JESSTATUS=s")], [The status filter of the JES view: #cmd("ALL"),
+      #cmd("INPUT"), #cmd("ACTIVE") or #cmd("OUTPUT"), in any case, stored in
+      upper case. No value: #cmd("ALL"), which is also the value at the start.
+      Another value, an abbreviation too: the setting stays, and the text is
+      #cmd("JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT; keeping the current value").
+      It acts as @ref-site-jesstatus says.],
+    [#cmd("TRUNCATE")], [A switch. Each use turns on or off the cutting of a
+      text line that is longer than the record (@ref-site-truncate). Off at
+      the start.],
+    [#cmd("RDW")], [Refused with a #cmd("501"). FTPD does not keep record
+      descriptor words in a transfer. Nothing changes.],
+    [#cmd("SBSENDEOL=v")], [#cmd("CRLF"), in any case, is accepted and changes
+      nothing: it is the only line end that FTPD writes and reads. No value is
+      accepted in the same way. Any other value is refused with a #cmd("501").
+      Nothing changes.],
     [#cmd("DATACLASS"), #cmd("STORCLASS"), #cmd("MGMTCLASS")], [Accepted and
       ignored, with any value. MVS 3.8j has no SMS.],
   )
@@ -186,6 +207,67 @@ of the full names, and still work.
 Every other word is #cmd("Unrecognized parameter"). That includes
 #cmd("JESINTERFACELEVEL"), which is a parameter of the configuration member
 (@ref-prm) and not a keyword of #cmd("SITE").
+
+== TRUNCATE <ref-site-truncate>
+
+#idx("TRUNCATE")#idx("451", "line too long")
+#cmd("SITE TRUNCATE") decides what #cmd("STOR") and #cmd("APPE") do with a line
+of a text transfer (#cmd("TYPE A")) that is longer than one record of the
+data set in the MVS view. The data bytes that one record holds:
+
+#tab(caption: [The longest line that fits])[
+  #table(columns: (1.6in, 1fr),
+    [Record format], [Data bytes],
+    [F, FB], [LRECL],
+    [V, VB, VBS], [LRECL minus 4. The 4 bytes are the record descriptor word.
+      A data set with #cmd("VB") and #cmd("LRECL=14") takes 10.],
+    [U], [BLKSIZE],
+  )
+]
+
+If the data set reports no length at all (the record length is zero, or the
+block size is zero for format U), the limit is 32767 bytes, the size of the
+buffer. A variable data set with a record length of 4 or less has no data
+bytes: every line that is not empty is too long. FTPD counts the bytes of the line as they come
+from the client, without the line end and without any CR. A line that has
+exactly the number fits.
+
+- *Switch off* (the start of every session): the transfer fails at the first
+  line that is too long. The reply is
+  #cmd("451 File transfer failed. File contains records that are longer than the LRECL (n data bytes). Use SITE TRUNCATE to cut them; the data set is incomplete."),
+  where n is the number of the table. A data set that this command created
+  is removed. A data set that existed is left as the failed transfer left it.
+- *Switch on:* FTPD keeps the first n bytes of the line, drops the rest,
+  and goes on with the next line. If it cut at least one line, the reply is
+  #cmd("250 Transfer completed successfully (data was truncated)."), and the
+  log has a warning with the number of lines. If no line was too long, the
+  reply is the plain #cmd("250 Transfer completed successfully.").
+
+The last line of the data is a line even without a line end. The switch has no
+effect on #cmd("TYPE I") and #cmd("TYPE E"), which cut the data into records by
+length, and none in the UFS and JES views. Before FTPD 1.3.0 the keyword
+did nothing, and FTPD cut every long line, with a plain #cmd("250").
+
+== JESSTATUS <ref-site-jesstatus>
+
+#idx("JESSTATUS")
+#cmd("SITE JESSTATUS=s") limits the JES view to the jobs in one status. It acts on:
+
+- #cmd("LIST") and #cmd("NLST"): the list has the jobs in that status only. The
+  header #cmd("125 List started OK for JESJOBNAME=n, JESSTATUS=s and JESOWNER=o")
+  names the filter.
+- #cmd("LIST JOBnnnnn"): a job outside the filter gives
+  #cmd("550 No job found with ID JOBnnnnn for JESSTATUS=s").
+- #cmd("RETR") and #cmd("DELE"): a job outside the filter gives
+  #cmd("550 Jobid JOBnnnnn not found for JESJOBNAME=n, JESSTATUS=s, JESOWNER=o").
+
+The statuses are those of the STATUS column of the job list. #cmd("INPUT"),
+#cmd("ACTIVE") and #cmd("OUTPUT") select the jobs with that text in the column.
+#cmd("ALL") selects every job, also the ones with the status #cmd("XMIT"),
+#cmd("SETUP"), #cmd("RECEIVE") or #cmd("UNKNOWN"). The filter works together
+with the owner and the job name for the list. For #cmd("RETR") and #cmd("DELE")
+the job ID decides, and the status is the only filter that takes part. The
+list of 200 jobs counts the jobs that pass the filter.
 
 == RETPD <ref-site-retpd>
 

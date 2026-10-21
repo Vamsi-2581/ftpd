@@ -206,7 +206,8 @@ How the records are made depends on the transfer type:
 
 - *TYPE A:* each line becomes one record, translated from ASCII to EBCDIC
   (code page 037). For a fixed record format the record is padded with
-  blanks.
+  blanks. A line that does not fit into the record is an error
+  (@ug-data-long).
 - *TYPE I and TYPE E:* the bytes are cut into records of the record length,
   or of the block size for record format U. A last short record is padded
   with binary zeros (not for record format U).
@@ -218,6 +219,54 @@ writes it, and at the end releases the space that was not used (the data set
 is opened with the #cmd("RLSE") option). So a generous primary quantity costs
 nothing once the transfer has finished. A data set that existed is not
 shortened.
+
+=== When a Line Is Too Long <ug-data-long>
+
+#idx("TRUNCATE")#idx("line", "too long")#idx("451", "line too long")
+In #cmd("TYPE A") one line is one record. A record holds a fixed number of data
+bytes:
+
+- *Fixed record formats (F):* the record length.
+- *Variable record formats (V):* the record length minus 4, because the record
+  length counts the 4 bytes of the record descriptor word, which the system
+  adds. A data set with #cmd("VB") and #cmd("LRECL=14") takes 10 bytes.
+- *Record format U:* the block size.
+
+A line of exactly this many bytes fits. The count is of the bytes that the
+client sent, without the line end and without any CR. A data set that reports
+no length takes lines of up to 32767 bytes. A variable data set with a record
+length of 4 or less has no data bytes, so every line that is not empty is too
+long.
+
+A longer line makes the upload fail. FTPD stops the transfer at that line and
+answers:
+
+```
+451 File transfer failed. File contains records that are longer than the LRECL (10 data bytes). Use SITE TRUNCATE to cut them; the data set is incomplete.
+```
+
+The number is the count of data bytes. When this #cmd("STOR") created the data
+set, FTPD removes it again, as in @ug-data-space. A data set that existed is
+left as the failed upload left it, incomplete. The client holds the only
+complete copy, so keep it.
+
+#cmd("SITE TRUNCATE") (@ug-site-keys) changes this for the rest of the session.
+FTPD then cuts the long line to the data bytes of the record, throws the rest
+away, goes on, and ends the transfer with
+
+```
+250 Transfer completed successfully (data was truncated).
+```
+
+A transfer in which no line was cut ends with the plain
+#cmd("250 Transfer completed successfully."), also with #cmd("TRUNCATE") on.
+FTPD writes a warning to the log for a transfer that cut lines. The rule
+applies to #cmd("STOR") and #cmd("APPE") of the MVS view in #cmd("TYPE A").
+In #cmd("TYPE I") and #cmd("TYPE E") the bytes are cut into records by length, so no
+line can be too long (@ug-data-stor).
+
+Before FTPD 1.3.0 FTPD cut every long line without a message and answered
+#cmd("250"), so a data set could lose data and the client was not told.
 
 === When the Space Is Not Enough <ug-data-space>
 

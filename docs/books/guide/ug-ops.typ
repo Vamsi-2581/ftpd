@@ -108,6 +108,11 @@ the volume in #cmd("DEFVOLUME") is not online, or the unit in #cmd("DEFUNIT")
 does not fit the volume. FTPD then ignores the value and lets the system
 choose, so that an upload does not fail for a wrong default.
 
+The message #cmd("FTPD062W n SETTING(S) IN DD:FTPDPRM HAVE NO EFFECT AND WERE IGNORED -- SEE THE LOG")
+comes with the configuration too. It counts the lines of the file that name
+a setting FTPD no longer has (@ug-ops-config). The log names them. FTPD is not
+affected. Remove the lines to stop the message.
+
 == The Configuration <ug-ops-config>
 
 #idx("configuration")#idx("FTPDPRM")
@@ -120,11 +125,18 @@ The file has one setting on each line, in the form #cmd("KEY=value"). The rules:
 - Empty lines are ignored. A line that starts with #cmd("\#") is a comment.
 - The key may be in any case. The value is taken as written, with the blanks
   at both ends removed.
-- A line of the form #cmd("VOLSER,UNIT") names a DASD volume. It must start with
-  a letter, and the volume serial is at most six characters. FTPD keeps up to 32
-  of these lines and shows them with #cmd("/F FTPD,CONFIG"). No other function of
-  FTPD reads them. A volume for new data sets is chosen with #cmd("DEFVOLUME")
-  and #cmd("DEFUNIT").
+- A line of the form #cmd("VOLSER,UNIT") used to name a DASD volume. No
+  function of FTPD reads a volume table from the configuration. FTPD still
+  recognises the line, so that an old file loads, and ignores it (see below). A volume for new data sets is chosen with
+  #cmd("DEFVOLUME") and #cmd("DEFUNIT").
+- The settings #cmd("AUTHUSER") and #cmd("JESINTERFACELEVEL") are ignored in
+  the same way. No function of FTPD reads them: a user ID in
+  #cmd("AUTHUSER") does not restrict who may stop the server, and
+  #cmd("JESINTERFACELEVEL") does not limit the JES view.
+- FTPD writes the warning #cmd("AUTHUSER has no effect in this release and is ignored")
+  to the log for each of these lines, with the setting (or #cmd("a VOLSER,UNIT volume line")) in its place. At the end of the read it
+  writes one console message, #cmd("FTPD062W"), with the number of the lines.
+  Before FTPD 1.3.0 FTPD took these lines without a word.
 - A key that FTPD does not know gives a warning in the log. A line without an
   equal sign gives a warning too. FTPD goes on in both cases.
 - A value that is out of range or unusable is corrected or ignored, usually with
@@ -242,8 +254,8 @@ answer comes as messages on the console.
     [#cmd("SESSIONS")], [#cmd("FTPD015I ACTIVE SESSIONS: 2 / 10"): the active
       sessions and #cmd("MAXSESSIONS").],
     [#cmd("CONFIG")], [The configuration that FTPD uses: the messages
-      #cmd("FTPD040I") to #cmd("FTPD049I"), #cmd("FTPD057I"),
-      #cmd("FTPD058I") and #cmd("FTPD061I").],
+      #cmd("FTPD040I") to #cmd("FTPD046I"), #cmd("FTPD049I"),
+      #cmd("FTPD057I"), #cmd("FTPD058I") and #cmd("FTPD061I").],
     [#cmd("VERSION")], [Two lines #cmd("FTPD016I"): the version and commit of
       FTPD, and the version of the C library. #cmd("FTPD006W") follows if the
       program was built from a modified tree.],

@@ -16,7 +16,7 @@ of parameters, in "Operating FTPD".
   may be in any case. The value is kept as written, with the exceptions that
   the table names.
 - An empty line and a line that starts with #cmd("\#") are ignored.
-- FTPD tests first whether a line is a volume line (@ref-prm-dasd). No key of
+- FTPD tests first whether a line is a volume line (@ref-prm-ignored). No key of
   FTPD is short enough to be taken for one.
 - A line that is not a volume line and has no equal sign gives the warning
   #cmd("unrecognized config line") in the log. A key that FTPD does not know
@@ -95,17 +95,23 @@ within 30 seconds loses the port.
       FTPD 1.3.0.],
     [#cmd("BANNER")], [MVS 3.8j FTPD Server], [The text of the #cmd("220") reply.
       FTPD keeps the first 79 characters.],
-    [#cmd("AUTHUSER")], [empty], [FTPD stores the first eight characters. No
-      function of FTPD uses the value.],
+    [#cmd("AUTHUSER")], [none], [Ignored. FTPD reads the line, writes the
+      warning #cmd("AUTHUSER has no effect in this release and is ignored") to
+      the log and counts it for #cmd("FTPD062W") (@ref-prm-ignored). The value
+      does not restrict who may stop the server. Before FTPD 1.3.0 FTPD
+      stored the first eight characters and said nothing.],
     [#cmd("SSLPROXY")], [NO], [#cmd("YES") or #cmd("NO"), in upper or in lower
       case only: another spelling, such as #cmd("Yes"), is a wrong value. With
       #cmd("YES") FTPD answers #cmd("PBSZ") and #cmd("PROT") with #cmd("200"),
       lists them in #cmd("FEAT") and writes the warnings #cmd("FTPD007W") at
       start. FTPD does not encrypt. Use it only with a TLS proxy in front of
       FTPD. A wrong value gives a warning and #cmd("NO").],
-    [#cmd("JESINTERFACELEVEL")], [2], [FTPD reads a number and replaces a number
-      other than 1 and 2 with 2, without a warning. No function of FTPD uses
-      the value. The parameter is not a keyword of #cmd("SITE").],
+    [#cmd("JESINTERFACELEVEL")], [none], [Ignored, like #cmd("AUTHUSER"): the
+      warning in the log is
+      #cmd("JESINTERFACELEVEL has no effect in this release and is ignored"),
+      and the line counts for #cmd("FTPD062W") (@ref-prm-ignored). The value does
+      not change the JES view. Before FTPD 1.3.0 FTPD stored a 1 or a 2 and
+      said nothing. The parameter is not a keyword of #cmd("SITE").],
   )
 ]
 
@@ -167,19 +173,43 @@ that needs more ends with a #cmd("552") reply (@ref-reply-552). Raise
 for its session with #cmd("SITE") (see "Space for New Data Sets" in the
 _FTPD User's Guide_).
 
-== Volume Lines <ref-prm-dasd>
+== Settings That Have No Effect <ref-prm-ignored>
 
-A line of the form
+#idx("FTPD062W")#idx("ignored settings")#idx("volume lines")
+Three kinds of line are read and have no effect:
+
+- #cmd("AUTHUSER") (@ref-prm-ses),
+- #cmd("JESINTERFACELEVEL") (@ref-prm-ses), and
+- a volume line, a line of the form
 
 ```
 VOLSER,UNIT
 ```
 
-names a DASD volume. The line starts with a letter. The volume serial is one to
-six characters before the first comma. The unit follows the comma, up to four
-characters, up to the first blank or tab. FTPD keeps up to 32 lines. A line after the 32nd gives the warning #cmd("DASD table full") in the
-log. #cmd("CONFIG") shows the lines (#cmd("FTPD047I"), #cmd("FTPD048I")). No
-other function of FTPD uses them.
+A line is a volume line when it starts with a letter, has a comma after one to
+six characters, and has a character other than a blank or a tab right after the comma.
+FTPD keeps nothing from it, and no function of FTPD reads a table of
+volumes from the configuration.
+
+FTPD does not take these lines as errors. For each one it writes a warning to
+the log (DD name #cmd("STDOUT")) that names the setting and says that it has
+no effect in this release and is ignored. At the end of the read it writes one
+message to the console:
+
+```
+FTPD062W n SETTING(S) IN DD:FTPDPRM HAVE NO EFFECT AND WERE IGNORED -- SEE THE LOG
+```
+
+n is the number of such lines. Without such a line the message is not
+written. Remove the lines to stop it. The sample member of the parameters that comes with FTPD
+1.3 has none of them. A file kept from an earlier release may have
+#cmd("JESINTERFACELEVEL=2") or volume lines, and then the first start of 1.3
+writes the message.
+
+Before FTPD 1.3.0 FTPD read the three kinds without a word, and
+#cmd("CONFIG") listed the volume lines with #cmd("FTPD047I") and
+#cmd("FTPD048I") (up to 32 of them, and the warning #cmd("DASD table full") for
+the rest). Those messages and that limit are gone.
 
 == Errors When Reading the File <ref-prm-err>
 

@@ -107,8 +107,12 @@ filters from the session:
   lists the jobs of all users.
 - *The job name:* #cmd("SITE JESJOBNAME=name") limits the list to the jobs with
   this name.
-- *The status:* jobs in every status are listed. #cmd("SITE JESSTATUS")
-  changes nothing (@ug-site-keys).
+- *The status:* #cmd("SITE JESSTATUS=status") limits the list to the jobs in
+  one status: #cmd("INPUT"), #cmd("ACTIVE") or #cmd("OUTPUT"). The default is
+  #cmd("ALL"), every status. A job in one of the other states of the column
+  STATUS (#cmd("XMIT"), #cmd("SETUP"), #cmd("RECEIVE"), #cmd("UNKNOWN")) is
+  listed with #cmd("ALL") only. The header #cmd("125") names the filter. Before
+  FTPD 1.3.0 the keyword was stored and the list showed every job.
 
 The list has at most 200 jobs. When FTPD reaches the limit, the end of the
 list is #cmd("250-JESENTRYLIMIT of 200 reached.  Additional entries not displayed") and #cmd("250 List completed successfully."). Narrow the filters to
@@ -129,7 +133,9 @@ JOBNAME  JOBID    STEPNAME PROCSTEP C DDNAME   BYTE-COUNT
 There is one line for each spool file, with the step, the procedure step, the
 output class and the DD name. The byte count is the number of records times
 the record length of the file, so it is not exact. A job ID that JES2 does not
-know gives #cmd("550 No job found with ID JOB00042"). The list includes the
+know, or a job that #cmd("JESSTATUS") excludes, gives
+#cmd("550 No job found with ID JOB00042 for JESSTATUS=ALL") (the text names
+the filter). The list includes the
 input files of the job (the JCL and the SYSIN data). #cmd("RETR") does not
 count them, as the next section shows.
 
@@ -156,7 +162,8 @@ The error replies are:
     [Reply], [Cause],
     [#cmd("501 Missing job ID")], [No argument.],
     [#cmd("550 Jobid JOB00042 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=USERID")],
-      [JES2 does not know the job. The text shows the filters of the session.],
+      [JES2 does not know the job, or the job is not in the status that
+      #cmd("JESSTATUS") names. The text shows the filters of the session.],
     [#cmd("550 Spool file 5 not found for Jobid JOB00042, 3 spool file(s) available")],
       [The number after the point is 0 or larger than the number of output
       files. The text says how many files the job has.],
@@ -169,10 +176,14 @@ The error replies are:
   )
 ]
 
-#note[*The job ID is enough.* #cmd("RETR") and #cmd("DELE") find the job by its
-ID. The filters #cmd("JESOWNER") and #cmd("JESJOBNAME") do not apply, and FTPD
-does not compare the owner of the job with the user ID of the session. The
-550 text names the filters, but they do not take part in the search.]
+#note[*The job ID and the status.* #cmd("RETR") and #cmd("DELE") find the job
+by its ID. The filters #cmd("JESOWNER") and #cmd("JESJOBNAME") do not apply,
+and FTPD does not compare the owner of the job with the user ID of the
+session. The 550 text names them, but they do not take part in the search.
+#cmd("JESSTATUS") does take part, since FTPD 1.3.0: with
+#cmd("SITE JESSTATUS=ACTIVE") the output of a job that has ended cannot be
+fetched, and a job that is not active cannot be cancelled. Set
+#cmd("JESSTATUS") back to #cmd("ALL") first.]
 
 === Cancelling a Job
 

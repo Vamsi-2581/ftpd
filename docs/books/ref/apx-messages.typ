@@ -79,16 +79,17 @@ sees are the reply codes in @ref-reply.
       The text is shown in upper case.],
     [#cmd("FTPD021E TRACE: SYNTAX: TRACE ON|OFF|DUMP")], [#cmd("TRACE") with a
       word that is not #cmd("ON"), #cmd("OFF") or #cmd("DUMP"), or with none.],
-    [#cmd("FTPD040I") to #cmd("FTPD049I")], [The answer to #cmd("CONFIG"). The
-      messages #cmd("FTPD057I"), #cmd("FTPD058I") and #cmd("FTPD061I") belong
-      to it. See
-      @ref-con-config.],
+    [#cmd("FTPD040I") to #cmd("FTPD046I"), #cmd("FTPD049I")], [The answer to
+      #cmd("CONFIG"). The messages #cmd("FTPD057I"), #cmd("FTPD058I") and
+      #cmd("FTPD061I") belong to it. See @ref-con-config. The messages
+      #cmd("FTPD047I") and #cmd("FTPD048I") (the volume lines) are gone since
+      FTPD 1.3.0.],
   )
 ]
 
-== Listener (050 to 060) <apx-messages-net>
+== Listener (050 to 062) <apx-messages-net>
 
-#tab(caption: [Messages 050 to 060])[
+#tab(caption: [Messages 050 to 062])[
   #table(columns: (2.5in, 1fr),
     [Message], [Meaning and action],
     [#cmd("FTPD050E SOCKET() FAILED, ERRNO=n")], [FTPD could not create the
@@ -130,6 +131,13 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD061I   MAXRETPD=n")], [Part of #cmd("CONFIG"). The most days that
       #cmd("SITE RETPD") takes (@ref-site-retpd-limit). The message is new in
       FTPD 1.3.0.],
+    [#cmd("FTPD062W n SETTING(S) IN DD:FTPDPRM HAVE NO EFFECT AND WERE IGNORED -- SEE THE LOG")],
+      [FTPD read n lines of #cmd("FTPDPRM") that name a setting it does not
+      have: #cmd("AUTHUSER"), #cmd("JESINTERFACELEVEL") or a volume line
+      (@ref-prm-ignored). Each is named in the log (DD name #cmd("STDOUT")). FTPD
+      starts as it would without the lines. Remove them from the file. The
+      message is new in FTPD 1.3.0. It is not written when there is no such
+      line.],
   )
 ]
 

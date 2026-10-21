@@ -180,6 +180,21 @@ The data depends on the transfer type:
   [#cmd("TYPE E")], [EBCDIC. The same bytes as for binary.],
 )
 
+#idx("record format", "variable")#idx("empty line")
+In #cmd("TYPE A") one record is one line, whatever the record format is. For
+a data set of a variable record format (#cmd("V"), #cmd("VB"), #cmd("VBA")) FTPD
+reads one record at a time, so the line ends where the record ends. A record
+that holds nothing but blanks is sent as an empty line. So a line that was
+empty when it was stored (@ug-data-stor) comes back empty. With
+#cmd("SITE TRAILING") the blanks are kept, and such a line comes back as a
+single blank. A record that holds the NL byte (#cmd("X'15'")) is cut at that
+byte into two lines, as mvsMF does.
+
+Before FTPD 1.3.0 FTPD read a variable data set as a stream of bytes across
+the record boundaries. A text transfer joined the records and cut the result
+again every #cmd("LRECL") bytes, so the client got no line ends where the
+records ended. Fixed record formats were not affected.
+
 The error replies are:
 
 - *The data set or member does not exist:*
@@ -207,7 +222,11 @@ How the records are made depends on the transfer type:
 - *TYPE A:* each line becomes one record, translated from ASCII to EBCDIC
   (code page 037). For a fixed record format the record is padded with
   blanks. A line that does not fit into the record is an error
-  (@ug-data-long).
+  (@ug-data-long). An empty line in a data set of a variable or undefined
+  record format is stored as a record of one blank, because a record of no
+  bytes cannot be written. #cmd("RETR") in #cmd("TYPE A") sends that record as
+  an empty line (@ug-data-retr). Before FTPD 1.3.0 such a line wrote no
+  record and was lost.
 - *TYPE I and TYPE E:* the bytes are cut into records of the record length,
   or of the block size for record format U. A last short record is padded
   with binary zeros (not for record format U).

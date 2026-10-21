@@ -10,7 +10,8 @@ one is the RAKF User's Guide that ships with RAKF itself.
 
 ## Which RAKF this assumes
 
-**RAKF 1.2.x**, which is what TK4-, TK5 and MVS/CE ship. There is **no
+**RAKF 1.2.x**, which is what TK4- and TK5 ship; the current MVS/CE image
+ships **RAKF 2.0.0** (`S RAKF` reports `RAKF V2R0M0`). There is **no
 administration tooling** at that level: the tables are plain text members you
 edit by hand and then reload. Where RAKF 2.0.0 changes something, this guide
 says so in a box.
@@ -96,7 +97,7 @@ A rejected one echoes the offending card and terminates:
 
 ```
 RAKFUIDS2  INPUT DATA INVALID OR OUT OF SEQ.
-FTPD     FTPD     ******** N                                            00000706
+JSMITH   USER     ******** N                                            00000706
 RAKFUIDSX  ** PROGRAM TERMINATED **
 ```
 
@@ -154,7 +155,15 @@ After any change to the tables, `S RAKF`.
 ## 3. FTPAUTH — who may use FTP at all
 
 `FTPAUTH` in the `FACILITY` class is the gate FTPD checks after the password is
-verified. Add to `SYS1.SECURE.CNTL(PROFILES)`:
+verified. It has to exist in `SYS1.SECURE.CNTL(PROFILES)`, and the group of your
+FTP users has to be allowed to read it.
+
+**Look first whether it is already there.** MVS/CE ships `FTPAUTH` in `PROFILES`
+with the universal entry `NONE` and the group `ADMIN` at `READ`. In that case
+add only the line for your group, below the existing ones, and never the
+universal `NONE` line a second time: a duplicate entry makes the table fail its
+sort check, and `S RAKF` ends with `RAKFPROF3 I/P RECORDS OUT OF ORDER` and
+ABEND U0300. If `FTPAUTH` is not there, add both lines, universal first:
 
 ```
          1         2         3         4         5         6
@@ -168,9 +177,11 @@ FACILITYFTPAUTH                                     FTPUSER READ
 ```
 
 The first line denies everyone, the second grants one group. Order matters —
-universal first, as above.
+universal first, as above, and the group lines of one resource in ascending
+group order. Where `FTPAUTH` already exists, the second line is the only one you
+add.
 
-**Define this profile.** It is tempting to skip it, because FTPD lets everyone
+**The profile must exist.** It is tempting to skip it, because FTPD lets everyone
 in when it is absent — but that is not a permissive default, it is RAKF's
 behaviour of granting **ALTER to undefined resources**. Skipping it also means
 the userid of the started task from section 2 can log in over FTP.

@@ -1356,10 +1356,11 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     **
     ** A "rb" stream on RECFM=V is a run of bytes over the record boundaries
     ** (RDWs stripped), so fread(lrecl) concatenates the records and re-wraps
-    ** them at LRECL (#185).  A text transfer of a V data set therefore
-    ** reopens it in text mode, where fgets() returns one record per call.
-    ** Only the RECFM in the DCB tells which case this is, so the first open
-    ** is always "rb". */
+    ** them at LRECL (#185).  RECFM=U is the same over its blocks, and a text
+    ** STOR writes one block per line (#245).  A text transfer of a V or U
+    ** data set therefore reopens it in text mode, where fgets() returns one
+    ** record or block per call.  Only the RECFM in the DCB tells which case
+    ** this is, so the first open is always "rb". */
     rmode = "rb";
     for (;;) {
         ftpd_acee_enter(sess);
@@ -1377,7 +1378,8 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
             return 0;
         }
         if (rmode[1] == 'b' && sess->type == XFER_TYPE_A &&
-            (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V) {
+            ((fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V ||
+             (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_U)) {
             fclose(fp);
             rmode = "r";
             continue;
@@ -1458,9 +1460,9 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
         /* ---------------------------------------------------------------
         ** ASCII mode: one record per line, trim, xlat, CRLF.
         ** For FB: each fread returns exactly LRECL bytes (one record).
-        ** For V (opened in text mode above): each fgets returns one record
-        ** and its '\n'; lrecl + 2 holds the longest record, the newline and
-        ** the terminator.
+        ** For V and U (opened in text mode above): each fgets returns one
+        ** record or block and its '\n'; lrecl + 2 holds the longest one, the
+        ** newline and the terminator (for U lrecl is the block size).
         ** --------------------------------------------------------------- */
         if (lrecl > 0 && rmode[1] != 'b') {
             size_t fgsz = (size_t)lrecl + 2 > sizeof(buf)

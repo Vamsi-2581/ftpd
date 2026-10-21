@@ -196,7 +196,8 @@ The error replies are:
 #idx("STOR")
 #cmd("STOR") writes the data it receives to a data set or to a member. A data
 set that does not exist is created, with the attributes of the session
-(@ug-site). A data set or a member that exists is replaced. FTPD checks that
+(@ug-site). A data set or a member that exists is replaced, unless its
+retention period has not expired (@ug-site-keys). FTPD checks that
 the user may update the data set, sends #cmd("125 Storing data set NAME"),
 reads the data and ends with #cmd("250 Transfer completed successfully.")
 when every record has reached the data set.

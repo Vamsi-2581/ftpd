@@ -71,7 +71,7 @@ full name always wins over a shorter keyword that it starts with, which keeps
       #cmd("BLOCKS") too, not the block size.],
     [#cmd("CYLINDERS")], [#cmd("CY")], [],
     [#cmd("DATACLASS")], [#cmd("DATAC")], [],
-    [#cmd("DIRECTORY")], [#cmd("DIR")], [],
+    [#cmd("DIRECTORY")], [#cmd("D")], [],
     [#cmd("FILETYPE")], [#cmd("FILE")], [],
     [#cmd("JESJOBNAME")], [#cmd("JESJOBN")], [],
     [#cmd("JESOWNER")], [#cmd("JESO")], [],
@@ -89,7 +89,7 @@ full name always wins over a shorter keyword that it starts with, which keeps
     [#cmd("TRAILINGBLANKS")], [#cmd("TRAIL")], [#cmd("TRAILING") is a longer
       form of it and works.],
     [#cmd("TRUNCATE")], [#cmd("TRUN")], [],
-    [#cmd("UNIT")], [#cmd("UNI")], [],
+    [#cmd("UNIT")], [#cmd("U")], [],
     [#cmd("VOLUME")], [#cmd("VOL")], [],
   )
 ]
@@ -192,8 +192,20 @@ If the system refuses the allocation with the retention period, the reply to
 #cmd("STOR") is #cmd("550 Cannot allocate dataset NAME") and FTPD removes the
 data set that it had created for the transfer.
 
-#note[*A defect* (ftpd#198): a #cmd("STOR") to a data set that exists and
-whose retention period has not expired makes the system ask the operator
-(message #cmd("IEC507D")) before it opens the data set. The session waits for
-the answer. A client that stores into the same name twice after
-#cmd("SITE RETPD") reaches this on the second #cmd("STOR").]
+Before #cmd("STOR") or #cmd("APPE") opens an MVS data set that exists, FTPD
+reads the expiration date of the data set. A retention period that has not
+expired is answered with
+
+- #cmd("550 NAME is retained until YYYY-MM-DD (YYYY.DDD) and is not opened for writing before then."),
+  or #cmd("... not opened for appending before then.") for #cmd("APPE"),
+- #cmd("550 NAME has a permanent retention period and is not opened for writing."),
+  or #cmd("... for appending.") for #cmd("APPE"), when the period is permanent.
+
+Nothing is opened and the session does not wait for the operator. A member is
+judged by the expiration date of the partitioned data set that holds it, not
+by the member. A data set that #cmd("MKD") created while #cmd("SITE RETPD") was
+set therefore refuses every #cmd("STOR") of a member with this #cmd("550")
+until the period has expired. A client that stores into the same name twice
+after #cmd("SITE RETPD") gets the reply on the second #cmd("STOR"). When
+FTPD cannot read the expiration date, it opens the data set as it would
+without the check.

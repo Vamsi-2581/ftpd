@@ -78,12 +78,18 @@ _FTPD Reference_ lists the shortest forms in "The SITE Command".
   )
 ]
 
-#note[*A retained data set cannot be stored into again without the operator.*
-A #cmd("STOR") to a data set that exists and whose retention period has not
-expired makes the system ask the operator before it opens the data set, and
-the session waits for the answer (ftpd#198). After #cmd("SITE RETPD") a script
-that stores the same name twice reaches this on the second #cmd("STOR"). Until
-this is fixed, store under a new name.]
+#note[*A retained data set is not stored into.* A #cmd("STOR") or #cmd("APPE")
+to a data set whose retention period has not expired is answered with
+#cmd("550 NAME is retained until YYYY-MM-DD (YYYY.DDD) and is not opened for writing before then.")
+(#cmd("appending") for #cmd("APPE")). For a permanent retention the reply is
+#cmd("550 NAME has a permanent retention period and is not opened for writing.").
+FTPD looks at the data set before it opens it, so the session does not wait
+for the operator. After #cmd("SITE RETPD") a script that stores the same name
+twice gets this reply on the second #cmd("STOR"). A member is judged by the
+partitioned data set that holds it: a data set that #cmd("MKD") created while
+#cmd("SITE RETPD") was set refuses every #cmd("STOR") of a member with this
+#cmd("550") until the period has expired. Store under a new name, or set
+#cmd("SITE RETPD") back to 0 before #cmd("MKD").]
 
 FTPD does not check #cmd("LRECL") and #cmd("RECFM") itself. It passes them to
 the allocation, and a combination that the system rejects shows when

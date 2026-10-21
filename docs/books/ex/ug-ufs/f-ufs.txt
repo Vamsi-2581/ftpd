@@ -1,0 +1,69 @@
+ftp> cd /u/ibmuser
+250 HFS directory /u/ibmuser is the current working directory
+ftp> pwd
+Remote directory: /u/ibmuser
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+226 Transfer complete
+ftp> mkdir work
+257 "/u/ibmuser/work" directory created
+ftp> cd work
+250 HFS directory /u/ibmuser/work is the current working directory
+ftp> put report.txt notes.txt
+local: report.txt remote: notes.txt
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for /u/ibmuser/work/notes.txt
+226 Transfer complete
+73 bytes sent in 00:00 (0.83 KiB/s)
+ftp> ls
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+-rw-r--r--   1 IBMUSER  ADMIN          73 Oct 21 16:18 notes.txt
+226 Transfer complete
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+-rw-r--r--   1 IBMUSER  ADMIN          73 Oct 21 16:18 notes.txt
+226 Transfer complete
+ftp> size notes.txt
+notes.txt	73
+ftp> modtime notes.txt
+notes.txt	Wed, 21 Oct 2026 16:18:29 +0000
+ftp> get notes.txt back-ufs.txt
+local: back-ufs.txt remote: notes.txt
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for /u/ibmuser/work/notes.txt
+226 Transfer complete
+73 bytes received in 00:00 (1.67 KiB/s)
+ftp> !diff report.txt back-ufs.txt && echo identical
+identical
+ftp> rename notes.txt memo.txt
+350 File exists, ready for destination
+502 Rename not supported for UFS
+ftp> append a.txt notes.txt
+local: a.txt remote: notes.txt
+229 Entering Extended Passive Mode (|||22000|)
+502 APPE not supported for UFS
+ftp> delete notes.txt
+250 File deleted
+ftp> delete notes.txt
+550 File or directory not found
+ftp> cd /u/ibmuser
+250 HFS directory /u/ibmuser is the current working directory
+ftp> rmdir work
+250 Directory removed
+ftp> rmdir work
+550 File or directory not found
+ftp> get nothere.txt
+local: nothere.txt remote: nothere.txt
+229 Entering Extended Passive Mode (|||22000|)
+550 File or directory not found
+ftp> cd /u/nothere
+550 File or directory not found
+ftp> cd 'IBMUSER.'
+250 "IBMUSER." is the working directory name prefix.
+ftp> pwd
+Remote directory: 'IBMUSER.'
+ftp> quit
+221 Quit command received. Goodbye.

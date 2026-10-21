@@ -77,7 +77,7 @@ they are here:
 
 #idx("UFSD")
 FTPD reaches three views: MVS data sets, JES and the file systems of UFSD
-(@ug-other). Only the third needs UFSD, and nothing about the installation
+(@ug-ufs). Only the third needs UFSD, and nothing about the installation
 does. The SYSMOD declares no prerequisite, #cmd("libufs") is linked into the
 load module, and FTPD asks UFSD for a session the first time a client uses a
 UFS path. On a system without the UFSD started task those commands answer
@@ -415,7 +415,7 @@ On MVS/CE the default is right, because #cmd("SYS2.PARMLIB") exists there.
 
 === The Procedure and JES <ug-install-jes>
 
-The JES view (@ug-other-jes) reads the JES2 checkpoint and the spool. FTPD
+The JES view (@ug-jes) reads the JES2 checkpoint and the spool. FTPD
 finds both itself: the checkpoint through the catalog (or, if it is not
 cataloged, by looking at the online volumes), and the spool from the volume
 that the checkpoint names. The procedure therefore has no #cmd("HASPCKPT") and
@@ -490,8 +490,9 @@ FACILITYFTPAUTH                                             NONE
 FACILITYFTPAUTH                                     USER    READ
 ```)
 
-If #cmd("FTPAUTH") is not defined, RAKF answers "undefined resource" to the
-request for #cmd("ALTER"), and every authenticated user is let in.
+FTPD asks RAKF for READ on #cmd("FTPAUTH"). If no profile covers it, RAKF
+answers "not protected" (return code 4), and FTPD lets every authenticated user
+in.
 
 #note[*The identity of the started task has to stay least-privilege.* Give it
 no broad #cmd("ID(FTPD) ACCESS(ALTER)") profiles for data sets. The access of

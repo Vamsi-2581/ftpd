@@ -5,7 +5,7 @@
 #idx("started task", "reference")
 This chapter describes FTPD as a program in an address space: the procedure,
 the authorization, the identity, the threads, the order of the start and the
-return codes. The _FTPD User's Guide_ has the daily use, in "Operating FTPD".
+return codes. The _FTPD User's Guide_ has the daily use, in "Running FTPD".
 
 == The Procedure <ref-stc-proc>
 
@@ -74,7 +74,7 @@ writes it:
 A session works under the identity of its own user for the time of a command
 that needs it. FTPD puts the identity of the started task back after each such
 operation and after each ABEND that it recovers from. The meaning for the
-security of the host is in the _FTPD User's Guide_, in "Security".
+security of the host is in the _FTPD User's Guide_, in "Setting Up Security".
 
 == The Order of the Start <ref-stc-start>
 

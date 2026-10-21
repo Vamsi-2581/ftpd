@@ -3,11 +3,13 @@
 = Setting Up a Session with SITE <ug-site>
 
 #idx("SITE")
-#cmd("SITE") sets the parameters of the session: how FTPD allocates a new
-data set, which view it works in, and which jobs it shows. A setting holds
-until the session ends or until a later #cmd("SITE") changes it. Each session
+The protocol command #cmd("SITE") sets the parameters of the session: how
+FTPD allocates a new data set, which view it works in, and which jobs it shows.
+In #cmd("tnftp") the client command #cmd("site") sends it. A setting holds
+until the session ends or until a later #cmd("site") changes it. Each session
 starts with the values from the #cmd("FTPDPRM") parameters whose names begin
-with #cmd("DEF") (@ug-ops-config).
+with #cmd("DEF") (@ug-ops-config). This chapter says what to type. The
+_FTPD Reference_ has every keyword, in "The SITE Command".
 
 == The Form of the Command <ug-site-form>
 
@@ -15,8 +17,8 @@ with #cmd("DEF") (@ug-ops-config).
 keyword, or a keyword, an equals sign and a value:
 
 ```
-SITE RECFM=FB LRECL=80 BLKSIZE=3120
-SITE CYLINDERS PRIMARY=5 SECONDARY=2
+site recfm=fb lrecl=80 blksize=3120
+site cylinders primary=5 secondary=2
 ```
 
 FTPD applies the words from left to right and sends one reply for the whole
@@ -26,7 +28,8 @@ command:
 - *A value is wrong:* the setting stays as it was. The reply is a multiple
   line #cmd("200") that names the problem on the first line and ends with
   #cmd("SITE command was accepted"). The other words of the command still
-  apply. If several words are wrong, the reply names the first.
+  apply. If several words are wrong, the reply names a refused word (#cmd("501")) before an
+  unknown word, and an unknown word before a wrong value.
 - *#cmd("RETPD") is above the limit of the server, the word is #cmd("RDW"),
   a #cmd("SBSENDEOL") that FTPD does not handle, or a #cmd("DCBDSN") whose model
   FTPD refuses:* the reply is a #cmd("501") with the reason, such as
@@ -44,16 +47,21 @@ command:
 - *No word at all:* #cmd("202 SITE not necessary; you may proceed").
 
 A keyword without a value takes the setting back to the value it had at the
-start of the session. So #cmd("SITE PRIMARY") undoes #cmd("SITE PRIMARY=200").
+start of the session. So #cmd("site primary") undoes #cmd("site primary=200").
 For #cmd("DIRECTORY") that is the value of #cmd("DEFDIRECTORY"). #cmd("RETPD")
 has no such parameter. A session starts without retention, and the bare
 keyword switches it off.
 
-A keyword may be shortened: #cmd("SITE PRI=5 SEC=2 CY") is
-#cmd("SITE PRIMARY=5 SECONDARY=2 CYLINDERS"). Every keyword has a shortest form, and a form that is
-too short is not a keyword. The word #cmd("PR=5") gets
-#cmd("Unrecognized parameter 'PR=5' on SITE command.") and sets nothing. The
-_FTPD Reference_ lists the shortest forms in "The SITE Command".
+A keyword may be shortened. Every keyword has a shortest form, and a form that
+is too short is not a keyword. The session shows the replies:
+
+#screen(raw(read("../ex/ug-site/s-case.txt"), block: true))
+
+#cmd("site pri=5 sec=2 cy") is #cmd("site primary=5 secondary=2 cylinders"). The
+word #cmd("pr=5") is too short, and FTPD sets nothing. The _FTPD Reference_
+lists the shortest forms in "The SITE Command". The first command of the
+session, in upper case, is not sent: it is the client that says
+#cmd("?Invalid command."). @ug-site-case explains.
 
 == The Keywords <ug-site-keys>
 
@@ -63,10 +71,13 @@ _FTPD Reference_ lists the shortest forms in "The SITE Command".
     [#cmd("RECFM=f")], [the record format of a new data set, such as
       #cmd("FB"), #cmd("VB") or #cmd("U"). FTPD folds it to upper case and
       does not check it.],
-    [#cmd("LRECL=n")], [the record length.],
+    [#cmd("LRECL=n")], [the record length. FTPD does not check the number.],
     [#cmd("BLKSIZE=n")], [the block size, also written #cmd("BLOCKSIZE=n"). For a fixed record format that
       is not a multiple of the record length, FTPD rounds it down to one,
-      and the reply says so with #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB").],
+      and the reply says so with #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB").
+      FTPD uses the #cmd("RECFM") and #cmd("LRECL") that stand when it reads
+      #cmd("BLKSIZE"), so put them before it. A later #cmd("LRECL") does not
+      change a block size that is set.],
     [#cmd("DCBDSN=dsn")], [the record format, record length and block size of
       a data set that exists, copied at once from its label. Give the full name,
       with or without quotes. A name that is not cataloged, a pattern or a
@@ -89,7 +100,9 @@ _FTPD Reference_ lists the shortest forms in "The SITE Command".
     [#cmd("RETPD=n")], [the retention period in days of a data set that
       #cmd("MKD") or #cmd("STOR") creates, 0 to 9999. 0 is no retention.
       The administrator sets a limit with #cmd("MAXRETPD"), 365 days unless
-      changed. More is answered with a #cmd("501"), and the setting stays.
+      changed. A value from the limit up to 9999 is answered with a #cmd("501"), and the
+      setting stays. A larger or non-numeric value is answered with
+      #cmd("200-RETPD must be 0-9999; keeping the current value").
       A member of a partitioned data set and a data set that exists keep what
       they have. See the note below.],
     [#cmd("UNIT=u")], [the unit for a new data set. Without it the system
@@ -112,18 +125,19 @@ the allocation, and a combination that the system rejects shows when
 #tab(caption: [SITE keywords for the mode of the session])[
   #table(columns: (1.35in, 1fr),
     [Keyword], [Effect],
-    [#cmd("FILETYPE=JES")], [switch to the JES view (@ug-other-jes).],
-    [#cmd("FILETYPE=SEQ")], [back to the view that was active before. Any
-      other value does the same.],
+    [#cmd("FILETYPE=JES")], [switch to the JES view (@ug-jes).],
+    [#cmd("FILETYPE=SEQ")], [back to the view that was active when the client
+      switched to JES, also after a #cmd("cd") in the JES view. Without such a
+      switch it is the data set view. Any other value does the same.],
     [#cmd("TRAILINGBLANKS")], [switch the blanks at the end of a record in text
       transfers between kept and dropped. Each use of the keyword switches
       again. A session starts with the blanks dropped.],
     [#cmd("JESJOBNAME=n"), #cmd("JESOWNER=n")], [the filters of the JES job
-      list (@ug-other-jes).],
+      list (@ug-jes).],
     [#cmd("JESSTATUS=s")], [the status filter of the JES view: #cmd("ALL"),
       #cmd("INPUT"), #cmd("ACTIVE") or #cmd("OUTPUT"), in any case. It applies
       to #cmd("LIST"), #cmd("NLST"), #cmd("RETR") and #cmd("DELE")
-      (@ug-other-jes). No value: #cmd("ALL"). Another value, such as
+      (@ug-jes). No value: #cmd("ALL"). Another value, such as
       #cmd("HELD"), keeps the filter that was set, and the reply starts with
       #cmd("200-JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT; keeping the current value").
       An abbreviation of a status is another value.],
@@ -178,15 +192,10 @@ different settings, and the #cmd("550") reply for a job that is not found
 showed the owner in lower case. Since FTPD 1.3.0 the filter is upper case
 whatever the client typed.
 
-#note[*The command line client may refuse the word SITE.* The BSD
-#cmd("ftp") client and tnftp, the #cmd("ftp") of many Linux, BSD and macOS
-systems, implement #cmd("site") as a command of their own. They know it in
-lower case only. #cmd("SITE") or #cmd("Site") gets the answer
-#cmd("?Invalid command.") from the client, and nothing reaches FTPD. Type
-#cmd("site") in lower case, or use #cmd("quote"), which sends the line to the
-server as it is.]
-
-```
-ftp> site lrecl=80
-ftp> quote SITE RECFM=FB
-```
+#note[*The command line client may refuse the word SITE.* #cmd("tnftp"), the
+#cmd("ftp") of many Linux, BSD and macOS systems, implements #cmd("site") as a
+command of its own. It knows it in lower case only. #cmd("SITE") gets the answer #cmd("?Invalid command.") from
+the client, and nothing reaches FTPD, as the first line of the session in
+@ug-site-form shows. Type #cmd("site") in lower case, or use #cmd("quote"),
+which sends the line to the server as it is. The session shows #cmd("quote")
+in both cases of the word, and FTPD accepts both.]

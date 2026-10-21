@@ -1,0 +1,12 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): IBMUSER
+331 Send password please.
+Password: 
+230 IBMUSER is logged on.  Working directory is "IBMUSER.".
+Remote system type is MVS.
+ftp> pwd
+Remote directory: 'IBMUSER.'
+ftp> quit
+221 Quit command received. Goodbye.

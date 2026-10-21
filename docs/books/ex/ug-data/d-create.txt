@@ -1,0 +1,40 @@
+ftp> site recfm=fb lrecl=132 blksize=3120
+200-BLOCKSIZE must be a multiple of LRECL for RECFM FB
+200 SITE command was accepted
+ftp> site recfm=fb lrecl=132 blksize=3036
+200 SITE command was accepted
+ftp> site primary=2 secondary=1 cylinders
+200 SITE command was accepted
+ftp> put report.txt WIDE
+local: report.txt remote: WIDE
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.WIDE
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.67 KiB/s)
+ftp> dir WIDE
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB      132  3036  PS   WIDE
+226 List completed successfully.
+ftp> site recfm=vb lrecl=255 blksize=6233
+200 SITE command was accepted
+ftp> put report.txt VARIABLE
+local: report.txt remote: VARIABLE
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.VARIABLE
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.71 KiB/s)
+ftp> dir VARIABLE
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  VB      255  6233  PS   VARIABLE
+226 List completed successfully.
+ftp> site recfm
+200 SITE command was accepted
+ftp> site bogus=1
+200-Unrecognized parameter 'bogus=1' on SITE command.
+200 SITE command was accepted
+ftp> quit
+221 Quit command received. Goodbye.

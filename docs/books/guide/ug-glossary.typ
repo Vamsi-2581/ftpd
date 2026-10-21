@@ -19,7 +19,7 @@ its own.
     and FTPD sends replies. It is the one that the client opens to the
     _port_ of FTPD.],
   [CWD], [The FTP command that changes the working directory. In FTPD it also
-    chooses between the data set view and the _UFS_ view (@ug-other-ufs).],
+    chooses between the data set view and the _UFS_ view (@ug-ufs).],
   [data connection], [The TCP connection that carries the content of a
     file or a list. A command opens one for each transfer.],
   [dummy function], [A function SYSMOD without elements that names the ids of
@@ -36,9 +36,9 @@ its own.
   [identity window], [The time in which FTPD runs a command under the _ACEE_ of
     the user and not under that of the _started task_ (@ug-security-stc).],
   [inode], [The record of a file or directory in _UFS_. A file system has a
-    fixed number of them (@ug-other-ufs).],
+    fixed number of them (@ug-ufs).],
   [internal reader], [The JES2 interface that takes JCL from a program
-    and submits it as a job (@ug-other-jes).],
+    and submits it as a job (@ug-jes).],
   [JES2], [The job entry subsystem of MVS 3.8j. It queues jobs and keeps their
     output in the _spool_.],
   [member], [One part of a _PDS_, addressed as #cmd("DSN(MEMBER)").],

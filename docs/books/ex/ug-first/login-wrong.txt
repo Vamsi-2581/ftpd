@@ -1,0 +1,23 @@
+ftp> open localhost 2121
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+ftp> user IBMUSER
+331 Send password please.
+Password: 
+530 Login incorrect.
+Login failed.
+ftp> user IBMUSER
+331 Send password please.
+Password: 
+530 Login incorrect.
+Login failed.
+ftp> user IBMUSER
+331 Send password please.
+Password: 
+530 Login incorrect. Too many attempts, disconnecting.
+Login failed.
+ftp> pwd
+421 Service not available, remote server has closed connection.
+Unable to determine remote directory
+ftp> 

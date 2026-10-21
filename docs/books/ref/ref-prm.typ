@@ -6,7 +6,7 @@
 FTPD reads its configuration once, at start, from the DD name #cmd("FTPDPRM").
 This chapter lists every parameter with its default and what FTPD does with a
 value that is wrong. The _FTPD User's Guide_ explains the file and the groups
-of parameters, in "Operating FTPD".
+of parameters, in "Running FTPD".
 
 == The Rules of the File <ref-prm-rules>
 
@@ -168,8 +168,8 @@ quantity. A data set can have 16 extents (the primary and 15 secondary
 extents), so the defaults give a limit of 85 tracks for one upload. An upload
 that needs more ends with a #cmd("552") reply (@ref-reply-552). Raise
 #cmd("DEFPRIMARY") for sites that receive large files; a client can also do it
-for its session with #cmd("SITE") (see "Space for New Data Sets" in the
-_FTPD User's Guide_).
+for its session with #cmd("SITE") (see "Describing the New Data Set" and "When
+the Space Is Not Enough" in the _FTPD User's Guide_).
 
 == Settings That Have No Effect <ref-prm-ignored>
 

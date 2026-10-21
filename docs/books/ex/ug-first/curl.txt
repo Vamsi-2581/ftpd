@@ -1,0 +1,13 @@
+$ curl -s -B -u IBMUSER:password -T report.txt ftp://localhost:2121/CURLTEXT
+$ curl -s -B -u IBMUSER:password ftp://localhost:2121/CURLTEXT
+First line of the report
+Second line
+
+Fourth line after an empty one
+$ curl -s -u IBMUSER:password ftp://localhost:2121/CURLTEXT | od -An -tx1 | head -2
+ c6 89 99 a2 a3 40 93 89 95 85 40 96 86 40 a3 88
+ 85 40 99 85 97 96 99 a3 40 40 40 40 40 40 40 40
+$ curl -s -u IBMUSER:password -T report.txt ftp://localhost:2121/CURLBIN
+$ curl -s -B -u IBMUSER:password ftp://localhost:2121/CURLBIN | od -An -tx1 | head -2
+ e3 d1 ca cb c8 80 25 d1 3e c1 80 3f c3 80 c8 c7
+ c1 80 ca c1 f8 3f ca c8 8e eb c1 c4 3f 3e c0 80

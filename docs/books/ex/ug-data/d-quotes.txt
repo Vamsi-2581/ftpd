@@ -1,0 +1,20 @@
+ftp> cd SYS1.PARMLIB
+250 "IBMUSER.SYS1.PARMLIB." is the working directory name prefix.
+ftp> get IEASYS00
+local: IEASYS00 remote: IEASYS00
+229 Entering Extended Passive Mode (|||22000|)
+550 Data set IBMUSER.SYS1.PARMLIB.IEASYS00 not found
+ftp> cd 'SYS1.PARMLIB'
+250 The working directory "SYS1.PARMLIB" is a partitioned data set
+ftp> get IEASYS00 ieasys00.txt
+local: ieasys00.txt remote: IEASYS00
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IEASYS00 FIXrecfm 80
+250 Transfer completed successfully.
+1558 bytes received in 00:00 (35.72 KiB/s)
+ftp> !head -3 ieasys00.txt
+APF=00,             IEAAPF00 FOR AUTHORIZED PROGRAM LIBRARIES           00000010
+BLDLF=00,           IEABLD00 FOR BLDL MODULES                           00000020
+CMD=00,             COMMND00 FOR AUTO COMMANDS                          00000030
+ftp> quit
+221 Quit command received. Goodbye.

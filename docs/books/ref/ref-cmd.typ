@@ -96,6 +96,90 @@ the user opens a new connection.
   )
 ]
 
+== Client Commands and Protocol Commands <ref-cmd-client>
+
+#idx("client commands")#idx("tnftp")
+A user types a command of the client, and the client sends one or several
+protocol commands to FTPD. The table lists the commands of #cmd("tnftp")
+(version 20230507) and what it sent for each, as a run with the client option
+#cmd("-d") showed against FTPD 1.3.0. The replies are those of the MVS view.
+Another client may send other commands for the same input. The _FTPD User's
+Guide_ shows each command in a session.
+
+#tab(caption: [Client commands of tnftp and the protocol commands they send])[
+  #table(columns: (1.5in, 1.5in, 1fr),
+    [You type], [FTPD receives], [Remarks],
+    [#cmd("open host port"), #cmd("user")], [#cmd("USER"), #cmd("PASS"),
+      then #cmd("SYST") and #cmd("FEAT") by the client itself],
+      [The client prints #cmd("Remote system type is MVS.") from the reply
+      to #cmd("SYST").],
+    [#cmd("pwd")], [#cmd("PWD")],
+      [#cmd("257 \"'IBMUSER.'\" is working directory."). The client prints
+      #cmd("Remote directory: 'IBMUSER.'").],
+    [#cmd("cd name")], [#cmd("CWD name")],
+      [#cmd("250 \"SYS1.\" is the working directory name prefix.") A name
+      with a leading slash chooses the UFS view.],
+    [#cmd("cdup")], [#cmd("CDUP")],
+      [In the MVS view the reply is the same as for #cmd("CWD").],
+    [#cmd("put local remote")], [#cmd("EPSV"), then
+      #cmd("STOR remote")], [#cmd("125 Storing data set NAME"), the data,
+      #cmd("250 Transfer completed successfully.")],
+    [#cmd("get remote local")], [#cmd("SIZE remote"), #cmd("EPSV"),
+      #cmd("RETR remote"), then #cmd("MDTM remote")],
+      [#cmd("SIZE") and #cmd("MDTM") get #cmd("502") in the MVS view. The
+      client goes on, and the transfer is not affected.],
+    [#cmd("append local remote")], [#cmd("EPSV"), #cmd("APPE remote")],
+      [#cmd("125 Appending to data set NAME")],
+    [#cmd("ls pattern")], [#cmd("EPSV"), #cmd("LIST pattern")],
+      [In #cmd("tnftp") #cmd("ls") sends #cmd("LIST"), not #cmd("NLST").],
+    [#cmd("dir pattern")], [#cmd("EPSV"), #cmd("LIST pattern")],
+      [The long list: volume, unit, date, extents, used tracks, #cmd("RECFM"),
+      #cmd("LRECL"), block size, #cmd("DSORG") and name.],
+    [#cmd("nlist pattern")], [#cmd("EPSV"), #cmd("NLST pattern")],
+      [Names only.],
+    [#cmd("rename old new")], [#cmd("RNFR old"), #cmd("RNTO new")],
+      [#cmd("350 RNFR accepted. Please supply new name for RNTO."), then
+      #cmd("250 IBMUSER.OLD renamed to IBMUSER.NEW").],
+    [#cmd("delete name")], [#cmd("DELE name")], [#cmd("250 NAME deleted.")],
+    [#cmd("mkdir name")], [#cmd("MKD name")],
+      [Creates a partitioned data set: #cmd("257 'IBMUSER.NAME' created.")],
+    [#cmd("rmdir name")], [#cmd("RMD name")],
+      [Deletes a partitioned data set: #cmd("250 NAME deleted.")],
+    [#cmd("size name")], [#cmd("SIZE name")],
+      [#cmd("502 SIZE not implemented for MVS data sets"). In the UFS view
+      #cmd("213").],
+    [#cmd("modtime name")], [#cmd("MDTM name")],
+      [#cmd("502 MDTM not implemented for MVS"). In the UFS view #cmd("213").],
+    [#cmd("mput a b")], [#cmd("EPSV"), #cmd("STOR a"), #cmd("EPSV"),
+      #cmd("STOR b")],
+      [One #cmd("STOR") for each file. The client asks before each file unless
+      #cmd("prompt") has switched the question off.],
+    [#cmd("mget a b")], [for each pattern #cmd("EPSV") and #cmd("NLST pattern"),
+      then for each name what #cmd("get") sends],
+      [FTPD sees a list and one #cmd("RETR") per name.],
+    [#cmd("mdelete a b")], [#cmd("EPSV"), #cmd("NLST pattern"), then
+      #cmd("DELE") for each name], [],
+    [#cmd("ascii"), #cmd("binary")], [#cmd("TYPE A"), #cmd("TYPE I")],
+      [#cmd("200 Representation type is Ascii NonPrint") and
+      #cmd("200 Representation type is Image").],
+    [#cmd("site keyword=value")], [#cmd("SITE keyword=value")],
+      [The client sends the text as typed, and #cmd("site") has to be lower
+      case in #cmd("tnftp").],
+    [#cmd("quote line")], [the line as typed],
+      [For example #cmd("quote noop") sends #cmd("noop") and gets
+      #cmd("200 OK").],
+    [#cmd("system")], [#cmd("SYST")],
+      [#cmd("215 MVS is the operating system of this server. ...")],
+    [#cmd("rhelp")], [#cmd("HELP")],
+      [#cmd("214-The following commands are recognized:") and
+      #cmd("214 HELP command successful.")],
+    [#cmd("passive")], [nothing],
+      [The client changes its own setting. The session in this run used
+      #cmd("EPSV").],
+    [#cmd("quit")], [#cmd("QUIT")], [#cmd("221 Quit command received. Goodbye.")],
+  )
+]
+
 == TYPE and STRU <ref-cmd-type>
 
 #idx("TYPE")#idx("STRU")
@@ -187,7 +271,7 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       #cmd("250 Transfer completed successfully."). In #cmd("TYPE A") one
       record is one line, also for the record formats #cmd("V"), #cmd("VB") and
       #cmd("VBA"). For record format #cmd("U") one block is one line
-      (_FTPD User's Guide_, "Fetching"). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
+      (_FTPD User's Guide_, "Downloading a Data Set"). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
       of a job (@ref-cmd-jes).],
     [#cmd("STOR")], [MVS: #cmd("125 Storing data set NAME"), the data, and
       #cmd("250 Transfer completed successfully."). Creates the data set or
@@ -200,7 +284,7 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       #cmd("SITE TRUNCATE") is cut and reported in the #cmd("250")
       (@ref-site-truncate). In #cmd("TYPE A") an empty line in a data set of
       a variable or undefined record format is stored as a record of one blank
-      (_FTPD User's Guide_, "Storing").
+      (_FTPD User's Guide_, "Uploading a Data Set").
       UFS: #cmd("150 Opening data connection for PATH") and
       #cmd("226 Transfer complete"). A file that exists is replaced. JES:
       submits the data as a job.],
@@ -276,4 +360,4 @@ as before:
 outside the filter is answered like an unknown job.
 
 The replies to errors, the format of the lists and the rules for JCL are in
-the _FTPD User's Guide_, "The JES and UFS Views".
+the _FTPD User's Guide_, "Submitting Jobs and Reading Their Output" and "Working with Files in UFS".

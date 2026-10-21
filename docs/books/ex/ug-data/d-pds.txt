@@ -1,0 +1,66 @@
+ftp> put a.txt 'IBMUSER.MYLIB(ALPHA)'
+local: a.txt remote: 'IBMUSER.MYLIB(ALPHA)'
+229 Entering Extended Passive Mode (|||22000|)
+550 IBMUSER.MYLIB(ALPHA) requests a nonexistent partitioned data set. Use MKD command to create it.
+ftp> mkdir MYLIB
+257 'IBMUSER.MYLIB' created.
+ftp> cd MYLIB
+250 The working directory "IBMUSER.MYLIB" is a partitioned data set
+ftp> pwd
+Remote directory: 'IBMUSER.MYLIB'
+ftp> put a.txt ALPHA
+local: a.txt remote: ALPHA
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set ALPHA
+250 Transfer completed successfully.
+32 bytes sent in 00:00 (0.77 KiB/s)
+ftp> put b.txt BETA
+local: b.txt remote: BETA
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set BETA
+250 Transfer completed successfully.
+15 bytes sent in 00:00 (0.31 KiB/s)
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+ALPHA   
+BETA    
+226 List completed successfully.
+ftp> get ALPHA alpha2.txt
+local: alpha2.txt remote: ALPHA
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set ALPHA FIXrecfm 80
+250 Transfer completed successfully.
+32 bytes received in 00:00 (0.70 KiB/s)
+ftp> !cat alpha2.txt
+line one
+line two
+line three
+ftp> get 'IBMUSER.MYLIB(BETA)' beta2.txt
+local: beta2.txt remote: 'IBMUSER.MYLIB(BETA)'
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set 'IBMUSER.MYLIB(BETA)' FIXrecfm 80
+250 Transfer completed successfully.
+15 bytes received in 00:00 (0.35 KiB/s)
+ftp> !cat beta2.txt
+second member
+ftp> rename ALPHA GAMMA
+350 RNFR accepted. Please supply new name for RNTO.
+250 IBMUSER.MYLIB(ALPHA) renamed to IBMUSER.MYLIB(GAMMA)
+ftp> delete BETA
+250 IBMUSER.MYLIB(BETA) deleted.
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+GAMMA   
+226 List completed successfully.
+ftp> get BETA beta3.txt
+local: beta3.txt remote: BETA
+229 Entering Extended Passive Mode (|||22000|)
+550 Request nonexistent member IBMUSER.MYLIB(BETA) to be sent.
+ftp> cd ..
+250 "IBMUSER." is the working directory name prefix.
+ftp> quit
+221 Quit command received. Goodbye.

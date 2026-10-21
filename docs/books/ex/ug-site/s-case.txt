@@ -1,0 +1,18 @@
+ftp> SITE lrecl=80
+?Invalid command.
+ftp> site lrecl=80
+200 SITE command was accepted
+ftp> quote SITE RECFM=FB
+200 SITE command was accepted
+ftp> quote site primary=5 secondary=2
+200 SITE command was accepted
+ftp> site pri=5 sec=2 cy
+200 SITE command was accepted
+ftp> site pr=5
+200-Unrecognized parameter 'pr=5' on SITE command.
+200 SITE command was accepted
+ftp> site primary=0
+200-PRIMARY must be 1-16777215; keeping the current value
+200 SITE command was accepted
+ftp> quit
+221 Quit command received. Goodbye.

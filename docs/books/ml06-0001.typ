@@ -33,28 +33,35 @@
 
 #heading(numbering: none)[About This Book] <about>
 
-This book shows how to use FTPD (ftpd), the FTP server for MVS 3.8j: how to
-log in, how data sets are named, how to store, append to and fetch them,
-how to describe a new data set with SITE, how FTPD uses the security system,
-and how an operator runs the started task. Every command, reply code,
-parameter and message in full is the subject of the companion volume, the
-_FTPD Reference_.
+This book shows how to use FTPD (ftpd), the FTP server for MVS 3.8j, with the
+command line client that comes with most systems. It is organized by tasks:
+logging in, downloading and uploading data sets, working with the members of a
+partitioned data set, submitting a job and fetching its output, working with
+files in UFS, and finding what a typical error means. Each task has a session
+that was typed at a real FTPD, so the reader sees what to type and what comes
+back. The chapters for the administrator are tasks as well: installing FTPD,
+setting up security, running the started task, and removing it again. Every
+command, reply code, parameter and message in full is the subject of the
+companion volume, the _FTPD Reference_. It also has the table of client
+commands and the protocol commands they send.
 
-The book describes FTPD 1.3: how to install it, upgrade it and take it off a
-system again, and how to use and run it afterwards.
+The book describes FTPD 1.3: how to use it, how to install it, upgrade it and
+take it off a system again, and how to run it.
 
 == How This Book Is Organized
 
 #deflist(width: 1.35in,
   [Chapter 1], [“Introducing FTPD”.],
-  [Chapter 2], [“Installing FTPD”.],
-  [Chapter 3], [“A First Session”.],
-  [Chapter 4], [“Working with Data Sets”.],
-  [Chapter 5], [“Setting Up a Session with SITE”.],
-  [Chapter 6], [“Security”.],
-  [Chapter 7], [“Operating FTPD”.],
-  [Chapter 8], [“The JES and UFS Views”.],
-  [Chapter 9], [“Removing FTPD”.],
+  [Chapter 2], [“Connecting and Logging In”.],
+  [Chapter 3], [“Working with Data Sets”.],
+  [Chapter 4], [“Setting Up a Session with SITE”.],
+  [Chapter 5], [“Submitting Jobs and Reading Their Output”.],
+  [Chapter 6], [“Working with Files in UFS”.],
+  [Chapter 7], [“Typical Errors and What They Mean”.],
+  [Chapter 8], [“Setting Up Security”.],
+  [Chapter 9], [“Installing FTPD”.],
+  [Chapter 10], [“Running FTPD”.],
+  [Chapter 11], [“Removing FTPD”.],
   [Appendix A], [“Glossary”.],
 )
 
@@ -73,13 +80,15 @@ system again, and how to use and run it afterwards.
 #set page(numbering: "1")
 
 #part("ug-intro.html", include "guide/ug-intro.typ")
-#part("ug-install.html", include "guide/ug-install.typ")
 #part("ug-first.html", include "guide/ug-first.typ")
 #part("ug-data.html", include "guide/ug-data.typ")
 #part("ug-site.html", include "guide/ug-site.typ")
+#part("ug-jes.html", include "guide/ug-jes.typ")
+#part("ug-ufs.html", include "guide/ug-ufs.typ")
+#part("ug-errors.html", include "guide/ug-errors.typ")
 #part("ug-security.html", include "guide/ug-security.typ")
+#part("ug-install.html", include "guide/ug-install.typ")
 #part("ug-ops.html", include "guide/ug-ops.typ")
-#part("ug-other.html", include "guide/ug-other.typ")
 #part("ug-remove.html", include "guide/ug-remove.typ")
 
 #show: appendices

@@ -653,11 +653,8 @@ DEFSPACETYPE=TRACK
   mode stalls after `227`.
 - `MAXSESSIONS` is the most sessions at the same time. The next connection is
   closed at once, without a reply, and FTPD logs `max sessions reached,
-  rejecting` to `STDOUT`. FTPD always runs at least 4 worker threads, so a
-  value below 4 works: it accepts at most that many sessions and logs a warning
-  to `STDOUT` at start, for example `MAXSESSIONS=2 is below 4, worker pool
-  raised to 4, at most 2 sessions are accepted`. There is no console message
-  for it. This is from FTPD 1.3.0.
+  rejecting` to `STDOUT`. FTPD runs one worker thread for each session, so
+  every value from 1 up works.
 - `DEFUNIT`/`DEFVOLUME` are where FTPD allocates a dataset a client creates
   without saying where. **Both are unset by default, which means the system
   chooses** — set them to keep uploads off a system pack. `DEFVOLUME` is checked
@@ -794,7 +791,7 @@ A healthy start ends in `FTPD001I … READY`:
 
 ```
 FTPD000I FTPD <version> (A3F2C91) STARTING
-FTPD005I LIBC370 2.24.1 (EF09210)
+FTPD005I LIBC370 2.25.1 (FCDE4E8)
 FTPD008I AUTHORIZED BY LIBRARY (MODULE KEY 0)
 FTPD004I STC RUNS AS <user>/<group>
 FTPD054I LISTENING ON ANY PORT 2121

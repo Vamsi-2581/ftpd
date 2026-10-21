@@ -297,12 +297,8 @@ session. When more clients connect together than #cmd("MAXSESSIONS") allows,
 the first ones are greeted and FTPD closes the rest without a reply. This is
 the behaviour of FTPD 1.3.0. FTPD 1.2.0 took one connection per second.
 
-FTPD always runs at least 4 worker threads. A #cmd("MAXSESSIONS") below 4 works
-and keeps its meaning: FTPD accepts at most that many sessions. At the start it
-writes a warning to the log, for example #cmd("MAXSESSIONS=2 is below 4, worker pool raised to 4, at most 2 sessions are accepted"). There is no
-message on the console for it. This is the behaviour of FTPD 1.3.0.
-
-FTPD hands each new session to a pool of worker threads. When the pool
+FTPD hands each new session to a pool of worker threads. The pool has
+#cmd("MAXSESSIONS") workers, so every value from 1 up works. When the pool
 cannot take it, because it is shutting down or has no storage for the queue
 entry, FTPD answers #cmd("421 Service not available, closing control connection"),
 closes the connection, frees the session and writes a warning to the log. The
@@ -327,9 +323,9 @@ session, goes to the DD name #cmd("STDOUT") as lines of the form
 
 The level is ERROR, WARN, INFO or DEBUG. FTPD writes the levels up to INFO.
 A line at the end of a session has the user ID and the number of bytes that the
-session sent and received. The warnings about the configuration (@ug-ops-config),
-the warning about a #cmd("MAXSESSIONS") below 4 and the refusal of a connection
-at the session limit (@ug-ops-ses) are only in this log. Look at it when the console is quiet and a client has a problem.
+session sent and received. The warnings about the configuration (@ug-ops-config)
+and the refusal of a connection at the session limit (@ug-ops-ses) are only in
+this log. Look at it when the console is quiet and a client has a problem.
 
 == When a Command Abends <ug-ops-abend>
 

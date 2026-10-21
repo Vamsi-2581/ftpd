@@ -10,6 +10,7 @@
 #include "ftpd#mvs.h"               /* ftpd_mvs_scratch()              */
 #include "ftpd#cmd.h"
 #include "ftpd#abd.h"               /* is the abandoned DD still held? */
+#include "ftpd#abc.h"               /* ABEND code text for the WTOs    */
 #include "ftpd#dat.h"
 #include "ftpd#ufs.h"
 #include "libufs.h"                 /* UFSFILE, ufs_fclose()          */
@@ -416,6 +417,7 @@ static int
 ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
 {
     FILE *fp;
+    char code[FTPD_ABC_LEN];
 
     /* 1. Reset the address-space-wide ASXBSENV to the STC identity.
     **
@@ -452,10 +454,12 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     if (sess->server->authorized) {
         int rc = try(ftpd_session_reset_identity, sess);
 
-        if (rc != 0)
-            ftpd_log_wto("FTPD077E IDENTITY RESET ABENDED S%03X -- "
-                         "ASXBSENV MAY STILL HOLD A USER ACEE",
-                         (unsigned)(rc > 0 ? (rc >> 12) & 0xFFF : 0));
+        if (ftpd_abc_text(rc, code))
+            ftpd_log_wto("FTPD077E IDENTITY RESET ABENDED %s -- "
+                         "ASXBSENV MAY STILL HOLD A USER ACEE", code);
+        else if (rc < 0)
+            ftpd_log_wto("FTPD077E IDENTITY RESET NOT RUN, ESTAE FAILED -- "
+                         "ASXBSENV MAY STILL HOLD A USER ACEE");
     }
 
     /* 2. Release the identity window's ENQ, which the ABEND skipped past.
@@ -484,18 +488,14 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     ** so leaked-resource accumulation from the documented residual windows
     ** stays observable in the operator log. */
     sess->server->total_recover++;
-    if (abcode == 0)
+    if (ftpd_abc_text((int)abcode, code))
+        ftpd_log_wto("FTPD070E ABEND %s RECOVERED CMD=%s SOCKET=%d "
+                     "TOTAL=%u", code, verb, sess->ctrl_sock,
+                     sess->server->total_recover);
+    else
         ftpd_log_wto("FTPD070E ABEND RECOVERY (ESTAE CREATE FAILED) "
                      "CMD=%s SOCKET=%d TOTAL=%u",
                      verb, sess->ctrl_sock, sess->server->total_recover);
-    else if (abcode > 0xFFF)
-        ftpd_log_wto("FTPD070E ABEND S%03X RECOVERED CMD=%s SOCKET=%d "
-                     "TOTAL=%u", (abcode >> 12) & 0xFFF, verb,
-                     sess->ctrl_sock, sess->server->total_recover);
-    else
-        ftpd_log_wto("FTPD070E ABEND U%04u RECOVERED CMD=%s SOCKET=%d "
-                     "TOTAL=%u", abcode, verb, sess->ctrl_sock,
-                     sess->server->total_recover);
 
     /* 4. Tell the client before touching in-flight resources, so a
     ** re-ABEND in cleanup cannot leave it hanging until timeout.

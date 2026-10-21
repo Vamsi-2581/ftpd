@@ -97,6 +97,12 @@ sources = ["test/tstret.c", "src/ftpd#ret.c"]
 [test.TSTABD]
 sources = ["test/tstabd.c", "src/ftpd#abd.c"]
 
+# ftpd_abc_text() -- the ABEND code in FTPD070E and FTPD077E: system or user,
+# and none when the ESTAE was not created (#260).  ftpd#abc.c is free of
+# project and MVS headers, so this is DUAL like TSTABD.
+[test.TSTABC]
+sources = ["test/tstabc.c", "src/ftpd#abc.c"]
+
 # The same check against the real TIOT: an allocated DD is found, a freed one
 # is not, and the FILE's own DD name is the one the TIOT lists (#232).
 # MVS-only; the data set is a temporary one.

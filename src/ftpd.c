@@ -683,12 +683,24 @@ bind_listener(const ftpd_server_t *server, int sock,
 ** Instead: the socket is non-blocking and polled with ecb_timed_wait on
 ** wakeup_ecb (1 second).  accept() returns EWOULDBLOCK when no connection
 ** is pending.  cmd_shutdown() posts wakeup_ecb which breaks the timed_wait
-** immediately. */
+** immediately.
+**
+** Every tick drains the backlog: accept() is repeated until it fails, so N
+** connections that arrived together are all taken on the same tick instead
+** of one per second (#209).  FTPD_ACTIVE is checked before each accept(), so
+** a shutdown that arrives during a burst is not held up by it.
+**
+** num_sessions is raised by the worker when it picks a session up, so during
+** a burst it lags behind the accepts.  The limit is therefore checked against
+** num_sessions plus the sessions this loop queued that no worker has started
+** yet (queued - total_sessions), or a burst would run past MAXSESSIONS. */
 static void
 accept_loop(ftpd_server_t *server, int sock)
 {
     struct sockaddr_in caddr;
     ftpd_session_t *sess;
+    long queued = 0;
+    long pending;
     int len;
     int rc;
 
@@ -697,39 +709,44 @@ accept_loop(ftpd_server_t *server, int sock)
         server->wakeup_ecb = 0;
         ecb_timed_wait(&server->wakeup_ecb, 100, 0);
 
-        if (!(server->flags & FTPD_ACTIVE))
-            break;
+        while (server->flags & FTPD_ACTIVE) {
+            /* Try accept -- non-blocking, returns <0 if no connection */
+            memset(&caddr, 0, sizeof(caddr));
+            len = sizeof(caddr);
+            rc = accept(sock, &caddr, &len);
+            if (rc < 0)
+                break;  /* EWOULDBLOCK -- backlog is empty */
 
-        /* Try accept — non-blocking, returns <0 if no connection */
-        memset(&caddr, 0, sizeof(caddr));
-        len = sizeof(caddr);
-        rc = accept(sock, &caddr, &len);
-        if (rc < 0)
-            continue;   /* EWOULDBLOCK — no pending connection */
+            /* Check session limit */
+            pending = queued - server->total_sessions;
+            if (pending < 0)
+                pending = 0;
+            if (server->num_sessions + pending >=
+                    server->config.max_sessions) {
+                ftpd_log(LOG_WARN, "%s: max sessions reached, rejecting",
+                         __func__);
+                closesocket(rc);
+                continue;
+            }
 
-        /* Check session limit */
-        if (server->num_sessions >= server->config.max_sessions) {
-            ftpd_log(LOG_WARN, "%s: max sessions reached, rejecting",
-                     __func__);
-            closesocket(rc);
-            continue;
+            /* Create session and queue to worker pool */
+            sess = ftpd_session_new(server, rc);
+            if (!sess) {
+                closesocket(rc);
+                continue;
+            }
+
+            ftpd_log(LOG_INFO, "%s: connection from %u.%u.%u.%u:%d",
+                     __func__,
+                     (ntohl(caddr.sin_addr.s_addr) >> 24) & 0xFF,
+                     (ntohl(caddr.sin_addr.s_addr) >> 16) & 0xFF,
+                     (ntohl(caddr.sin_addr.s_addr) >> 8) & 0xFF,
+                     ntohl(caddr.sin_addr.s_addr) & 0xFF,
+                     ntohs(caddr.sin_port));
+
+            if (ftpd_session_queue(server, sess) == 0)
+                queued++;
         }
-
-        /* Create session and queue to worker pool */
-        sess = ftpd_session_new(server, rc);
-        if (!sess) {
-            closesocket(rc);
-            continue;
-        }
-
-        ftpd_log(LOG_INFO, "%s: connection from %u.%u.%u.%u:%d", __func__,
-                 (ntohl(caddr.sin_addr.s_addr) >> 24) & 0xFF,
-                 (ntohl(caddr.sin_addr.s_addr) >> 16) & 0xFF,
-                 (ntohl(caddr.sin_addr.s_addr) >> 8) & 0xFF,
-                 ntohl(caddr.sin_addr.s_addr) & 0xFF,
-                 ntohs(caddr.sin_port));
-
-        ftpd_session_queue(server, sess);
     }
 }
 

@@ -97,5 +97,34 @@ main(void)
     ftpd_ret_unexpired(b, 2025, 365, &d);
     CHECK(d.month == 12 && d.day == 31, "2028 day 366 is December 31");
 
+    /* --- ftpd_ret_parse_days(): the MAXRETPD value (#201) --------------- */
+    {
+        static const struct {
+            const char *text;
+            int         ok;         /* 1 = parses to want */
+            int         want;
+            const char *msg;
+        } cases[] = {
+            { "365",            1, 365,  "365 parses" },
+            { "0",              1, 0,    "0 parses: no retention allowed" },
+            { "9999",           1, 9999, "9999 is the top of the range" },
+            { "10000",          0, 0,    "10000 is refused" },
+            { "-1",             0, 0,    "a negative number is refused" },
+            { "abc",            0, 0,    "abc is refused, it is not 0" },
+            { "",               0, 0,    "an empty value is refused" },
+            { "30d",            0, 0,    "trailing junk is refused" },
+            { "3 0",            0, 0,    "an embedded blank is refused" },
+            { "99999999999999", 0, 0,    "an absurd number is refused" },
+        };
+
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+            int v = 7;              /* what a refusal must leave alone */
+            int ok = ftpd_ret_parse_days(cases[i].text, 9999, &v);
+
+            CHECK(ok == cases[i].ok && v == (ok ? cases[i].want : 7),
+                  cases[i].msg);
+        }
+    }
+
     return mbt_test_summary("TSTRET");
 }

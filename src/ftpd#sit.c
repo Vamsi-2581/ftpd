@@ -8,6 +8,7 @@
 ** A keyword may be abbreviated as far as z/OS allows (PRI=, SEC=, TR, CY,
 ** REC=, LR=, BLK=, DIR=, ...); see site_keywords[].
 ** Unknown parameters return "200-Unrecognized parameter ... / 200 SITE ...".
+** A RETPD above MAXRETPD returns 501 naming the limit (#201).
 ** Bare SITE (no args) returns "202 SITE not necessary; you may proceed".
 */
 #include "ftpd.h"
@@ -201,12 +202,14 @@ site_warn(char *warn, int warnsz, const char *text)
 ** Does not send any reply — caller sends one reply after all tokens.
 ** warn/warnsz: optional buffer filled with a warning message; caller
 **   should include it in the final multi-line reply if non-empty.
+** deny/denysz: filled (first one wins) when the server's policy refuses the
+**   value; the caller answers 501 instead of 200 if it is non-empty.
 ** Returns 0 if recognized, 1 if unrecognized.
 ** ----------------------------------------------------------------- */
 static int
 site_apply_one(ftpd_session_t *sess,
                const char *key, const char *val,
-               char *warn, int warnsz)
+               char *warn, int warnsz, char *deny, int denysz)
 {
     const ftpd_config_t *cfg = &sess->server->config;
 
@@ -330,7 +333,14 @@ site_apply_one(ftpd_session_t *sess,
         if (!site_parse_range(val, FTPD_RETPD_MAX, &v))
             site_warn(warn, warnsz,
                 "RETPD must be 0-9999; keeping the current value");
-        else
+        else if (v > cfg->max_retpd) {
+            /* The server's ceiling (MAXRETPD, #201).  A policy refusal, not
+            ** a typo: it gets a 5xx of its own instead of the 200 warning. */
+            if (deny[0] == '\0')
+                snprintf(deny, denysz,
+                    "RETPD=%d exceeds the server limit of %d days; "
+                    "keeping the current value", v, cfg->max_retpd);
+        } else
             sess->alloc.retpd = v;
         return 0;
     }
@@ -503,6 +513,7 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
     char key[32];
     char val[64];
     char warn[128];
+    char deny[128];             /* first value the server's policy refused */
     char badtok[96];            /* first unrecognized token, verbatim */
     char badmsg[160];
     const char *p;
@@ -562,6 +573,7 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
 #endif
 
     warn[0] = '\0';
+    deny[0] = '\0';
     badtok[0] = '\0';
     n_tokens = 0;
     n_unrecognized = 0;
@@ -584,7 +596,8 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
 
         parse_kv(tok, key, sizeof(key), val, sizeof(val));
         full = site_resolve(key);
-        if (!full || site_apply_one(sess, full, val, warn, sizeof(warn)) != 0) {
+        if (!full || site_apply_one(sess, full, val, warn, sizeof(warn),
+                                  deny, sizeof(deny)) != 0) {
             /* Keep the first offender verbatim for the reply — z/OS names it,
             ** and "which one?" is the only question the old wording left. */
             if (badtok[0] == '\0') {
@@ -605,7 +618,15 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
     }
 
     /* Send exactly one reply for the entire command */
-    if (n_unrecognized > 0) {
+    if (deny[0] != '\0') {
+        /* The other parameters of the line were applied: SITE has no
+        ** all-or-nothing, so a 5xx alone would read as "nothing changed". */
+        if (n_tokens > 1)
+            ftpd_session_reply_multi(sess, FTP_501, deny,
+                "Other parameters on this command were applied.");
+        else
+            ftpd_session_reply(sess, FTP_501, deny);
+    } else if (n_unrecognized > 0) {
         snprintf(badmsg, sizeof(badmsg),
                  "Unrecognized parameter '%s' on SITE command.", badtok);
         ftpd_session_reply_multi(sess, FTP_200,

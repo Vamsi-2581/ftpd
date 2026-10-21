@@ -57,6 +57,18 @@ MAXSESSIONS=10
 IDLETIMEOUT=300
 BANNER=MVS 3.8j FTPD Server
 #
+# The most days a client may ask for with SITE RETPD.  A data set created
+# with a retention period cannot be written to again until it expires, and
+# only the operator can get rid of it earlier, so every user who can log in
+# can leave data sets behind for this long.  SITE RETPD=n with n above this
+# is answered with 501 and changes nothing.  Without the key the limit is
+# 365.  0 allows no retention at all; the highest value is 9999, which is
+# what SITE RETPD takes anyway.
+#
+# MAXRETPD       0-9999 days
+#
+MAXRETPD=365
+#
 # --- TLS terminating proxy ---
 #
 # MVS 3.8j has no TLS, so FTPD cannot offer FTPS itself.  The way around

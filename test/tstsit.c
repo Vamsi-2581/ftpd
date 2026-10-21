@@ -23,6 +23,7 @@
 
 static ftpd_server_t    server;
 static ftpd_session_t   sess;
+static int              test_max_retpd = 9999;  /* MAXRETPD of fresh_session() */
 
 static int  last_code;
 static char last_text[256];
@@ -78,6 +79,7 @@ fresh_session(void)
     strcpy(server.config.defaults.unit, "3380");
     strcpy(server.config.defaults.volume, "SYSRES");
     server.config.defaults.directory = 25;
+    server.config.max_retpd = test_max_retpd;
     strcpy(sess.alloc.recfm, "FB");
     sess.alloc.lrecl = 80;
     sess.alloc.blksize = 3120;
@@ -383,6 +385,46 @@ main(void)
     retpd_bad("99999999999999", "an absurd RETPD is refused, 5 stays");
     run("RETPD=5 RETPD", &st, &code, text, sizeof(text));
     CHECK(st.alloc.retpd == 0, "a bare RETPD goes back to no retention");
+
+    /* --- MAXRETPD: the server's ceiling on SITE RETPD (#201) ----------- */
+    test_max_retpd = 30;
+    run("RETPD=30", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 30,
+          "RETPD equal to MAXRETPD is accepted");
+    run("RETPD=29", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 29,
+          "RETPD below MAXRETPD is accepted");
+    run("RETPD=5 RETPD=31", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.alloc.retpd == 5
+          && strstr(text, "31") != NULL && strstr(text, "30 days") != NULL,
+          "RETPD one over MAXRETPD is 501, names the limit, 5 stays");
+    run("RETPD=9999", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.alloc.retpd == 0,
+          "RETPD=9999 over a limit of 30 is refused, still no retention");
+    run("RETPD=31 RECFM=VB", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.alloc.retpd == 0
+          && strcmp(st.alloc.recfm, "VB") == 0
+          && strstr(text, "applied") != NULL,
+          "another parameter on the same SITE is applied, and the reply says so");
+    run("RETPD=10000", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 0
+          && strstr(text, "RETPD must be 0-9999") != NULL,
+          "a value outside 0-9999 keeps its own warning");
+    run("RETPD", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 0, "a bare RETPD is never refused");
+
+    test_max_retpd = 0;
+    run("RETPD=0", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 0,
+          "MAXRETPD=0: RETPD=0 is accepted");
+    run("RETPD=1", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.alloc.retpd == 0 && strstr(text, "0 days") != NULL,
+          "MAXRETPD=0: any retention is refused");
+
+    test_max_retpd = 9999;
+    run("RETPD=9999", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.alloc.retpd == 9999,
+          "MAXRETPD=9999 never refuses a valid value");
 
     /* --- DIRECTORY and DEFDIRECTORY (#130) --------------------------- */
     run("", &st, &code, text, sizeof(text));

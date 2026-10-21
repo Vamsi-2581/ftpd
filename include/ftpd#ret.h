@@ -39,6 +39,18 @@ typedef struct ftpd_ret_date {
 ** the check never refuses on bytes it cannot read.
 */
 int ftpd_ret_unexpired(const unsigned char expdt[3], int cur_year,
-                       int cur_yday, ftpd_ret_date_t *until);
+                       int cur_yday, ftpd_ret_date_t *until)
+                                                           asm("FTPRETUN");
+
+/*
+** A whole decimal number 0..max, for the MAXRETPD value in FTPDPRM (#201).
+**
+** atoi() maps "abc", "" and "-5" to 0 or a negative number; for MAXRETPD 0 is
+** a real setting (no retention at all), so a typo must not land on it.
+** Returns 1 and sets *out when s is only digits and not above max; returns 0
+** and leaves *out alone otherwise.
+*/
+int ftpd_ret_parse_days(const char *s, int max, int *out)
+                                                           asm("FTPRETPD");
 
 #endif /* FTPD_RET_H */

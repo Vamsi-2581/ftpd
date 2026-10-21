@@ -231,8 +231,8 @@ creates because the name does not exist. It sets what #cmd("RECFM"),
 model. It does not read the data.
 
 *The name of the model.* It is a fully qualified data set name, with or without
-quotes. FTPD drops one quote at the start and one at the end, and folds the name
-to upper case. It does not add the working directory or a prefix. The name is
+quotes. FTPD drops a quote at the start and a quote at the end, each if there is one,
+and folds the name to upper case. It does not add the working directory or a prefix. The name is
 at most 44 characters. It has no pattern and no member. Only the three values
 of the model are used. The organization of the new data set is the one that
 the command asks for, not the one of the model.
@@ -306,7 +306,7 @@ from learning the attributes of a data set that RAKF keeps from them.
 
 *What it does not do.* #cmd("STAT") does not show the three values, and
 #cmd("DCBDSN") has no value of its own to show. It has no effect on a data set
-that exists: FTPD sends no attributes for it. The UFS and JES views do not use
+that exists: it keeps its own attributes. The UFS and JES views do not use
 the three values.
 
 Before FTPD 1.3.0 the word was not a keyword, and the reply to it was

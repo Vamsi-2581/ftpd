@@ -27,11 +27,14 @@ command:
   line #cmd("200") that names the problem on the first line and ends with
   #cmd("SITE command was accepted"). The other words of the command still
   apply. If several words are wrong, the reply names the first.
-- *#cmd("RETPD") is above the limit of the server, or the word is #cmd("RDW")
-  or a #cmd("SBSENDEOL") that FTPD does not handle:* the reply is a #cmd("501")
-  with the reason, such as
-  #cmd("501 RETPD=n exceeds the server limit of N days; keeping the current value"),
-  and the setting stays as it was. If the command has
+- *#cmd("RETPD") is above the limit of the server, the word is #cmd("RDW"),
+  a #cmd("SBSENDEOL") that FTPD does not handle, or a #cmd("DCBDSN") whose model
+  FTPD refuses:* the reply is a #cmd("501") with the reason, such as
+  #cmd("501 RETPD=n exceeds the server limit of N days; keeping the current value")
+  or
+  #cmd("501 DCBDSN: NAME is not cataloged; keeping the current values"),
+  and the setting stays as it was. For #cmd("DCBDSN") see the _FTPD Reference_,
+  "DCBDSN". If the command has
   more words, FTPD applies them, and the reply has two lines: the text above
   with #cmd("501-"), and #cmd("501 Other parameters on this command were applied.")
   A script must not read this #cmd("501") as "nothing changed".

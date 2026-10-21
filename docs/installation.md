@@ -198,10 +198,11 @@ The server starts and accepts connections, but nobody can log in. Every
 
 The session stays open and usable (`USER`, `SYST`, `NOOP`, `QUIT`); the
 attempt does not count as a failed login, so the session is not closed after
-three of them. The commands that need a login answer `530 Not logged in.` The log (`STDOUT`)
-gets one `[ERROR]` line for it per run of the server. Before 1.3.0 `PASS` was
-not answered at all, and the session was closed after three of them with
-`FTPD071E` and no reply. Treat `FTPD003W` as an install that is not finished.
+three of them. The commands that need a login answer `530 Not logged in.`
+The log (`STDOUT`) gets one `[ERROR]` line for it per run of the server.
+Before 1.3.0 `PASS` was not answered at all, and the session was closed after
+three of them with `FTPD071E` and no reply. Treat `FTPD003W` as an install
+that is not finished.
 
 ---
 

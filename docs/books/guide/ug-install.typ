@@ -138,11 +138,13 @@ you added an APF entry is not a decision of the site but a symptom.
 FTPD warns and keeps running when the authorization fails
 (#cmd("FTPD003W APF SETUP FAILED RC=n")). The server starts and accepts
 connections, but nobody can log in. Every #cmd("PASS") gets the reply
-#cmd("530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message."). The session stays open. The client can
-send #cmd("USER"), #cmd("SYST"), #cmd("NOOP") and #cmd("QUIT"), and a command
-that needs a login gets #cmd("530 Not logged in."). The refused #cmd("PASS") does not count as a failed login, so the session
-is not closed after three of them. The log in the DD name #cmd("STDOUT") has one
-line with the level #cmd("[ERROR]") for it per run of the server. Before FTPD
+#cmd("530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message.").
+The session stays open. The client can send #cmd("USER"), #cmd("SYST"),
+#cmd("NOOP") and #cmd("QUIT"), and a command that needs a login gets
+#cmd("530 Not logged in."). The refused #cmd("PASS") does not count as a failed
+login, so the session is not closed after three of them. The log in the DD
+name #cmd("STDOUT") has one line with the level #cmd("[ERROR]") for it per run
+of the server. Before FTPD
 1.3.0 FTPD did not answer #cmd("PASS") at all, and it closed the session after
 the third one with #cmd("FTPD071E") and no reply. Treat #cmd("FTPD003W") as an
 installation that is not finished.

@@ -184,7 +184,7 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- SEE __fabandon() IN CLIBIO.H")], [The cleanup of the file returned an error code that the
       header #cmd("clibio.h") of the C library describes (n is less than 0).],
     [#cmd("FTPD077E IDENTITY RESET ABENDED Sxxx -- ASXBSENV MAY STILL HOLD A USER ACEE")], [While FTPD recovered from the ABEND of a command, the reset of the
-      identity of the started task ended in an ABEND itself (Sxxx is its code).
+      identity of the started task ended in an ABEND itself (Sxxx is its code\; S000 means that the recovery for the reset could not be set up).
       The field #cmd("ASXBSENV") of the address space may still point to the
       security environment of the user of that session, and the other
       sessions may act under it. The recovery goes on: the lock that protects

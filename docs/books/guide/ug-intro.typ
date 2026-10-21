@@ -190,5 +190,12 @@ the book explains the subject:
     [#cmd("SITE DCBDSN=dsn") takes the record format, record length and block
       size of a cataloged data set for the data sets that follow. Before,
       #cmd("DCBDSN") was an unknown word.], [@ug-site-keys],
+    [A FTPD that is not authorized (#cmd("FTPD003W")) answers every
+      #cmd("PASS") with #cmd("530 Login not possible: FTPD is not APF authorized ..."),
+      and the session stays open. Before, #cmd("PASS") was not answered, and
+      the session was closed after the third one. The new message
+      #cmd("FTPD077E") tells the operator that the reset of the identity
+      ended in an ABEND during a recovery.],
+      [@ug-install-auth, @ug-ops-abend],
   )
 ] <ug-intro-new-tab>

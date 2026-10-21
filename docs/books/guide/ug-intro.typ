@@ -118,5 +118,24 @@ the book explains the subject:
       unless the client sent #cmd("SITE DIRECTORY=").], [@ug-site-keys],
     [A #cmd("MAXSESSIONS") below 4 works. FTPD runs at least 4 worker threads
       and warns in the log. Before, no session started.], [@ug-ops-ses],
+    [A text line that is longer than the record of the data set makes
+      #cmd("STOR") and #cmd("APPE") fail with #cmd("451"), and a data set that
+      the command created is removed. Before, FTPD cut the line without a
+      word and answered #cmd("250"). #cmd("SITE TRUNCATE") brings the cutting
+      back, and the #cmd("250") then says so. #emph[This is a change of
+      behaviour: a script that relied on the silent cut now fails.]],
+      [@ug-data-long],
+    [#cmd("SITE JESSTATUS") takes #cmd("ALL"), #cmd("INPUT"), #cmd("ACTIVE") or
+      #cmd("OUTPUT") and filters the job list, #cmd("RETR") and #cmd("DELE") of
+      the JES view. Before, FTPD stored any value and listed every job.],
+      [@ug-other-jes],
+    [#cmd("SITE RDW") and a #cmd("SITE SBSENDEOL") other than #cmd("CRLF") are
+      answered with #cmd("501"). Before, the answer was #cmd("200") and
+      nothing changed.], [@ug-site-keys],
+    [#cmd("AUTHUSER"), #cmd("JESINTERFACELEVEL") and the lines of the form
+      #cmd("VOLSER,UNIT") in #cmd("FTPDPRM") are reported as ignored, in the
+      log and with one console message #cmd("FTPD062W"). Before, FTPD read
+      them without a word. #cmd("CONFIG") no longer writes #cmd("FTPD047I") and
+      #cmd("FTPD048I").], [@ug-ops-config],
   )
 ] <ug-intro-new-tab>

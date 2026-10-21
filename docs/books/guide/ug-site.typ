@@ -27,9 +27,11 @@ command:
   line #cmd("200") that names the problem on the first line and ends with
   #cmd("SITE command was accepted"). The other words of the command still
   apply. If several words are wrong, the reply names the first.
-- *#cmd("RETPD") is above the limit of the server:* the reply is
+- *#cmd("RETPD") is above the limit of the server, or the word is #cmd("RDW")
+  or a #cmd("SBSENDEOL") that FTPD does not handle:* the reply is a #cmd("501")
+  with the reason, such as
   #cmd("501 RETPD=n exceeds the server limit of N days; keeping the current value"),
-  and the retention period of the session stays as it was. If the command has
+  and the setting stays as it was. If the command has
   more words, FTPD applies them, and the reply has two lines: the text above
   with #cmd("501-"), and #cmd("501 Other parameters on this command were applied.")
   A script must not read this #cmd("501") as "nothing changed".
@@ -108,18 +110,43 @@ the allocation, and a combination that the system rejects shows when
       again. A session starts with the blanks dropped.],
     [#cmd("JESJOBNAME=n"), #cmd("JESOWNER=n")], [the filters of the JES job
       list (@ug-other-jes).],
+    [#cmd("JESSTATUS=s")], [the status filter of the JES view: #cmd("ALL"),
+      #cmd("INPUT"), #cmd("ACTIVE") or #cmd("OUTPUT"), in any case. It applies
+      to #cmd("LIST"), #cmd("NLST"), #cmd("RETR") and #cmd("DELE")
+      (@ug-other-jes). No value: #cmd("ALL"). Another value, such as
+      #cmd("HELD"), keeps the filter that was set, and the reply starts with
+      #cmd("200-JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT; keeping the current value").
+      An abbreviation of a status is another value.],
+    [#cmd("TRUNCATE")], [switch between failing and cutting for a text line
+      that is longer than the record of the data set. Each use of the keyword
+      switches again. A session starts with the switch off: the upload fails
+      (@ug-data-long).],
   )
 ]
 
-FTPD accepts these keywords and does nothing with them, so scripts written
-for the z/OS server run unchanged: #cmd("JESSTATUS"), #cmd("TRUNCATE"),
-#cmd("RDW"), #cmd("SBSENDEOL"), #cmd("DATACLAS"), #cmd("STORCLAS") and
-#cmd("MGMTCLAS"). The job list always shows jobs in every status.
+FTPD refuses two keywords of the z/OS server because it cannot do what they
+ask. The reply is a #cmd("501"), and nothing changes:
+
+- #cmd("RDW") asks for the record descriptor words of variable records to be
+  kept in the transfer. FTPD does not keep them. The reply is
+  #cmd("501 SITE RDW is not supported: FTPD does not keep record descriptor words").
+- #cmd("SBSENDEOL=value") sets the line end of text files. FTPD handles the
+  line end CRLF only. #cmd("SBSENDEOL=CRLF") in any case is answered with
+  #cmd("200"). Any other value, and the keyword with no value, is answered
+  with #cmd("501 SBSENDEOL=LF is not supported: FTPD only handles CRLF"). The
+  text names the value as the client typed it, or #cmd("(none)").
+
+A script that sets one of them must read the code of the reply. Before FTPD
+1.3.0 the reply was #cmd("200") for both, and the setting did nothing.
+With more words on the line FTPD applies them, and the reply has two lines
+(@ug-site-form).
+
+FTPD accepts #cmd("DATACLAS"), #cmd("STORCLAS") and #cmd("MGMTCLAS") and does
+nothing with them, so that scripts written for the z/OS server run unchanged.
 There are no storage classes on MVS 3.8j.
 
-#cmd("JESINTERFACELEVEL") is a server setting in the parameters
-(@ug-ops-config). A client cannot set it with #cmd("SITE"), and FTPD answers
-that the parameter is not known.
+#cmd("JESINTERFACELEVEL") is not a keyword of #cmd("SITE"). FTPD answers that
+the parameter is not known. In the parameters (@ug-ops-config) it is ignored.
 
 == Upper and Lower Case <ug-site-case>
 

@@ -192,7 +192,10 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       #cmd("SITE RETPD") (@ref-site-retpd). A data set whose retention period
       has not expired gets a #cmd("550") with the date
       (@ref-site-retained). A member that finds no room in the directory of its
-      partitioned data set gets a #cmd("552") (@ref-reply-552).
+      partitioned data set gets a #cmd("552") (@ref-reply-552). In #cmd("TYPE A")
+      a line that is longer than the record gets a #cmd("451"), or with
+      #cmd("SITE TRUNCATE") is cut and reported in the #cmd("250")
+      (@ref-site-truncate).
       UFS: #cmd("150 Opening data connection for PATH") and
       #cmd("226 Transfer complete"). A file that exists is replaced. JES:
       submits the data as a job.],
@@ -250,9 +253,10 @@ as before:
       #cmd("250-It is known to JES as JOBnnnnn") and
       #cmd("250 Transfer completed successfully."). FTPD adds #cmd("NOTIFY"),
       #cmd("USER") and #cmd("PASSWORD") to the JOB statement.],
-    [#cmd("LIST"), #cmd("NLST")], [The list of jobs, filtered by the owner
-      and the job name of #cmd("SITE"). At most 200 entries.],
-    [#cmd("LIST JOBnnnnn")], [The spool files of one job. #cmd("550 No job found with ID JOBnnnnn") if there is none.],
+    [#cmd("LIST"), #cmd("NLST")], [The list of jobs, filtered by the owner,
+      the job name and the status of #cmd("SITE"). At most 200 entries.],
+    [#cmd("LIST JOBnnnnn")], [The spool files of one job. #cmd("550 No job found with ID JOBnnnnn for JESSTATUS=ALL") if there is none, or if the
+      job is not in the status of #cmd("SITE JESSTATUS").],
     [#cmd("RETR JOBnnnnn")], [All output files of the job, each followed by
       the line #cmd(" !! END OF JES SPOOL FILE !!").],
     [#cmd("RETR JOBnnnnn.n")], [The output file number n, counted from 1. The
@@ -261,6 +265,10 @@ as before:
       #cmd("250 Cancel successful").],
   )
 ]
+
+#cmd("SITE JESSTATUS") (@ref-site-jesstatus) limits #cmd("LIST"),
+#cmd("NLST"), #cmd("RETR") and #cmd("DELE") to the jobs in one status. A job
+outside the filter is answered like an unknown job.
 
 The replies to errors, the format of the lists and the rules for JCL are in
 the _FTPD User's Guide_, "The JES and UFS Views".

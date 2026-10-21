@@ -87,13 +87,13 @@ with the replacement.
     [#cmd("FTPD058I")], [#cmd("DEFPRIMARY"), #cmd("DEFSECONDARY"),
       #cmd("DEFSPACETYPE") as #cmd("TRK"), #cmd("CYL") or #cmd("BLK"), and
       #cmd("DEFDIRECTORY").],
-    [#cmd("FTPD047I")], [#cmd("DASD VOLUMES=n:"), the number of volume lines.],
-    [#cmd("FTPD048I")], [One message for each volume line, as
-      #cmd("VOLSER,UNIT").],
   )
 ]
 
-#cmd("CONFIG") does not show #cmd("AUTHUSER") and #cmd("JESINTERFACELEVEL").
+#cmd("CONFIG") does not show #cmd("AUTHUSER") and #cmd("JESINTERFACELEVEL"),
+which FTPD ignores (@ref-prm-ignored). Before FTPD 1.3.0 it showed the volume
+lines in the messages #cmd("FTPD047I") and #cmd("FTPD048I"). They are gone.
+A start that reads such a line writes #cmd("FTPD062W") (@apx-messages).
 
 == Stopping FTPD <ref-con-stop>
 

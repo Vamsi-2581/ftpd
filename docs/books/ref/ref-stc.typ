@@ -87,10 +87,12 @@ security of the host is in the _FTPD User's Guide_, in "Security".
     [3], [#cmd("FTPD008I"), #cmd("FTPD003W")], [The result of the authorization
       (@ref-stc-apf).],
     [4], [#cmd("FTPD004I"), #cmd("FTPD004W")], [The identity (@ref-stc-id).],
-    [5], [#cmd("FTPD009E"), #cmd("FTPD059W"), #cmd("FTPD060W")], [FTPD reads the
+    [5], [#cmd("FTPD009E"), #cmd("FTPD059W"), #cmd("FTPD060W"),
+      #cmd("FTPD062W")], [FTPD reads the
       configuration (@ref-prm). A read error ends the start (see below). The
-      two warnings are about #cmd("DEFVOLUME") and #cmd("DEFUNIT")
-      (@ref-prm-def).],
+      first two warnings are about #cmd("DEFVOLUME") and #cmd("DEFUNIT")
+      (@ref-prm-def). #cmd("FTPD062W") counts the lines of the file that name
+      an ignored setting (@ref-prm-ignored).],
     [6], [#cmd("FTPD007W")], [Two lines, only with #cmd("SSLPROXY=YES").],
     [7], [#cmd("FTPD002E")], [FTPD takes the lock for the port (see below). If
       another FTPD holds it, the start ends with the return code 8.],

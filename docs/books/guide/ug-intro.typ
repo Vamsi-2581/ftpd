@@ -106,5 +106,17 @@ the book explains the subject:
     [#cmd("STATS") counts each transferred byte once, and only for sessions
       that have ended. Before, a transfer of a data set counted two to three
       times.], [@ug-ops-con],
+    [#cmd("SITE") accepts the shortest forms of its keywords, such as
+      #cmd("PRI=5") for #cmd("PRIMARY=5"). Before, a short form was an unknown
+      word.], [@ug-site-form],
+    [#cmd("SITE RETPD=days") sets the retention period of the data sets that
+      #cmd("MKD") and #cmd("STOR") create. The parameter #cmd("MAXRETPD") limits
+      it, and a larger value is answered with #cmd("501"). Before, there was
+      no #cmd("RETPD").], [@ug-site-keys],
+    [The parameter #cmd("DEFDIRECTORY") sets the directory blocks of a
+      partitioned data set that #cmd("MKD") creates. Before, it was always 10
+      unless the client sent #cmd("SITE DIRECTORY=").], [@ug-site-keys],
+    [A #cmd("MAXSESSIONS") below 4 works. FTPD runs at least 4 worker threads
+      and warns in the log. Before, no session started.], [@ug-ops-ses],
   )
 ] <ug-intro-new-tab>

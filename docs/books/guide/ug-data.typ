@@ -283,7 +283,8 @@ These commands work on data sets and members:
 #deflist(width: 1.0in,
   [#cmd("MKD")], [creates a partitioned data set with the attributes of the
     session. #cmd("SITE DIRECTORY") sets the number of directory blocks
-    (10 if it is not set). A name that exists is answered with
+    (the value of #cmd("DEFDIRECTORY"), 10 if the administrator did not
+    change it), and #cmd("SITE RETPD") the retention period. A name that exists is answered with
     #cmd("550 NAME already exists.").],
   [#cmd("DELE")], [deletes a data set, or a member when the name has one.],
   [#cmd("RMD")], [deletes a data set.],

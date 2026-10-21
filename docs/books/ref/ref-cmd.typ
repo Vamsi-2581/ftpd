@@ -188,7 +188,8 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       of a job (@ref-cmd-jes).],
     [#cmd("STOR")], [MVS: #cmd("125 Storing data set NAME"), the data, and
       #cmd("250 Transfer completed successfully."). Creates the data set or
-      replaces it. UFS: #cmd("150 Opening data connection for PATH") and
+      replaces it. A new data set gets the retention period of
+      #cmd("SITE RETPD") (@ref-site-retpd). UFS: #cmd("150 Opening data connection for PATH") and
       #cmd("226 Transfer complete"). A file that exists is replaced. JES:
       submits the data as a job.],
     [#cmd("APPE")], [MVS: appends to a sequential data set
@@ -218,7 +219,8 @@ Guide_, "Working with Data Sets", for the rules.]
       #cmd("250 File deleted"). JES: cancels the job and removes its output
       (@ref-cmd-jes).],
     [#cmd("MKD")], [MVS: creates a partitioned data set (#cmd("257 'NAME' created.")); #cmd("SITE DIRECTORY")
-      sets the directory blocks, 10 by default. UFS: #cmd("257 \"PATH\" directory created").],
+      sets the directory blocks, #cmd("DEFDIRECTORY") by default (10), and
+      #cmd("SITE RETPD") the retention period (@ref-site-retpd). UFS: #cmd("257 \"PATH\" directory created").],
     [#cmd("RMD")], [MVS: deletes a data set. UFS: #cmd("250 Directory removed"); a directory that is not empty gets #cmd("550").],
     [#cmd("RNFR")], [MVS: #cmd("350 RNFR accepted. Please supply new name for RNTO."). UFS: #cmd("350 File exists, ready for destination").],
     [#cmd("RNTO")], [MVS: renames a data set or a member (#cmd("250 OLD renamed to NEW")). The command must

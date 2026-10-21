@@ -115,8 +115,8 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD056E FTPD IS NOT LISTENING ON PORT n, THIS INSTANCE ENDS")],
       [The listener did not come up. The return code is 8.],
     [#cmd("FTPD057I   BINDTRIES=n BINDWAIT=n")], [Part of #cmd("CONFIG").],
-    [#cmd("FTPD058I   DEFPRIMARY=n DEFSECONDARY=n DEFSPACETYPE=text")], [Part of
-      #cmd("CONFIG").],
+    [#cmd("FTPD058I   DEFPRIMARY=n DEFSECONDARY=n DEFSPACETYPE=text DEFDIRECTORY=n")], [Part of
+      #cmd("CONFIG"). #cmd("DEFDIRECTORY") is in the line since FTPD 1.3.0.],
     [#cmd("FTPD059W DEFVOLUME=volume IS NOT ONLINE -- NEW DATA SETS WILL GO WHERE THE SYSTEM CHOOSES")], [The volume is not online. FTPD drops
       #cmd("DEFVOLUME") and #cmd("DEFUNIT"). Correct the parameter or mount the
       volume (@ref-prm-def).],

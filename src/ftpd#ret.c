@@ -72,11 +72,10 @@ int
 ftpd_ret_parse_days(const char *s, int max, int *out)
 {
     long v = 0;
-    int i;
 
     if (s[0] == '\0' || strlen(s) > 9)
         return 0;
-    for (i = 0; s[i]; i++) {
+    for (int i = 0; s[i]; i++) {
         if (s[i] < '0' || s[i] > '9')
             return 0;
         v = v * 10 + (s[i] - '0');

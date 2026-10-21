@@ -122,7 +122,7 @@ ftp mvshost 2121
 | PRIMARY=*n* | Primary space allocation (1-16777215) |
 | SECONDARY=*n* | Secondary space allocation (0-16777215; 0 = none) |
 | DIRECTORY=*n* | PDS directory blocks (1-16777215), default `DEFDIRECTORY` |
-| RETPD=*days* | Retention period of new data sets (0-9999; 0 = none) |
+| RETPD=*days* | Retention period of new data sets (0-9999; 0 = none), at most `MAXRETPD` days |
 | TRACKS / CYLINDERS / BLOCKS | Space allocation unit |
 | FILETYPE=JES / SEQ | Switch to JES or dataset mode |
 | JESOWNER=*name* | JES job owner filter |
@@ -134,6 +134,9 @@ A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the
 session (`SITE RETPD` returns to no retention). `BLOCKS` counts the space in
 units of the current `BLKSIZE`.
+
+`SITE RETPD=n` with `n` above `MAXRETPD` in `FTPDPRM` (default 365 days) is
+answered `501` naming the limit, and the session keeps its retention period.
 
 A data set whose retention period has not expired is not opened for output:
 `STOR` and `APPE` answer `550` and name the expiration date, instead of waiting

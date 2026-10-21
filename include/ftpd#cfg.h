@@ -22,6 +22,9 @@ typedef struct ftpd_dasd {
 /* Longest retention SITE RETPD takes: the z/OS FTP limit. */
 #define FTPD_RETPD_MAX      9999
 
+/* The ceiling on SITE RETPD when FTPDPRM has no MAXRETPD: a year. */
+#define FTPD_MAXRETPD_DEFAULT 365
+
 /* --- Server configuration --- */
 /*
 ** The three address fields below are all written by ftpd_adr_parse(), so
@@ -64,6 +67,9 @@ typedef struct ftpd_config {
     int             max_sessions;   /* max concurrent sessions       */
     int             idle_timeout;   /* idle timeout in seconds       */
     char            banner[80];     /* custom 220 banner text        */
+    int             max_retpd;      /* MAXRETPD: the most days SITE
+                                    ** RETPD may ask for, 0..9999.
+                                    ** 0 = no retention at all        */
 
     /* Security */
     char            authuser[9];    /* user allowed to TERM server   */

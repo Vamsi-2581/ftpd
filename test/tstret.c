@@ -97,5 +97,32 @@ main(void)
     ftpd_ret_unexpired(b, 2025, 365, &d);
     CHECK(d.month == 12 && d.day == 31, "2028 day 366 is December 31");
 
+    /* --- ftpd_ret_parse_days(): the MAXRETPD value (#201) --------------- */
+    {
+        int v = -1;
+
+        CHECK(ftpd_ret_parse_days("365", 9999, &v) == 1 && v == 365,
+              "365 parses");
+        CHECK(ftpd_ret_parse_days("0", 9999, &v) == 1 && v == 0,
+              "0 parses: no retention allowed at all");
+        CHECK(ftpd_ret_parse_days("9999", 9999, &v) == 1 && v == 9999,
+              "9999 is the top of the range");
+        v = 7;
+        CHECK(ftpd_ret_parse_days("10000", 9999, &v) == 0 && v == 7,
+              "10000 is refused and *out stays");
+        CHECK(ftpd_ret_parse_days("-1", 9999, &v) == 0 && v == 7,
+              "a negative number is refused");
+        CHECK(ftpd_ret_parse_days("abc", 9999, &v) == 0 && v == 7,
+              "abc is refused, it is not 0");
+        CHECK(ftpd_ret_parse_days("", 9999, &v) == 0 && v == 7,
+              "an empty value is refused, it is not 0");
+        CHECK(ftpd_ret_parse_days("30d", 9999, &v) == 0 && v == 7,
+              "trailing junk is refused");
+        CHECK(ftpd_ret_parse_days("3 0", 9999, &v) == 0 && v == 7,
+              "an embedded blank is refused");
+        CHECK(ftpd_ret_parse_days("99999999999999", 9999, &v) == 0 && v == 7,
+              "an absurd number is refused without overflowing");
+    }
+
     return mbt_test_summary("TSTRET");
 }

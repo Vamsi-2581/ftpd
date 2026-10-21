@@ -105,7 +105,7 @@ sources = ["test/tstret.c", "src/ftpd#ret.c"]
 host = false
 parm = "IBMUSER.FTPD.TPRM"
 sources = ["test/tstprm.c", "src/ftpd#cfg.c", "src/ftpd#log.c",
-           "src/ftpd#adr.c"]
+           "src/ftpd#adr.c", "src/ftpd#ret.c"]
 
 # ftpd_session_queue() -- a connection the worker pool refuses is answered
 # 421 and released, session and socket both (#177).  MVS-only: real thread

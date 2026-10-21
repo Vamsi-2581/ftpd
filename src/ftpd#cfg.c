@@ -13,6 +13,7 @@
 
 #include "ftpd#cfg.h"
 #include "ftpd#log.h"
+#include "ftpd#ret.h"
 
 /* --------------------------------------------------------------------
 ** Default configuration values
@@ -53,6 +54,11 @@ ftpdcfg_defaults(ftpd_config_t *cfg)
     cfg->max_sessions = 10;
     cfg->idle_timeout = 300;
     strcpy(cfg->banner, "MVS 3.8j FTPD Server");
+    /* Finite on purpose: with no ceiling any authenticated user can create
+    ** data sets that only the operator can remove (#201).  A year is long
+    ** enough for what a file transfer is retained for, and far below the
+    ** 9999 days SITE RETPD would take. */
+    cfg->max_retpd = FTPD_MAXRETPD_DEFAULT;
 
     /* Security */
     memset(cfg->authuser, 0, sizeof(cfg->authuser));
@@ -283,6 +289,19 @@ parse_keyvalue(ftpd_config_t *cfg, const char *key, const char *value)
                      __func__);
             cfg->idle_timeout = 300;
         }
+    }
+    else if (strcmp(key, "MAXRETPD") == 0) {
+        /* The ceiling on SITE RETPD, in days.  0 is a real value -- no
+        ** retention at all -- so a value that is not a plain number in
+        ** 0..9999 is refused and the current one kept; atoi() would have
+        ** turned a typo into 0.  Above 9999 there is nothing left to limit,
+        ** SITE RETPD stops there anyway. */
+        int v;
+        if (!ftpd_ret_parse_days(value, FTPD_RETPD_MAX, &v))
+            ftpd_log(LOG_WARN, "%s: MAXRETPD must be 0..%d, keeping %d",
+                     __func__, FTPD_RETPD_MAX, cfg->max_retpd);
+        else
+            cfg->max_retpd = v;
     }
     else if (strcmp(key, "BANNER") == 0) {
         strncpy(cfg->banner, value, sizeof(cfg->banner) - 1);
@@ -591,6 +610,7 @@ ftpdcfg_dump(const ftpd_config_t *cfg)
                  cfg->bind_tries, cfg->bind_wait);
     ftpd_log_wto("FTPD043I   MAXSESSIONS=%d IDLETIMEOUT=%d",
                  cfg->max_sessions, cfg->idle_timeout);
+    ftpd_log_wto("FTPD061I   MAXRETPD=%d", cfg->max_retpd);
     ftpd_log_wto("FTPD044I   BANNER=%s", cfg->banner);
     ftpd_log_wto("FTPD049I   SSLPROXY=%s",
                  cfg->sslproxy ? "YES" : "NO");

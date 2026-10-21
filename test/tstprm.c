@@ -75,6 +75,10 @@ static const char * const parmlines[] = {
     "DEFSPACETYPE=FURLONGS",    /* not a space type: must be refused      */
     "DEFDIRECTORY=30",
     "DEFDIRECTORY=0",           /* out of range (1..): must be refused    */
+    "MAXRETPD=90",              /* #201 */
+    "MAXRETPD=-5",              /* negative: must be refused              */
+    "MAXRETPD=abc",             /* not a number, not 0: must be refused   */
+    "MAXRETPD=10000",           /* above what SITE RETPD takes: refused   */
     NULL
 };
 
@@ -154,6 +158,9 @@ main(int argc, char **argv)
     printf("TSTPRM -- ftpd#119: DD:FTPDPRM read error must abandon "
            "the start (dsn '%s')\n\n", dsn);
 
+    ftpdcfg_defaults(&cfg);
+    CHECK_EQ(cfg.max_retpd, 365, "MAXRETPD defaults to 365 days");
+
     if (write_parmlib(dsn) != 0) {
         /* No vector, no verdict -- say so loudly rather than pass on a
         ** test that never ran.  wtof() as well as printf(), the #145
@@ -189,6 +196,9 @@ main(int argc, char **argv)
 
         CHECK_EQ(cfg.defaults.directory, TSTPRM_DIRBLKS,
                  "healthy FTPDPRM: DEFDIRECTORY parsed, DEFDIRECTORY=0 refused");
+
+        CHECK_EQ(cfg.max_retpd, 90,
+                 "healthy FTPDPRM: MAXRETPD parsed, -5, abc and 10000 refused");
 
         __dsfree("FTPDPRM");
     } else {

@@ -18,13 +18,9 @@
 /* Most data bytes one record of the data set holds, at most cap.
 **
 ** F: lrecl.  V: lrecl - 4, because LRECL counts the 4-byte RDW the program
-** never sees.  U: blksize, since there is no LRECL.  0 when the data set has
-** no usable length. */
+** never sees (a V data set with LRECL 1-4 holds none, so 0).  U: blksize, since
+** there is no LRECL.  -1 when the data set reports no length at all. */
 int ftpd_rec_maxdata(int recfm, int lrecl, int blksize, int cap)
                                                             asm("FTPRECMX");
-
-/* Bytes of a line of linelen bytes that go into a record of maxdata bytes:
-** all of them if they fit, else maxdata. */
-int ftpd_rec_keep(long linelen, int maxdata)                asm("FTPRECKP");
 
 #endif /* FTPD_REC_H */

@@ -1,5 +1,5 @@
 /* TSTREC.C
-** Tests for ftpd_rec_maxdata() and ftpd_rec_keep() -- how much of a text line
+** Tests for ftpd_rec_maxdata() -- how much of a text line
 ** fits in one record (#207).  STOR used to cut an overlong line without a
 ** word and answer 250.
 **
@@ -25,14 +25,12 @@ main(void)
              "V with LRECL 4 holds no data");
     CHECK_EQ(ftpd_rec_maxdata(FTPD_REC_V, 2, 0, 32767), 0,
              "V never goes negative");
-    CHECK_EQ(ftpd_rec_maxdata(FTPD_REC_F, 0, 0, 32767), 0,
-             "F with no LRECL holds nothing");
-
-    CHECK_EQ(ftpd_rec_keep(10, 80), 10, "a short line is kept whole");
-    CHECK_EQ(ftpd_rec_keep(80, 80), 80, "a line of exactly LRECL fits");
-    CHECK_EQ(ftpd_rec_keep(81, 80), 80, "one byte over is cut to LRECL");
-    CHECK_EQ(ftpd_rec_keep(100000L, 80), 80, "a huge line is cut to LRECL");
-    CHECK_EQ(ftpd_rec_keep(0, 80), 0, "an empty line stays empty");
+    CHECK_EQ(ftpd_rec_maxdata(FTPD_REC_F, 0, 0, 32767), -1,
+             "F with no LRECL: length unknown, not zero");
+    CHECK_EQ(ftpd_rec_maxdata(FTPD_REC_V, 0, 0, 32767), -1,
+             "V with no LRECL: length unknown, not zero");
+    CHECK_EQ(ftpd_rec_maxdata(FTPD_REC_U, 80, 0, 32767), -1,
+             "U with no BLKSIZE: length unknown");
 
     return mbt_test_summary("TSTREC");
 }

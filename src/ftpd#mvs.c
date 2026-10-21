@@ -2427,7 +2427,7 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
             (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_U ? FTPD_REC_U :
                                                               FTPD_REC_F,
             fp->lrecl, fp->blksize, (int)sizeof(recbuf) - 1);
-        if (maxdata <= 0)
+        if (maxdata < 0)
             maxdata = (int)sizeof(recbuf) - 1;
 
         while ((nread = ftpd_data_recv(sess, netbuf, sizeof(netbuf))) > 0) {

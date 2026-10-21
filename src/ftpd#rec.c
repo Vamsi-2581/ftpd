@@ -10,20 +10,18 @@ ftpd_rec_maxdata(int recfm, int lrecl, int blksize, int cap)
 {
     int max;
 
-    if (recfm == FTPD_REC_V)
-        max = lrecl - 4;
-    else if (recfm == FTPD_REC_U)
+    if (recfm == FTPD_REC_U)
         max = blksize;
     else
         max = lrecl;
 
-    if (max < 0)
-        max = 0;
-    return max > cap ? cap : max;
-}
+    if (max <= 0)
+        return -1;
 
-int
-ftpd_rec_keep(long linelen, int maxdata)
-{
-    return linelen > (long)maxdata ? maxdata : (int)linelen;
+    if (recfm == FTPD_REC_V) {
+        max -= 4;
+        if (max < 0)
+            max = 0;
+    }
+    return max > cap ? cap : max;
 }

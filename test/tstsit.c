@@ -328,7 +328,18 @@ main(void)
     run("SBSENDEOL=LFCR", &st, &code, text, sizeof(text));
     CHECK(code == 501, "SBSENDEOL=LFCR is refused");
     run("SBSENDEOL", &st, &code, text, sizeof(text));
-    CHECK(code == 501, "a bare SBSENDEOL is refused: it names no line end");
+    CHECK(code == 200 && strcmp(text, "SITE command was accepted") == 0,
+          "a bare SBSENDEOL returns to the default, which is CRLF");
+
+    /* The value is the client's own: it must reach the reply verbatim, never
+    ** be read as a format. */
+    run("SBSENDEOL=%s%s%s%n", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "SBSENDEOL=%s%s%s%n is not") != NULL,
+          "conversion characters in a refused SBSENDEOL come back verbatim");
+    run("SBSENDEOL=%s%s%s%n TRUNCATE", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "%s%s%s%n") != NULL
+          && strstr(text, "applied") != NULL,
+          "the same with another parameter on the line");
 
     /* JESSTATUS is a filter now: only its four values are taken. */
     run("", &st, &code, text, sizeof(text));

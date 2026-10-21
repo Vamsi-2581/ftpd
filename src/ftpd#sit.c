@@ -482,10 +482,9 @@ site_apply_one(ftpd_session_t *sess,
         uval[sizeof(uval) - 1] = '\0';
         for (i = 0; uval[i]; i++)
             uval[i] = (char)toupper((unsigned char)uval[i]);
-        if (strcmp(uval, "CRLF") != 0 && deny[0] == '\0')
+        if (uval[0] != '\0' && strcmp(uval, "CRLF") != 0 && deny[0] == '\0')
             snprintf(deny, denysz,
-                "SBSENDEOL=%s is not supported: FTPD only handles CRLF",
-                val[0] ? val : "(none)");
+                "SBSENDEOL=%s is not supported: FTPD only handles CRLF", val);
         return 0;
     }
 
@@ -661,7 +660,7 @@ ftpd_site_dispatch(ftpd_session_t *sess, const char *arg)
             ftpd_session_reply_multi(sess, FTP_501, deny,
                 "Other parameters on this command were applied.");
         else
-            ftpd_session_reply(sess, FTP_501, deny);
+            ftpd_session_reply(sess, FTP_501, "%s", deny);
     } else if (n_unrecognized > 0) {
         snprintf(badmsg, sizeof(badmsg),
                  "Unrecognized parameter '%s' on SITE command.", badtok);

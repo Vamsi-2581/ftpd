@@ -156,6 +156,16 @@ host = false
 parm = "21771"
 sources = ["test/tstque.c", "src/ftpd#*.c"]
 
+# PASS on a server that is not program-authorized -- ftpd_auth_pass() and
+# ftpd_session_recover() (#258).  MVS-only: the real session loop in a real
+# worker, a loopback client, and an unauthorized task whose MODESET ABENDs.
+# Every ftpd#*.c comes along, ftpd.c (main) does not.  parm is the loopback
+# listen port.
+[test.TSTPAS]
+host = false
+parm = "21772"
+sources = ["test/tstpas.c", "src/ftpd#*.c"]
+
 # ftpd_site_dispatch() -- SITE keywords and keyword values in any spelling
 # (#189).  MVS-only: ftpd#sit.c includes ftpd.h and so the libc370 MVS
 # headers.  The test replaces the two reply functions and the volume check,

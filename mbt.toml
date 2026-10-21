@@ -87,6 +87,18 @@ sources = ["test/tstdsn.c", "src/ftpd#dsn.c"]
 [test.TSTRET]
 sources = ["test/tstret.c", "src/ftpd#ret.c"]
 
+# ftpd_rec_maxdata()/ftpd_rec_keep() -- how much of a text line one record
+# holds, so STOR can refuse or truncate an overlong line instead of cutting it
+# silently (#207).  ftpd#rec.c is free of project and MVS headers: DUAL.
+[test.TSTREC]
+sources = ["test/tstrec.c", "src/ftpd#rec.c"]
+
+# ftpd_jfl_name()/ftpd_jfl_match() -- the JESSTATUS filter of the JES mode of
+# LIST, RETR and DELE (#207).  ftpd#jfl.c is free of project and MVS headers:
+# DUAL.
+[test.TSTJFL]
+sources = ["test/tstjfl.c", "src/ftpd#jfl.c"]
+
 # ftpd_pool_size() -- the worker pool is never smaller than 4, because libc370
 # starts no worker for a pool of 1-3 (libc370#700, #168).  ftpd#pol.c is free
 # of project and MVS headers, so this is DUAL like TSTADR.
@@ -129,7 +141,7 @@ sources = ["test/tstque.c", "src/ftpd#*.c"]
 # so it needs no socket, no UCB scan and no log anchor.
 [test.TSTSIT]
 host = false
-sources = ["test/tstsit.c", "src/ftpd#sit.c"]
+sources = ["test/tstsit.c", "src/ftpd#sit.c", "src/ftpd#jfl.c"]
 
 # ── Dependencies ─────────────────────────────────────────
 # Only ufsd is a declared dependency: libufs.h / libufs.a are ufsd-specific.

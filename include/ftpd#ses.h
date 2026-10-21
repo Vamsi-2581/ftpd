@@ -51,7 +51,6 @@ struct ftpd_session {
     char            ufs_cwd[256];   /* current UFS path              */
 
     /* JES context */
-    int             jes_level;      /* JES interface level (1/2)     */
     char            jes_owner[9];   /* JESOWNER filter               */
     char            jes_jobname[9]; /* JESJOBNAME filter             */
     char            jes_status[8];  /* JESSTATUS filter              */
@@ -65,7 +64,6 @@ struct ftpd_session {
     /* Transfer modifiers (SITE toggles) */
     int             trailing;       /* SITE TRAILING (0=keep blanks) */
     int             truncate;       /* SITE TRUNCATE                 */
-    int             rdw;            /* SITE RDW                      */
 
     /* Transfer state */
     long            rest_offset;    /* REST restart offset           */

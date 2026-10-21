@@ -14,6 +14,7 @@
 ** USER/PASSWORD injection follows mvsmf/src/jobsapi.c process_jobcard().
 */
 #include "ftpd.h"
+#include "ftpd#jfl.h"
 #include "ftpd#ses.h"
 #include "ftpd#aut.h"
 #include "ftpd#dat.h"
@@ -338,6 +339,25 @@ job_status(unsigned char q_type)
 }
 
 /* --------------------------------------------------------------------
+** The JESSTATUS the session works with, as it is shown in the replies.
+** Empty means no SITE JESSTATUS was given: ALL.
+** ----------------------------------------------------------------- */
+static const char *
+status_filter(const ftpd_session_t *sess)
+{
+    return sess->jes_status[0] ? sess->jes_status : "ALL";
+}
+
+/* --------------------------------------------------------------------
+** Does the job pass the session's JESSTATUS filter (#207)?
+** ----------------------------------------------------------------- */
+static int
+job_matches_status(const ftpd_session_t *sess, const JESJOB *job)
+{
+    return ftpd_jfl_match(sess->jes_status, job_status(job->q_type));
+}
+
+/* --------------------------------------------------------------------
 ** Helper: format return code from JCTCNVRC completion field.
 ** Follows mvsmf jobsapi.c process_job() retcode decoding.
 ** ----------------------------------------------------------------- */
@@ -407,11 +427,12 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     /* Query with dd=1 to include JESDD array */
     joblist = jesjob(jes, jobid_arg, FILTER_JOBID, 1);
 
-    if (!joblist || !joblist[0]) {
+    if (!joblist || !joblist[0] || !job_matches_status(sess, joblist[0])) {
         if (joblist) jesjobfr(&joblist);
         jesclose(&jes);
         ftpd_session_reply(sess, FTP_550,
-                           "No job found with ID %s", jobid_arg);
+                           "No job found with ID %s for JESSTATUS=%s",
+                           jobid_arg, status_filter(sess));
         return 0;
     }
 
@@ -509,8 +530,9 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
 
     /* z/OS: "125 List started OK for JESJOBNAME=..., JESSTATUS=ALL and JESOWNER=..." */
     ftpd_session_reply(sess, FTP_125,
-        "List started OK for JESJOBNAME=%s, JESSTATUS=ALL and JESOWNER=%s",
+        "List started OK for JESJOBNAME=%s, JESSTATUS=%s and JESOWNER=%s",
         sess->jes_jobname[0] ? sess->jes_jobname : "*",
+        status_filter(sess),
         owner[0] == '*' || !owner[0] ? "*" : owner);
 
     if (ftpd_data_open(sess) != 0) {
@@ -536,6 +558,9 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
             char class_buf[4];
 
             if (!job_matches_owner(job, owner))
+                continue;
+
+            if (!job_matches_status(sess, job))
                 continue;
 
             if (count >= 200) {
@@ -632,7 +657,8 @@ spool_line_callback(const char *line, unsigned linelen, void *arg)
 ** Follows mvsMF find_job_by_name_and_id() pattern.
 ** ----------------------------------------------------------------- */
 static JESJOB *
-find_job(const char *jobid_arg, JESJOB ***out_joblist)
+find_job(const ftpd_session_t *sess, const char *jobid_arg,
+         JESJOB ***out_joblist)
 {
     JES *jes;
     JESJOB **joblist;
@@ -645,7 +671,7 @@ find_job(const char *jobid_arg, JESJOB ***out_joblist)
     joblist = jesjob(jes, jobid_arg, FILTER_JOBID, 1);
     jesclose(&jes);
 
-    if (!joblist || !joblist[0]) {
+    if (!joblist || !joblist[0] || !job_matches_status(sess, joblist[0])) {
         if (joblist) jesjobfr(&joblist);
         return NULL;
     }
@@ -710,13 +736,14 @@ ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
     }
 
     /* Find the job */
-    job = find_job(jobid_arg, &joblist);
+    job = find_job(sess, jobid_arg, &joblist);
     if (!job) {
         /* z/OS: "550 Jobid J0099999 not found for JESJOBNAME=..., JESSTATUS=..., JESOWNER=..." */
         ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=ALL, JESOWNER=%s",
+            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
             jobid_arg,
             sess->jes_jobname[0] ? sess->jes_jobname : "*",
+            status_filter(sess),
             sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
         return 0;
     }
@@ -918,13 +945,14 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
     }
 
     /* Find the job to get the jobname (jescanj needs both) */
-    job = find_job(jobid_arg, &joblist);
+    job = find_job(sess, jobid_arg, &joblist);
     if (!job) {
         /* z/OS: "550 Jobid J0099999 not found for JESJOBNAME=..., ..." */
         ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=ALL, JESOWNER=%s",
+            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
             jobid_arg,
             sess->jes_jobname[0] ? sess->jes_jobname : "*",
+            status_filter(sess),
             sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
         return 0;
     }
@@ -945,9 +973,10 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
     case CANJ_NOJB:
     case CANJ_BADI:
         ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=ALL, JESOWNER=%s",
+            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
             jobid_arg,
             sess->jes_jobname[0] ? sess->jes_jobname : "*",
+            status_filter(sess),
             sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
         break;
     case CANJ_ICAN:

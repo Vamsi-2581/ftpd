@@ -5,7 +5,6 @@
 #
 # Format: KEY=VALUE (case-insensitive keys)
 # Lines starting with # are comments.
-# DASD volumes: VOLSER,UNIT (e.g. PUB001,3390)
 #
 # --- Network ---
 #
@@ -93,9 +92,6 @@ MAXRETPD=365
 # this is for implicit FTPS.
 #
 SSLPROXY=NO
-#
-# --- JES ---
-JESINTERFACELEVEL=2
 #
 # --- Default allocation parameters ---
 #

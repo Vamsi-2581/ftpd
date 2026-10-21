@@ -64,7 +64,6 @@ ftpd_session_new(ftpd_server_t *server, int sock)
     sess->alloc.retpd = 0;
 
     /* JES defaults from config */
-    sess->jes_level = server->config.jes_level;
 
     return sess;
 }

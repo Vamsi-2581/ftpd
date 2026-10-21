@@ -106,7 +106,6 @@ typedef struct state {
     char            jes_status[8];
     int             trailing;
     int             truncate;
-    int             rdw;
 } state_t;
 
 static void
@@ -122,7 +121,6 @@ snapshot(state_t *st)
     strcpy(st->jes_status, sess.jes_status);
     st->trailing = sess.trailing;
     st->truncate = sess.truncate;
-    st->rdw = sess.rdw;
 }
 
 /* Member by member: a struct compare would also compare padding. */
@@ -146,8 +144,7 @@ state_equal(const state_t *a, const state_t *b)
         && strcmp(a->jes_jobname, b->jes_jobname) == 0
         && strcmp(a->jes_status, b->jes_status) == 0
         && a->trailing == b->trailing
-        && a->truncate == b->truncate
-        && a->rdw == b->rdw;
+        && a->truncate == b->truncate;
 }
 
 /* Run one SITE argument string on a fresh session. */
@@ -269,8 +266,6 @@ main(void)
     same("FILETYPE=SEQ", "filetype=seq");
     same("TRAILING", "trailing");
     same("TRUNCATE", "truncate");
-    same("RDW", "rdw");
-    same("SBSENDEOL", "sbsendeol");
     same("DATACLAS=X", "dataclas=x");
     same("STORCLAS=X", "storclas=x");
     same("MGMTCLAS=X", "mgmtclas=x");
@@ -294,6 +289,71 @@ main(void)
     run("jesinterfacelevel=1", &st, &code, text, sizeof(text));
     CHECK(code == 200 && strstr(text, "Unrecognized parameter") != NULL,
           "jesinterfacelevel=1 is unrecognised too");
+
+    /* --- settings that took effect nowhere (#207) ---------------------- */
+
+    /* TRUNCATE is read by STOR/APPE (test/test_ftpd.sh, section "TRUNCATE"):
+    ** here only that it toggles, and toggles back. */
+    run("TRUNCATE", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.truncate == 1, "TRUNCATE toggles on");
+    run("TRUNCATE TRUNCATE", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.truncate == 0, "TRUNCATE twice toggles off again");
+
+    /* RDW and a line end FTPD does not handle are refused with 501 and
+    ** change nothing, instead of a 200 for a setting that does nothing. */
+    run("RDW", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "RDW") != NULL
+          && strstr(text, "not supported") != NULL,
+          "RDW is refused with 501");
+    run("rdw", &st, &code, text, sizeof(text));
+    CHECK(code == 501, "rdw is refused with 501 too");
+    run("RDW TRUNCATE", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.truncate == 1 && strstr(text, "applied") != NULL,
+          "RDW is refused, TRUNCATE on the same SITE is applied, and the "
+          "reply says so");
+
+    run("SBSENDEOL=CRLF", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(text, "SITE command was accepted") == 0,
+          "SBSENDEOL=CRLF is accepted: it is what FTPD does");
+    run("sbsendeol=crlf", &st, &code, text, sizeof(text));
+    CHECK(code == 200, "sbsendeol=crlf is accepted too");
+    run("SBSENDEOL=LF", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "SBSENDEOL=LF") != NULL
+          && strstr(text, "CRLF") != NULL,
+          "SBSENDEOL=LF is refused, naming the value");
+    run("SBSENDEOL=CR", &st, &code, text, sizeof(text));
+    CHECK(code == 501, "SBSENDEOL=CR is refused");
+    run("SBSENDEOL=NL", &st, &code, text, sizeof(text));
+    CHECK(code == 501, "SBSENDEOL=NL is refused");
+    run("SBSENDEOL=LFCR", &st, &code, text, sizeof(text));
+    CHECK(code == 501, "SBSENDEOL=LFCR is refused");
+    run("SBSENDEOL", &st, &code, text, sizeof(text));
+    CHECK(code == 501, "a bare SBSENDEOL is refused: it names no line end");
+
+    /* JESSTATUS is a filter now: only its four values are taken. */
+    run("", &st, &code, text, sizeof(text));
+    CHECK(st.jes_status[0] == '\0', "a fresh session filters nothing");
+    run("JESSTATUS=OUTPUT", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_status, "OUTPUT") == 0,
+          "JESSTATUS=OUTPUT sets OUTPUT");
+    run("jesstatus=active", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_status, "ACTIVE") == 0,
+          "jesstatus=active sets ACTIVE");
+    run("JESSTATUS=INPUT", &st, &code, text, sizeof(text));
+    CHECK(strcmp(st.jes_status, "INPUT") == 0, "JESSTATUS=INPUT sets INPUT");
+    run("JESSTATUS=OUTPUT JESSTATUS=ALL", &st, &code, text, sizeof(text));
+    CHECK(strcmp(st.jes_status, "ALL") == 0, "JESSTATUS=ALL resets the filter");
+    run("JESSTATUS=OUTPUT JESSTATUS", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_status, "ALL") == 0,
+          "a bare JESSTATUS goes back to ALL");
+    run("JESSTATUS=OUTPUT JESSTATUS=HELD", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_status, "OUTPUT") == 0
+          && strstr(text, "JESSTATUS must be ALL, INPUT, ACTIVE or OUTPUT")
+             != NULL,
+          "JESSTATUS=HELD is refused with a warning, OUTPUT stays");
+    run("JESSTATUS=OUT", &st, &code, text, sizeof(text));
+    CHECK(st.jes_status[0] == '\0' && strstr(text, "JESSTATUS must be") != NULL,
+          "an abbreviated JESSTATUS value is refused");
 
     /* --- minimum abbreviations, as z/OS marks them (#130) -------------- */
     same("PRIMARY=100", "PRI=100");

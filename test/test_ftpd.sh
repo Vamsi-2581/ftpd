@@ -20,6 +20,7 @@
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
 #   10. SITE in any spelling: verb, keywords and values (quote form)
 #   11. Member STOR into a PDS with a full directory: 552 + SITE DIRECTORY=
+#   12. STOR and APPE on a retained data set: 550 with the date, no IEC507D
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -1554,6 +1555,107 @@ if grep -q "^250" "$FTP_OUT"; then
     pass "The PDS can be deleted after the failure (no DD left allocated)"
 else
     fail "RMD of the PDS after the failure: $(tail -2 "$FTP_OUT" | tr '\n' ' ')"
+fi
+
+# ============================================================
+# Test 12: STOR and APPE on a retained data set (#198)
+#
+# OPEN for output of a data set whose expiration date has not passed raises
+# IEC507D and waits for an operator reply.  FTPD answers 550 with the date
+# before the OPEN instead.  Without the check the second STOR below never
+# answers; ftp_run_wd cuts such a session off, and the console still shows
+# the IEC507D to reply to.
+#
+# Needs RETPD (SITE RETPD, #130).  Expiration is one day ahead, so the data
+# sets are deleted at the end: DELE and RMD do not ask for retention.
+# ============================================================
+section "Test 12: STOR and APPE on a retained data set"
+
+DSN_RET="${HLQ}.TEST.RETSEQ"
+DSN_RETP="${HLQ}.TEST.RETPDS"
+printf 'RETAINED-000001\nRETAINED-000002\n' > "$TMPDIR/ret.txt"
+
+# ftp_run, but a session stuck in OPEN (IEC507D) is cut off after 90 s
+ftp_run_wd() {
+    local cmds="$1"
+    local capture="${2:-/dev/null}"
+
+    printf "user %s %s\n%b\nquit\n" "$USER" "$PASS" "$cmds" \
+        | timeout 90 ftp -n -v -p -P "$PORT" "$HOST" > "$capture" 2>&1
+    return $?
+}
+
+ftp_run "delete '$DSN_RET'
+rmdir '$DSN_RETP'" /dev/null
+
+info "STOR twice and APPE with RETPD=1 -> '$DSN_RET'"
+FTP_OUT="$TMPDIR/ftp_ret_seq.log"
+ftp_run_wd "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=3120
+site primary=2
+site secondary=1
+site tracks
+site retpd=1
+type ascii
+put $TMPDIR/ret.txt '$DSN_RET'
+put $TMPDIR/ret.txt '$DSN_RET'
+append $TMPDIR/ret.txt '$DSN_RET'
+CMDS
+)" "$FTP_OUT"
+RET_REFUSED=$(grep -cE "^550 .* is retained until [0-9]{4}-[0-9]{2}-[0-9]{2} \([0-9]{4}\.[0-9]{3}\)" "$FTP_OUT")
+if [ "$RET_REFUSED" -eq 2 ] && grep -q "^250 \|^226 " "$FTP_OUT"; then
+    pass "STOR creates the retained data set; STOR and APPE over it answer 550 with the date"
+else
+    fail "retained data set: $RET_REFUSED of 2 refusals answered 550 with a date (a hang is IEC507D)"
+    tail -12 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+info "STOR without RETPD over the retained data set"
+FTP_OUT="$TMPDIR/ftp_ret_plain.log"
+ftp_run_wd "type ascii
+put $TMPDIR/ret.txt '$DSN_RET'" "$FTP_OUT"
+if grep -qE "^550 .* is retained until " "$FTP_OUT"; then
+    pass "a session without RETPD is refused the same way"
+else
+    fail "STOR over a retained data set without RETPD: no 550 with a date"
+    tail -6 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+info "STOR of a member into a PDS that MKD created with RETPD=1"
+FTP_OUT="$TMPDIR/ftp_ret_pds.log"
+ftp_run_wd "$(cat <<CMDS
+site recfm=fb
+site lrecl=80
+site blksize=3120
+site primary=2
+site secondary=1
+site tracks
+site retpd=1
+mkdir '$DSN_RETP'
+type ascii
+put $TMPDIR/ret.txt '$DSN_RETP(M1)'
+put $TMPDIR/ret.txt '$DSN_RETP(M1)'
+CMDS
+)" "$FTP_OUT"
+RETP_REFUSED=$(grep -cE "^550 .* is retained until " "$FTP_OUT")
+if [ "$RETP_REFUSED" -eq 2 ]; then
+    pass "STOR into a retained PDS answers 550 with the date, new member or not"
+else
+    fail "retained PDS: $RETP_REFUSED of 2 member STORs answered 550 with a date"
+    tail -8 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+info "DELE and RMD of the retained data sets"
+FTP_OUT="$TMPDIR/ftp_ret_clean.log"
+ftp_run_wd "delete '$DSN_RET'
+rmdir '$DSN_RETP'" "$FTP_OUT"
+if [ "$(grep -c "^250 .* deleted" "$FTP_OUT")" -eq 2 ]; then
+    pass "DELE and RMD remove retained data sets"
+else
+    fail "DELE/RMD of retained data sets"
+    tail -6 "$FTP_OUT" | sed 's/^/    /'
 fi
 
 # ============================================================

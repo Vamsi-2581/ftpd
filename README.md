@@ -135,6 +135,12 @@ A parameter given without a value returns to the configured default — so
 session (`SITE RETPD` returns to no retention). `BLOCKS` counts the space in
 units of the current `BLKSIZE`.
 
+A data set whose retention period has not expired is not opened for output:
+`STOR` and `APPE` answer `550` and name the expiration date, instead of waiting
+for an operator reply (IEC507D). A PDS created with `SITE RETPD` is retained as
+a whole, so it takes no member until the period is over. `DELE` and `RMD` still
+remove a retained data set.
+
 Keywords can be abbreviated the way z/OS allows, so scripts written for z/OS
 work unchanged: `PRI=`, `SEC=`, `TR`, `CY`, `REC=`, `LR=`, `BLK=`, `DIR=`,
 `D=`, `VOL=`, `U=`, `RET=` and so on. A form that fits more than one keyword

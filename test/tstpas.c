@@ -49,47 +49,10 @@
 #include "ftpd#log.h"
 #include "ftpd#ses.h"
 #include "ftpd#xlt.h"
+#include "tstloop.h"
 
 #define DFLT_PORT       21772
-#define LOOPBACK        0x7F000001UL
 #define REPLY_WAIT      5               /* seconds a reply may take     */
-
-static void
-nap(unsigned tenths)
-{
-    ECB ecb = 0;
-
-    ecb_timed_wait(&ecb, tenths * 10, 0);
-}
-
-/* A connected pair: *cli is the client end, *srv the accepted end. */
-static int
-connected_pair(int lsn, unsigned short port, int *cli, int *srv)
-{
-    struct sockaddr_in sa;
-    struct sockaddr_in pa;
-    int                len = sizeof(pa);
-
-    *cli = socket(AF_INET, SOCK_STREAM, 0);
-    if (*cli < 0)
-        return -1;
-
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-    sa.sin_addr.s_addr = htonl(LOOPBACK);
-    if (connect(*cli, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-        closesocket(*cli);
-        return -1;
-    }
-
-    *srv = accept(lsn, (struct sockaddr *)&pa, &len);
-    if (*srv < 0) {
-        closesocket(*cli);
-        return -1;
-    }
-    return 0;
-}
 
 /* Read one reply line (up to LF) from the control connection and leave it
 ** in EBCDIC in buf.  Returns the length, 0 when the server said nothing
@@ -152,9 +115,11 @@ main(int argc, char **argv)
     unsigned short     port = DFLT_PORT;
     ftpd_server_t     *server;
     CTHDMGR           *mgr;
-    struct sockaddr_in sa;
-    int                lsn, cli, srv;
-    int                n, i;
+    int                lsn;
+    int                cli;
+    int                srv;
+    int                n;
+    int                i;
     char               buf[200];
 
     if (argc > 1 && argv[1] && argv[1][0])
@@ -172,13 +137,8 @@ main(int argc, char **argv)
     server->flags |= FTPD_ACTIVE;
     server->config.idle_timeout = 60;
 
-    lsn = socket(AF_INET, SOCK_STREAM, 0);
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-    sa.sin_addr.s_addr = htonl(LOOPBACK);
-    if (lsn < 0 || bind(lsn, (struct sockaddr *)&sa, sizeof(sa)) < 0 ||
-        listen(lsn, 5) < 0) {
+    lsn = loop_listen(port);
+    if (lsn < 0) {
         printf("FAIL: cannot listen on the loopback port, errno=%d\n", errno);
         return 8;
     }

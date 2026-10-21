@@ -52,9 +52,9 @@
 #include "ftpd.h"
 #include "ftpd#log.h"
 #include "ftpd#ses.h"
+#include "tstloop.h"
 
 #define DFLT_PORT       21771
-#define LOOPBACK        0x7F000001UL
 
 /* What the worker saw.  Heap, written by the worker task, read by main. */
 struct ctx {
@@ -81,43 +81,6 @@ worker(void *udata, CTHDWORK *work)
         ctx->got++;
         ftpd_session_free((ftpd_session_t *)data);
         data = NULL;
-    }
-    return 0;
-}
-
-static void
-nap(unsigned tenths)
-{
-    ECB ecb = 0;
-
-    ecb_timed_wait(&ecb, tenths * 10, 0);
-}
-
-/* A connected pair: *cli is the client end, *srv the accepted end. */
-static int
-connected_pair(int lsn, unsigned short port, int *cli, int *srv)
-{
-    struct sockaddr_in sa;
-    struct sockaddr_in pa;
-    int                len = sizeof(pa);
-
-    *cli = socket(AF_INET, SOCK_STREAM, 0);
-    if (*cli < 0)
-        return -1;
-
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-    sa.sin_addr.s_addr = htonl(LOOPBACK);
-    if (connect(*cli, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-        closesocket(*cli);
-        return -1;
-    }
-
-    *srv = accept(lsn, (struct sockaddr *)&pa, &len);
-    if (*srv < 0) {
-        closesocket(*cli);
-        return -1;
     }
     return 0;
 }
@@ -161,7 +124,6 @@ main(int argc, char **argv)
     struct ctx         ctx;
     CTHDMGR           *mgr;
     ftpd_session_t    *sess;
-    struct sockaddr_in sa;
     int                lsn, cli, srv;
     int                rc, n, i;
     char               buf[128];
@@ -179,13 +141,8 @@ main(int argc, char **argv)
     }
     memset(&ctx, 0, sizeof(ctx));
 
-    lsn = socket(AF_INET, SOCK_STREAM, 0);
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-    sa.sin_addr.s_addr = htonl(LOOPBACK);
-    if (lsn < 0 || bind(lsn, (struct sockaddr *)&sa, sizeof(sa)) < 0 ||
-        listen(lsn, 5) < 0) {
+    lsn = loop_listen(port);
+    if (lsn < 0) {
         printf("FAIL: cannot listen on the loopback port, errno=%d\n", errno);
         return 8;
     }

@@ -1315,6 +1315,7 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     char member[FTPD_MAX_MBR_LEN + 1];
     char fname[FTPD_MAX_DSN_LEN + FTPD_MAX_MBR_LEN + 4];
     FILE *fp;
+    const char *rmode;
     char buf[32768];
     size_t n;
     int rc;
@@ -1351,20 +1352,37 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     if (check_dataset_access(sess, dsn, RACF_ATTR_READ) != 0)
         return 0;
 
-    /* Switch to user's security environment for fopen */
-    ftpd_acee_enter(sess);
-    fp = fopen(fname, "rb");
-    ftpd_acee_leave(sess);
-    if (fp == NULL) {
-        ftpd_log(LOG_INFO, "RETR: fopen('%s') failed", fname);
-        if (member[0])
-            ftpd_session_reply(sess, FTP_550,
-                "Request nonexistent member %s(%s) to be sent.",
-                dsn, member);
-        else
-            ftpd_session_reply(sess, FTP_550,
-                "Data set %s not found", dsn);
-        return 0;
+    /* Switch to user's security environment for fopen.
+    **
+    ** A "rb" stream on RECFM=V is a run of bytes over the record boundaries
+    ** (RDWs stripped), so fread(lrecl) concatenates the records and re-wraps
+    ** them at LRECL (#185).  A text transfer of a V data set therefore
+    ** reopens it in text mode, where fgets() returns one record per call.
+    ** Only the RECFM in the DCB tells which case this is, so the first open
+    ** is always "rb". */
+    rmode = "rb";
+    for (;;) {
+        ftpd_acee_enter(sess);
+        fp = fopen(fname, rmode);
+        ftpd_acee_leave(sess);
+        if (fp == NULL) {
+            ftpd_log(LOG_INFO, "RETR: fopen('%s') failed", fname);
+            if (member[0])
+                ftpd_session_reply(sess, FTP_550,
+                    "Request nonexistent member %s(%s) to be sent.",
+                    dsn, member);
+            else
+                ftpd_session_reply(sess, FTP_550,
+                    "Data set %s not found", dsn);
+            return 0;
+        }
+        if (rmode[1] == 'b' && sess->type == XFER_TYPE_A &&
+            (fp->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V) {
+            fclose(fp);
+            rmode = "r";
+            continue;
+        }
+        break;
     }
 
     /* Track the open handle so ABEND recovery can release it (DCB +
@@ -1438,10 +1456,39 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     }
     else if (sess->type == XFER_TYPE_A) {
         /* ---------------------------------------------------------------
-        ** ASCII mode: fread lrecl bytes per record, trim, xlat, CRLF.
+        ** ASCII mode: one record per line, trim, xlat, CRLF.
         ** For FB: each fread returns exactly LRECL bytes (one record).
+        ** For V (opened in text mode above): each fgets returns one record
+        ** and its '\n'; lrecl + 2 holds the longest record, the newline and
+        ** the terminator.
         ** --------------------------------------------------------------- */
-        if (lrecl > 0) {
+        if (lrecl > 0 && rmode[1] != 'b') {
+            size_t fgsz = (size_t)lrecl + 2 > sizeof(buf)
+                              ? sizeof(buf) : (size_t)lrecl + 2;
+
+            while (fgets(buf, (int)fgsz, fp) != NULL) {
+                int end = (int)strlen(buf);
+
+                if (end > 0 && buf[end - 1] == '\n')
+                    end--;
+
+                if (!sess->trailing) {
+                    while (end > 0 && buf[end - 1] == ' ')
+                        end--;
+                }
+
+                ftpd_xlat_mvs_e2a((unsigned char *)buf, end);
+
+                buf[end]     = ASCII_CR;
+                buf[end + 1] = ASCII_LF;
+                if (ftpd_data_send(sess, buf, end + 2) < 0) {
+                    aborted = 1;
+                    break;
+                }
+                total += end + 2;
+            }
+        }
+        else if (lrecl > 0) {
             while ((n = fread(buf, 1, lrecl, fp)) > 0) {
                 int end = (int)n;
 
@@ -2480,6 +2527,12 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
                         if (stor_put(recbuf, fp->lrecl, fp, &io_errno) != 0)
                             io_err = 1;
                     } else {
+                        /* fwrite() of zero bytes writes no record, so an
+                        ** empty line vanished from V and U data sets (#185).
+                        ** It is stored as a record of one blank, which RETR
+                        ** trims back to an empty line. */
+                        if (recpos == 0)
+                            recbuf[recpos++] = ' ';
                         if (stor_put(recbuf, recpos, fp, &io_errno) != 0)
                             io_err = 1;
                     }

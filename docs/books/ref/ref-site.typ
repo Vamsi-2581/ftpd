@@ -17,8 +17,8 @@ SITE [keyword[=value] ...]
   or without #cmd("=") and a value. A word of more than 95 characters is cut.
 - The verb, the keyword and the value are not case sensitive. FTPD folds the
   keyword to upper case. It folds the values of #cmd("RECFM"), #cmd("VOLUME"),
-  #cmd("UNIT"), #cmd("FILETYPE"), #cmd("JESJOBNAME"), #cmd("JESOWNER") and
-  #cmd("JESSTATUS") too. This holds since FTPD 1.3.0 for the three JES values.
+  #cmd("UNIT"), #cmd("FILETYPE"), #cmd("DCBDSN"), #cmd("JESJOBNAME"),
+  #cmd("JESOWNER") and #cmd("JESSTATUS") too. This holds since FTPD 1.3.0 for the three JES values.
 - A keyword is at most 31 characters and a value at most 63 characters. FTPD
   cuts what is longer, without a message.
 - A keyword may be shortened (@ref-site-abbr). FTPD refuses a form that is too
@@ -56,16 +56,20 @@ SITE [keyword[=value] ...]
     [#cmd("501 SBSENDEOL=value is not supported: FTPD only handles CRLF")],
       [#cmd("SBSENDEOL") has a value other than #cmd("CRLF"), and it is the
       only word. The text names the value as the client typed it.],
+    [#cmd("501 DCBDSN: ... keeping the current values")], [#cmd("DCBDSN") names
+      a data set that FTPD cannot use as a model, and it is the only word
+      (@ref-site-dcbdsn).],
     [#cmd("501-text") and
       #cmd("501 Other parameters on this command were applied.")], [One of the
-      three #cmd("501") cases above, with more than one word on the line.],
+      four #cmd("501") cases above, with more than one word on the line.],
     [#cmd("202 SITE not necessary; you may proceed")], [No word.],
   )
 ]
 
 The code is #cmd("200") in the first three cases, #cmd("501") when #cmd("RETPD")
-is above the limit or when the line has #cmd("RDW") or a #cmd("SBSENDEOL") that
-FTPD does not handle, and #cmd("202") for no word. A script must read the first
+is above the limit, when the line has #cmd("RDW") or a #cmd("SBSENDEOL") that
+FTPD does not handle or a #cmd("DCBDSN") that FTPD refuses, and #cmd("202") for
+no word. A script must read the first
 line.
 
 The #cmd("501") takes the place of the other replies. If the same line has a
@@ -73,7 +77,7 @@ refused word and also a wrong value or a word that is not a keyword,
 the reply is the #cmd("501"), and the text about the other word is not sent.
 The other words are applied in every case. If more than one word is refused,
 the #cmd("501") names the first of them, counted from the left, whichever of
-#cmd("RETPD"), #cmd("RDW") and #cmd("SBSENDEOL") it is.
+#cmd("RETPD"), #cmd("RDW"), #cmd("SBSENDEOL") and #cmd("DCBDSN") it is.
 
 == Abbreviations <ref-site-abbr>
 
@@ -95,6 +99,7 @@ full name always wins over a shorter keyword that it starts with, which keeps
       #cmd("BLOCKS") too, not the block size.],
     [#cmd("CYLINDERS")], [#cmd("CY")], [],
     [#cmd("DATACLASS")], [#cmd("DATAC")], [],
+    [#cmd("DCBDSN")], [#cmd("DC")], [],
     [#cmd("DIRECTORY")], [#cmd("D")], [],
     [#cmd("FILETYPE")], [#cmd("FILE")], [],
     [#cmd("JESJOBNAME")], [#cmd("JESJOBN")], [],
@@ -144,6 +149,9 @@ of the full names, and still work.
       #cmd("F"), the record length is above 0 and the block size is not a
       multiple of it, FTPD rounds the block size down to a multiple (at least
       one record) and sends the text #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB"). No value: #cmd("DEFBLKSIZE").],
+    [#cmd("DCBDSN=dsn")], [The record format, record length and block size of
+      a model data set, taken at once from its label (@ref-site-dcbdsn). No
+      value: #cmd("DEFRECFM"), #cmd("DEFLRECL") and #cmd("DEFBLKSIZE").],
     [#cmd("PRIMARY=n")], [The primary quantity, 1 to 16777215. Another value:
       the setting stays and the text is #cmd("PRIMARY must be 1-16777215; keeping the current value"). No value: #cmd("DEFPRIMARY").],
     [#cmd("SECONDARY=n")], [The secondary quantity, 0 to 16777215. Another
@@ -210,6 +218,99 @@ of the full names, and still work.
 Every other word is #cmd("Unrecognized parameter"). That includes
 #cmd("JESINTERFACELEVEL"), which is a parameter of the configuration member
 (@ref-prm) and not a keyword of #cmd("SITE").
+
+== DCBDSN <ref-site-dcbdsn>
+
+#idx("DCBDSN")#idx("model data set")#idx("501", "DCBDSN")
+#cmd("SITE DCBDSN=dsn") takes the record format, the record length and the
+block size of a data set that exists, the model, and uses the three for the
+data sets that the session creates next: a partitioned data set that
+#cmd("MKD") creates, and a sequential data set that #cmd("STOR") or #cmd("APPE")
+creates because the name does not exist. It sets what #cmd("RECFM"),
+#cmd("LRECL") and #cmd("BLKSIZE") set, in one word. FTPD reads the label of the
+model. It does not read the data.
+
+*The name of the model.* It is a fully qualified data set name, with or without
+quotes. FTPD drops one quote at the start and one at the end, and folds the name
+to upper case. It does not add the working directory or a prefix. The name is
+at most 44 characters. It has no pattern and no member. Only the three values
+of the model are used. The organization of the new data set is the one that
+the command asks for, not the one of the model.
+
+*What is copied.*
+
+#tab(caption: [The values that #cmd("DCBDSN") copies])[
+  #table(columns: (1.6in, 1fr),
+    [Value], [Rule],
+    [Record format], [#cmd("F"), #cmd("V") or #cmd("U"), then #cmd("B") if the
+      model is blocked, then #cmd("A") if it has ANSI control characters. So
+      #cmd("VBA") is copied whole. #cmd("S"), #cmd("T") and #cmd("M") are not
+      copied (see below).],
+    [Record length], [As the label holds it.],
+    [Block size], [As the label holds it. FTPD does not round it to a multiple
+      of the record length, as #cmd("BLKSIZE") does.],
+  )
+]
+
+*A format that is not copied.* If the label of the model has the attribute
+#cmd("S"), #cmd("T") or #cmd("M"), FTPD does not copy it. It applies the other
+values, and the reply is the text
+#cmd("RECFM attribute x of NAME is not carried over") followed by
+#cmd("200 SITE command was accepted") (@ref-site-reply). The letter x is the
+first of #cmd("S"), #cmd("T") and #cmd("M") that the label has, in that order.
+The text names one attribute even if the label has two.
+
+*The last word wins.* #cmd("DCBDSN") stores the three values and remembers
+nothing else. FTPD applies the words of a line from left to right. A
+#cmd("RECFM"), #cmd("LRECL") or #cmd("BLKSIZE") that comes after it replaces its
+one value, and the other two keep what the model gave. After
+#cmd("SITE DCBDSN=IBMUSER.TEST.DCBMOD") and #cmd("SITE LRECL=100"), the record
+format and the block size are the model's and the record length is 100. A
+#cmd("DCBDSN") that comes after them replaces all three.
+
+*The bare keyword.* #cmd("SITE DCBDSN") with no value sets the record format,
+the record length and the block size to #cmd("DEFRECFM"), #cmd("DEFLRECL") and
+#cmd("DEFBLKSIZE"), also when they were set with #cmd("RECFM"), #cmd("LRECL") or
+#cmd("BLKSIZE") before. The reply is the plain #cmd("200").
+
+*A model that FTPD refuses.* The reply is a #cmd("501"), the three values stay
+as they were, and the reply ends with #cmd("keeping the current values"). The
+other words of the line are applied, and the reply has the two lines of
+@ref-site-reply.
+
+#tab(caption: [The #cmd("501") replies of DCBDSN])[
+  #table(columns: (3.2in, 1fr),
+    [Reply], [When],
+    [#cmd("501 DCBDSN: NAME is not cataloged; keeping the current values")],
+      [The catalog has no entry for the name.],
+    [#cmd("501 DCBDSN: no format 1 DSCB for NAME; keeping the current values")],
+      [The name is cataloged, but the label cannot be read on its volume.],
+    [#cmd("501 DCBDSN: NAME has no RECFM recorded; keeping the current values")],
+      [The label has neither #cmd("F"), #cmd("V") nor #cmd("U").],
+    [#cmd("501 DCBDSN: NAME is not a plain data set name; keeping the current values")],
+      [The name has a member in parentheses, a pattern character, an empty
+      qualifier, or a character that a data set name cannot have.],
+    [#cmd("501 DCBDSN: not a data set name; keeping the current values")],
+      [The value is empty after the quotes, or longer than 44 characters.],
+    [#cmd("501 DCBDSN: access to NAME denied; keeping the current values")],
+      [The user of the session may not read the data set (below).],
+  )
+]
+
+*The access check.* Before FTPD looks for the model, it asks RAKF whether the
+user of the session may read the data set, with the identity of the session and
+not that of the started task. A data set that RAKF does not protect counts as
+readable. When RAKF denies the read, the reply is the last row of the table and
+the log has a warning that names the data set and the user. This keeps a user
+from learning the attributes of a data set that RAKF keeps from them.
+
+*What it does not do.* #cmd("STAT") does not show the three values, and
+#cmd("DCBDSN") has no value of its own to show. It has no effect on a data set
+that exists: FTPD sends no attributes for it. The UFS and JES views do not use
+the three values.
+
+Before FTPD 1.3.0 the word was not a keyword, and the reply to it was
+#cmd("Unrecognized parameter").
 
 == TRUNCATE <ref-site-truncate>
 

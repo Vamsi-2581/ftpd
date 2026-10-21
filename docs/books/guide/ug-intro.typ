@@ -157,5 +157,8 @@ the book explains the subject:
       #cmd("DSNPRFX"), or a checkpoint that is neither cataloged nor on an
       online volume). Before, the JES view needed both.],
       [@ug-install-jes],
+    [#cmd("SITE DCBDSN=dsn") takes the record format, record length and block
+      size of a cataloged data set for the data sets that follow. Before,
+      #cmd("DCBDSN") was an unknown word.], [@ug-site-keys],
   )
 ] <ug-intro-new-tab>

@@ -64,6 +64,13 @@ _FTPD Reference_ lists the shortest forms in "The SITE Command".
     [#cmd("BLKSIZE=n")], [the block size, also written #cmd("BLOCKSIZE=n"). For a fixed record format that
       is not a multiple of the record length, FTPD rounds it down to one,
       and the reply says so with #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB").],
+    [#cmd("DCBDSN=dsn")], [the record format, record length and block size of
+      a data set that exists, copied at once from its label. Give the full name,
+      with or without quotes. A name that is not cataloged, a pattern or a
+      member is refused with a #cmd("501"), and the values stay. A
+      #cmd("RECFM"), #cmd("LRECL") or #cmd("BLKSIZE") after it replaces its one
+      value. Without a value the three return to the defaults. See the
+      _FTPD Reference_, "DCBDSN".],
     [#cmd("PRIMARY=n")], [the primary space quantity, 1 to 16777215. Another
       value is refused with #cmd("PRIMARY must be 1-16777215; keeping the current value").],
     [#cmd("SECONDARY=n")], [the secondary quantity, 0 to 16777215. Zero is a

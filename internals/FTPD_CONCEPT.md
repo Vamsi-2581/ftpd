@@ -111,6 +111,14 @@ ten 80-byte records in a 3120-byte block are indistinguishable from a full
 block. z/OS FTP does not implement `SIZE` for data sets either. Clients use the
 value for resume offsets, so an estimate is worse than an honest `502`.
 
+`FEAT` lists `SIZE` and `MDTM` in both views (#208). A session starts in the
+MVS view and clients read `FEAT` once, after the login; a `FEAT` that named the
+two only in the UFS view would hide them from every UFS user. The price is that
+a client which trusts `FEAT` and asks in the MVS view gets `502`, the usual
+"not available for this object" that clients carry on from. `test/test_ftpd.sh`
+Test 14 pins both halves: one `FEAT` reply in both views, `502` for data sets,
+`213` for UFS.
+
 ### 2.2 z/OS-Compatible SITE Commands
 
 The SITE command is the key differentiator. We implement the subset that makes sense on MVS 3.8j:
@@ -1201,6 +1209,7 @@ Note: The z/OS 3.1 test server returned `211 no Extensions supported` (with SIZE
 
 ```
 211-Features supported
+ EPSV
  SIZE
  MDTM
  SITE FILETYPE
@@ -1208,5 +1217,9 @@ Note: The z/OS 3.1 test server returned `211 no Extensions supported` (with SIZE
  UTF8
 211 End
 ```
+
+The reply is the same in the MVS and the UFS view (and with `SSLPROXY=YES`
+gets ` PBSZ` and ` PROT` before `211 End`); see §2.1 for why `SIZE` and `MDTM`
+stay listed although the MVS view answers them with `502`.
 
 `REST STREAM` is **not** advertised because z/OS requires MODE B or C for REST (returns `504 Restart requires Block or Compressed transfer mode` in MODE S). Since we only support MODE S in Phase 1, REST is not available. REST support may be added when MODE B is implemented.

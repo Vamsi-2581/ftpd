@@ -23,6 +23,8 @@
 #   12. STOR and APPE on a retained data set: 550 with the date, no IEC507D
 #   13. Byte counters: F FTPD,STATS counts every transferred byte once
 #       (needs FTPD_CONSOLE, see below)
+#   14. FEAT, SIZE and MDTM in the MVS and in the UFS view: one FEAT reply
+#       in both, 502 for SIZE/MDTM on data sets, 213 for UFS
 #
 # Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
 # reach.  Set FTPD_CONSOLE to a command that sends one operator command and
@@ -1781,6 +1783,94 @@ delete cnt.bin
 cd /
 rmdir $UFS_CNTDIR" /dev/null
 fi
+
+# ============================================================
+# TEST 14: FEAT, SIZE and MDTM in the MVS and the UFS view (#208)
+#
+# FEAT lists SIZE and MDTM whatever the view is: a session starts in the
+# MVS view, clients read FEAT once after the login, and a FEAT that left
+# the two out there would hide them from every UFS user.  In the MVS view
+# both commands answer 502 (a data set has no exact byte count, #88); in
+# the UFS view they answer 213.  This test pins that split, so a change to
+# one side has to change the other and the books on purpose.
+#
+# UFS is asked about the root directory "/": it always exists, and it
+# needs no data connection to create a file first.
+# ============================================================
+section "Test 14: FEAT, SIZE and MDTM in the MVS and the UFS view"
+
+# feat_block <log>: the last FEAT reply in a client log, without CRs
+feat_block() {
+    tr -d '\r' < "$1" | awk '
+        /^211-/ { inb = 1; blk = "" }
+        inb     { blk = blk $0 "\n" }
+        /^211 / { inb = 0; last = blk }
+        END     { printf "%s", last }'
+}
+
+FTP_OUT="$TMPDIR/ftp_feat_mvs.log"
+ftp_run "$(cat <<CMDS
+quote FEAT
+quote SIZE ${HLQ}.TEST.NOSUCH
+quote MDTM ${HLQ}.TEST.NOSUCH
+CMDS
+)" "$FTP_OUT"
+feat_block "$FTP_OUT" > "$TMPDIR/feat_mvs.txt"
+
+if grep -q '^ SIZE$' "$TMPDIR/feat_mvs.txt" \
+   && grep -q '^ MDTM$' "$TMPDIR/feat_mvs.txt"; then
+    pass "FEAT in the MVS view lists SIZE and MDTM"
+else
+    fail "FEAT in the MVS view: SIZE and MDTM not both listed"
+    sed 's/^/    /' "$TMPDIR/feat_mvs.txt"
+fi
+if tr -d '\r' < "$FTP_OUT" | grep -q '^502 SIZE'; then
+    pass "SIZE on a data set answers 502"
+else
+    fail "SIZE on a data set: expected 502"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+if tr -d '\r' < "$FTP_OUT" | grep -q '^502 MDTM'; then
+    pass "MDTM on a data set answers 502"
+else
+    fail "MDTM on a data set: expected 502"
+    tail -5 "$FTP_OUT" | sed 's/^/    /'
+fi
+
+if [ "${UFS_AVAILABLE:-0}" = "1" ]; then
+    FTP_OUT="$TMPDIR/ftp_feat_ufs.log"
+    ftp_run "$(cat <<CMDS
+cd /
+quote FEAT
+quote SIZE /
+quote MDTM /
+CMDS
+)" "$FTP_OUT"
+    feat_block "$FTP_OUT" > "$TMPDIR/feat_ufs.txt"
+
+    if [ -s "$TMPDIR/feat_ufs.txt" ] \
+       && cmp -s "$TMPDIR/feat_mvs.txt" "$TMPDIR/feat_ufs.txt"; then
+        pass "FEAT is the same reply in the UFS view as in the MVS view"
+    else
+        fail "FEAT differs between the MVS and the UFS view"
+        diff "$TMPDIR/feat_mvs.txt" "$TMPDIR/feat_ufs.txt" | sed 's/^/    /'
+    fi
+    if tr -d '\r' < "$FTP_OUT" | grep -Eq '^213 [0-9]+$'; then
+        pass "SIZE in the UFS view answers 213"
+    else
+        fail "SIZE in the UFS view: expected 213 and a number"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+    if tr -d '\r' < "$FTP_OUT" | grep -Eq '^213 [0-9]{14}$'; then
+        pass "MDTM in the UFS view answers 213 and YYYYMMDDHHMMSS"
+    else
+        fail "MDTM in the UFS view: expected 213 and 14 digits"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+else
+    info "UFS not available, skipping the UFS half of Test 14"
+fi
+
 
 # ============================================================
 # Summary

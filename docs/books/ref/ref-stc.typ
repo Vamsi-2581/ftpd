@@ -129,8 +129,13 @@ FTPD has three kinds of tasks:
 - The socket thread opens the listener, accepts the connections and hands each
   to a worker. It checks every second whether FTPD is ending.
 - The worker threads run the sessions. FTPD creates the pool with
-  #cmd("MAXSESSIONS") as its size. One worker serves one session until the client
-  quits or the connection closes.
+  #cmd("MAXSESSIONS") as its size, but with at least 4 threads. One worker serves
+  one session until the client quits or the connection closes.
+
+When #cmd("MAXSESSIONS") is below 4, FTPD writes the warning
+#cmd("[WARN ] initialize: MAXSESSIONS=n is below 4, worker pool raised to 4, at most n sessions are accepted")
+to #cmd("STDOUT") at the start. It has no number and no console message. The
+session limit stays #cmd("MAXSESSIONS").
 
 The socket thread closes a connection at once, without a reply, when
 #cmd("MAXSESSIONS") sessions are active already. It writes a warning to

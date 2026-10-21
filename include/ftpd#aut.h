@@ -8,6 +8,9 @@
 ** Authenticate user via RAKF.
 ** Called from the PASS command handler.
 **
+** - Answers 530 at once, without calling RACF, when the server is not
+**   APF-authorized (server->authorized): racf_login() would ABEND S047.
+**   The attempt does not count towards the 3 failed logins.
 ** - Calls racf_login() to verify userid/password
 ** - Checks FACILITY class resource FTPAUTH for authorization
 ** - Sets session state (authenticated, hlq, mvs_cwd, acee)

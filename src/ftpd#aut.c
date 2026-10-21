@@ -25,6 +25,27 @@ ftpd_auth_pass(ftpd_session_t *sess, const char *password)
     char user[9];
     char pass[9];
 
+    /* Without program authorization racf_login() cannot fail politely: it
+    ** MODESETs into supervisor state and the task ABENDs S047, so nothing
+    ** below this point is reachable.  Say so instead.  This is neither a
+    ** wrong password nor a reason to close the session, so the attempt is
+    ** not counted and the client may go on with USER, SYST, NOOP or QUIT.
+    ** Logged once per server: the operator has FTPD003W, and a client can
+    ** send PASS as often as it likes. */
+    if (!sess->server->authorized) {
+        if (!sess->server->unauth_logged) {
+            sess->server->unauth_logged = 1;
+            ftpd_log(LOG_ERROR, "%s: login refused, FTPD is not APF "
+                     "authorized (see FTPD003W); no user can be logged in",
+                     __func__);
+        }
+        ftpd_session_reply(sess, FTP_530,
+            "Login not possible: FTPD is not APF authorized. "
+            "Ask the administrator to check the FTPD003W console message.");
+        sess->state = SESS_AUTH_USER;
+        return 0;
+    }
+
     /* Uppercase userid and password (RAKF requires uppercase) */
     {
         int i;

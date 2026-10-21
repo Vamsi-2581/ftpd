@@ -132,6 +132,16 @@ struct ftpd_server {
     char            enq_rname[16];  /* "FTPD.PORT.nnnnn": the single
                                     ** instance ENQ, held by main's TCB
                                     ** for the life of the server      */
+    int             authorized;     /* the task is APF-authorized, set
+                                    ** once by main() after the APF setup.
+                                    ** 0 (also the memset value) is the
+                                    ** fail-closed reading: racf_login()
+                                    ** and racf_set_acee() MODESET into
+                                    ** supervisor state and ABEND S047
+                                    ** without it, so neither is called
+                                    ** (#258)                          */
+    int             unauth_logged;  /* the unauthorized PASS refusal has
+                                    ** been logged, once per server     */
     ACEE            *stc_acee;      /* identity RAKF gave the STC, read at
                                     ** init; recovery resets ASXBSENV
                                     ** to this after an ABEND          */

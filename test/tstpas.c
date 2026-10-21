@@ -9,6 +9,17 @@
 ** same MODESET -- a second S047, swallowed by the try() around the recovery,
 ** so the client never got a reply to PASS.
 **
+** Two rounds:
+**
+**   1  the server knows it is not authorized (server->authorized == 0, as
+**      main() sets it): PASS is refused with 530 before racf_login(), the
+**      failed-login counter does not move, the session goes on.
+**   2  the server believes it is authorized, which the test task is not:
+**      racf_login() ABENDs S047 and so does the identity reset in
+**      ftpd_session_recover().  The recovery must still tell the client
+**      (451) and go on with the next command.  This is the "recovery dies
+**      silently" case on its own, without the check of round 1.
+**
 ** The test runs the real session loop (ftpd_session_run) in a real worker of
 ** a real thread manager and talks to it over a loopback connection, the way
 ** a client does: the banner, USER, PASS, NOOP, QUIT.  The test task itself
@@ -174,6 +185,7 @@ main(int argc, char **argv)
 
     CHECK_EQ(__isauth(), 0,
              "precondition: the test task is not APF-authorized");
+    server->authorized = 0;
 
     mgr = cthread_manager_init(1, ftpd_session_run, server, 64 * 1024);
     if (!mgr) {
@@ -204,6 +216,8 @@ main(int argc, char **argv)
     n = reply(cli, buf, sizeof(buf));
     CHECK(is_code(buf, n, "530"),
           "PASS is answered 530 within the time a reply may take");
+    CHECK(n > 3 && strstr(buf, "APF") != NULL,
+          "... and the text names the cause");
 
     /* Three more in a row: nothing counts them as failed logins or as
     ** consecutive ABENDs, so the session is still there afterwards. */
@@ -222,6 +236,41 @@ main(int argc, char **argv)
     CHECK_EQ(command(cli, "QUIT"), 0, "QUIT sent");
     n = reply(cli, buf, sizeof(buf));
     CHECK(is_code(buf, n, "221"), "QUIT is answered 221");
+
+    closesocket(cli);
+
+    /* ---- round 2: the recovery ABENDs again ------------------------- */
+
+    server->authorized = 1;
+    if (connected_pair(lsn, port, &cli, &srv) != 0 ||
+        ftpd_session_queue(server, ftpd_session_new(server, srv)) != 0) {
+        printf("FAIL: round 2: no second session\n");
+        return 8;
+    }
+
+    n = reply(cli, buf, sizeof(buf));
+    CHECK(is_code(buf, n, "220"), "round 2: the banner is sent");
+
+    command(cli, "USER IBMUSER");
+    n = reply(cli, buf, sizeof(buf));
+    CHECK(is_code(buf, n, "331"), "round 2: USER is answered 331");
+
+    for (i = 0; i < 2; i++) {
+        command(cli, "PASS SECRET");
+        n = reply(cli, buf, sizeof(buf));
+        CHECK(is_code(buf, n, "451"),
+              "round 2: PASS ABENDs twice and is still answered (451)");
+        command(cli, "USER IBMUSER");
+        n = reply(cli, buf, sizeof(buf));
+    }
+
+    command(cli, "NOOP");
+    n = reply(cli, buf, sizeof(buf));
+    CHECK(is_code(buf, n, "200"), "round 2: the session is still usable");
+
+    command(cli, "QUIT");
+    n = reply(cli, buf, sizeof(buf));
+    CHECK(is_code(buf, n, "221"), "round 2: QUIT is answered 221");
 
     closesocket(cli);
     nap(5);

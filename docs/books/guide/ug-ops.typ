@@ -355,6 +355,13 @@ If FTPD could not even set up the recovery, the message says so in parentheses,
 #cmd("FTPD070E ABEND RECOVERY (ESTAE CREATE FAILED) CMD=... SOCKET=... TOTAL=..."),
 and the command did not run.
 
+The first step of the recovery puts the identity of the started task back. If
+that step ends in an ABEND itself, FTPD goes on with the recovery and writes
+#cmd("FTPD077E IDENTITY RESET ABENDED Sxxx -- ASXBSENV MAY STILL HOLD A USER ACEE")
+before the #cmd("FTPD070E"). The address space may then still carry the
+security environment of the user of that session. Stop FTPD, start it again and
+report the ABEND code. FTPD 1.3.0 writes this message.
+
 The client gets one of three replies:
 
 - *The data set is full:* the ABEND is #cmd("SB37"), #cmd("SD37") or

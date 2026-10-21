@@ -386,7 +386,7 @@ gating anything.
 | `RAKF008W illegal operation -- access denied` | The `RAKFADM` FACILITY profile denies the table-update utility |
 | `FTPD004I STC RUNS AS STC/STCGROUP` | No mapping of the STC name `FTPD` applies — the RAKF release has none, or the name is not in its configuration (on RAKF 2.0.0: no userid `FTPD` in `USERS`). FTPD is running with Operations authority |
 | `FTPD004W NO SECURITY ENVIRONMENT` | The address space has no ACEE. RAKF permits any access without one |
-| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. Commands that need authorization fail. On RAKF 2.0.0 the group of the `FTPD` user may lack READ on `FACILITY` `SVC244` — section 2 |
+| `FTPD003W APF SETUP FAILED RC=n` | No APF authorisation and no SVC 244. Nobody can log in: every `PASS` answers `530 Login not possible: FTPD is not APF authorized`. On RAKF 2.0.0 the group of the `FTPD` user may lack READ on `FACILITY` `SVC244` — section 2 |
 | `ADDUSER`, `PERMIT` and the other RAKF commands refuse to run | The user lacks the SPECIAL authority (column 30 of `USERS`, RAKF 2.0.0) — section 1 |
 | `530 Login incorrect` for a valid user | Wrong password, or the user is not in `USERS`. A user added without `S RAKF` does not exist yet |
 | `530 Not authorized for FTP access` | `FTPAUTH` denies this user — check the group in columns 53–60 |

@@ -137,8 +137,15 @@ you added an APF entry is not a decision of the site but a symptom.
 
 FTPD warns and keeps running when the authorization fails
 (#cmd("FTPD003W APF SETUP FAILED RC=n")). The server starts and accepts
-connections, but the commands that need the authority fail one by one. Treat
-that message as an installation that is not finished.
+connections, but nobody can log in. Every #cmd("PASS") gets the reply
+#cmd("530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message."). The session stays open. The client can
+send #cmd("USER"), #cmd("SYST"), #cmd("NOOP") and #cmd("QUIT"), and a command
+that needs a login gets #cmd("530 Not logged in."). The refused #cmd("PASS") does not count as a failed login, so the session
+is not closed after three of them. The log in the DD name #cmd("STDOUT") has one
+line with the level #cmd("[ERROR]") for it per run of the server. Before FTPD
+1.3.0 FTPD did not answer #cmd("PASS") at all, and it closed the session after
+the third one with #cmd("FTPD071E") and no reply. Treat #cmd("FTPD003W") as an
+installation that is not finished.
 
 The two routes differ in one respect that matters when you debug FTPD. An APF
 entry authorizes the job step before the program is fetched, so MVS loads FTPD
@@ -686,8 +693,9 @@ libraries are the way back until the banner says that the new release runs:
     [#cmd("S0C4") at the start, no #cmd("FTPD000I")], [FTPD 1.0.0 started from
       an APF-authorized library. Upgrade to 1.0.1, or take the APF entry out
       (@ug-install-auth).],
-    [#cmd("FTPD003W APF SETUP FAILED")], [No RAKF, so no SVC 244, and no APF
-      entry (@ug-install-auth).],
+    [#cmd("FTPD003W APF SETUP FAILED"), and every #cmd("PASS") gets
+      #cmd("530 Login not possible: FTPD is not APF authorized")], [No RAKF, so no SVC 244, and no APF
+      entry (@ug-install-auth). Nobody can log in until this is fixed.],
     [#cmd("FTPD002E FTPD IS ALREADY ACTIVE")], [An older instance is up.
       #cmd("P FTPD") first.],
     [#cmd("530") for a valid user], [The RAKF user or password is wrong, or the

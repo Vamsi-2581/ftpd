@@ -189,9 +189,19 @@ Unlike UFSD, FTPD **warns and keeps running** when authorisation fails:
 FTPD003W APF SETUP FAILED RC=n
 ```
 
-The server starts and accepts connections, but the commands that need
-authorisation fail one by one and say so. Treat that message as an
-install that is not finished.
+The server starts and accepts connections, but nobody can log in. Every
+`PASS` is answered
+
+```
+530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message.
+```
+
+The session stays open and usable (`USER`, `SYST`, `NOOP`, `QUIT`); the
+attempt does not count as a failed login, so the session is not closed after
+three of them. The commands that need a login answer `530 Not logged in.` The log (`STDOUT`)
+gets one `[ERROR]` line for it per run of the server. Before 1.3.0 `PASS` was
+not answered at all, and the session was closed after three of them with
+`FTPD071E` and no reply. Treat `FTPD003W` as an install that is not finished.
 
 ---
 
@@ -903,7 +913,7 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | SMP reports success, but the module is not where you expected | A ddname says nothing about the dataset behind it. Check the JCL, then look at the library itself |
 | `S806` (module not found) at `/S FTPD` | `STEPLIB` in the procedure does not name the LINKLIB the APPLY wrote to |
 | `/S FTPD` rejected — procedure not found | Procedure not copied into a PROCLIB in the started-task concatenation |
-| `FTPD003W APF SETUP FAILED` | No RAKF (so no SVC 244) and no APF entry — step 2 |
+| `FTPD003W APF SETUP FAILED`; every `PASS` answers `530 Login not possible: FTPD is not APF authorized` | No RAKF (so no SVC 244) and no APF entry — step 2. Nobody can log in until this is fixed |
 | `FTPD004I STC RUNS AS STC/STCGROUP` | RAKF assigned the default started-task account, which has Operations authority — step 8 |
 | `FTPD004W NO SECURITY ENVIRONMENT FOR THE STC` | The address space has no ACEE, and RAKF permits any access without one — step 8 |
 | `FTPD002E FTPD IS ALREADY ACTIVE ON PORT n` | An older instance is still up. `/P FTPD` first |

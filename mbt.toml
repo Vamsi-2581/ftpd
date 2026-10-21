@@ -91,6 +91,29 @@ sources = ["test/tstdsn.c", "src/ftpd#dsn.c"]
 [test.TSTRET]
 sources = ["test/tstret.c", "src/ftpd#ret.c"]
 
+# ftpd_abd_dd_state() -- is the DD of an abandoned transfer
+# still in the TIOT?  FTPD076W says "DD STILL HELD" only when it is (#232).
+# ftpd#abd.c is free of project and MVS headers, so this is DUAL like TSTRET.
+[test.TSTABD]
+sources = ["test/tstabd.c", "src/ftpd#abd.c"]
+
+# The same check against the real TIOT: an allocated DD is found, a freed one
+# is not, and the FILE's own DD name is the one the TIOT lists (#232).
+# MVS-only; the data set is a temporary one.
+[test.TSTABT]
+host = false
+sources = ["test/tstabt.c", "src/ftpd#abd.c"]
+
+# The case behind FTPD076W: a STOR into a PDS with a full directory ends in an
+# SB14 in the CLOSE, recovery abandons the FILE, and the DD that is gone must not
+# be reported as held (#232).  MVS-only: a real PDS and a real ABEND.  parm
+# names the scratch PDS the test creates and deletes (see TSTPRM for why the
+# HLQ is written out and why the name stays short).
+[test.TSTABR]
+host = false
+parm = "IBMUSER.FTPD.TABR"
+sources = ["test/tstabr.c", "src/ftpd#abd.c"]
+
 # ftpd_rec_maxdata()/ftpd_rec_keep() -- how much of a text line one record
 # holds, so STOR can refuse or truncate an overlong line instead of cutting it
 # silently (#207).  ftpd#rec.c is free of project and MVS headers: DUAL.

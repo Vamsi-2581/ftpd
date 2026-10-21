@@ -351,8 +351,18 @@ the session goes on with the next command:
       [#cmd("STOR") over a data set with the expiration date 99365 or 99366,
       which never expires. For #cmd("APPE") the last word is
       #cmd("appending").],
+    [#cmd("550 NAME has the expiration date 99000 and is not opened for writing.")],
+      [#cmd("STOR") over a data set with the expiration date 99000, year 99
+      and day 0. For #cmd("APPE") the last word is #cmd("appending").],
   )
 ]
+
+- *The date 99000.* The value is no calendar date, but the system treats the
+  data set as retained all the same: without the check, the open would ask the
+  operator with #cmd("IEC507D"). FTPD refuses it with its own reply and writes
+  #cmd("STOR: NAME has the expiration date 99000, refused") to the log
+  (#cmd("APPE:") for an append). Other values with day 0, such as 26000, count
+  as no expiration date.
 
 - *The date.* A data set expires on its expiration date. On that day
   #cmd("STOR") and #cmd("APPE") open it, and from the next day on they get

@@ -683,6 +683,19 @@ DEFSPACETYPE=TRACK
   keeps trying a listener port it cannot have yet — a port still held, or a
   stack that is not up. Giving up ends the started task, so raise `BINDTRIES`
   if `/S FTPD` runs early in an IPL.
+- `MAXRETPD` is the most days a client may ask for with `SITE RETPD`: 365 unless
+  you set it, 0 to 9999. FTPD does not store into a data set with an unexpired
+  retention period (`STOR` and `APPE` are answered `550`), so the limit caps
+  how long a client can keep a name blocked that way. `SITE RETPD=n` with `n`
+  above the limit is answered
+  `501 RETPD=n exceeds the server limit of N days; keeping the current value`
+  and the session keeps its retention period. `MAXRETPD=0` allows no retention
+  at all. A value that is not a whole number from 0 to 9999 is ignored with a
+  warning in the log (`MAXRETPD must be 0..9999, keeping N`) and the previous
+  value stays. A `FTPDPRM` from an earlier release needs no change: without the
+  key the limit is 365, and `SITE RETPD` itself is new in 1.3.0. The shipped
+  `FTPDPRM0` carries the key. `/F FTPD,CONFIG` shows the value in use as
+  `FTPD061I   MAXRETPD=n`.
 
 A `#` in the first non-blank column comments a line out — it has to be first,
 because a `#` anywhere else is data.

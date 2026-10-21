@@ -268,18 +268,38 @@ shows #cmd("FTPD070E ABEND SB14 RECOVERED CMD=STOR") as well
 (@ug-ops-abend).
 
 The code is #cmd("552") for the reason given in @ug-data-space: a retry meets
-the same full directory. The partitioned data set is as it was before. The
-member that failed is not in it, the members stored before keep their records,
-and the started task goes on serving.
+the same full directory. The member that failed is not in the data set, and
+the started task goes on serving.
 
 The directory of the partitioned data set cannot be extended. To get more
-room:
+room, the members have to move into a new partitioned data set that has more
+directory blocks:
 
-+ Set the number of directory blocks with #cmd("SITE DIRECTORY=n"), higher
-  than the number the full data set has.
-+ Create a new partitioned data set with #cmd("MKD").
-+ Copy the members into it, and delete the old data set when it is no longer
-  needed.
++ Find out how many directory blocks the full data set has. FTPD does not show
+  the number, and #cmd("LIST") does not either. Ask the person who looks after
+  the data set or who created it. If you created it with #cmd("MKD"), you know
+  the value of #cmd("SITE DIRECTORY") you used, or #cmd("DEFDIRECTORY") of the
+  server if you set none (@ug-site).
++ Make the name of the new partitioned data set free. #cmd("MKD") answers
+  #cmd("550") for a name that exists. Either give the new data set another
+  name, or rename the full one first with #cmd("RNFR") and #cmd("RNTO")
+  (@ug-data-manage).
++ Set a number higher than that of the full data set with
+  #cmd("SITE DIRECTORY=n"), and create the new data set with #cmd("MKD").
+  #cmd("SITE DIRECTORY") acts on #cmd("MKD") only. A #cmd("STOR") that creates
+  a data set makes a sequential one.
++ Copy the members one by one: #cmd("RETR") each member from the old data set
+  to the client, and #cmd("STOR") it into the new one. FTPD has no command that
+  copies on the server. On the host, the utility IEBCOPY does the same work.
++ Delete the old data set when it is no longer needed.
+
+A transfer carries the records of a member and nothing else. What the
+directory entry holds besides them, such as the ISPF statistics that
+#cmd("LIST") shows, is not carried, and an alias is not recreated. A member
+that was fetched and stored under the name of an alias is a member of its own.
+
+A partitioned data set that FTPD did not create is created again with the tool
+that created it, with more directory blocks.
 
 == Appending <ug-data-appe>
 

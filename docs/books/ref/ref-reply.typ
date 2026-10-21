@@ -174,10 +174,11 @@ again unless something changes. FTPD sends it in these cases:
       takes it for a full directory of the partitioned data set, as the system
       found no room for the entry of the member. "Most likely" because FTPD does
       not get the reason code, which is in message #cmd("IEC217I")
-      (#cmd("B14-0C")). The directory cannot be extended: create the data set
-      again with #cmd("SITE DIRECTORY=n") and #cmd("MKD"), and copy the
-      members. The partitioned data set is unchanged. See "When the Directory
-      Is Full" in the _FTPD User's Guide_.],
+      (#cmd("B14-0C")). The directory cannot be extended: create a new data set
+      under another name with #cmd("SITE DIRECTORY=n") and #cmd("MKD"), and
+      copy the members with #cmd("RETR") and #cmd("STOR"). The member that
+      failed is not in the data set. See "When the Directory Is Full" in the
+      _FTPD User's Guide_.],
     [#cmd("Requested file action aborted: no space for the file. ...")],
       [A write to a UFS file found the file system full, or the file at its
       largest size.],

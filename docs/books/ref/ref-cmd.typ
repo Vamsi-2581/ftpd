@@ -200,7 +200,9 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       (#cmd("125 Appending to data set NAME")). Creates a data set or a member
       that does not exist. A member that exists, or a partitioned data set
       without a member, gets #cmd("550"), and so does a data set whose
-      retention period has not expired (@ref-site-retained). UFS:
+      retention period has not expired (@ref-site-retained). A member that
+      does not exist and finds no room in the directory of its partitioned
+      data set gets a #cmd("552") (@ref-reply-552). UFS:
       #cmd("502 APPE not supported for UFS").],
   )
 ]

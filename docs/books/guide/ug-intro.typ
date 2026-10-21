@@ -67,7 +67,7 @@ FTPD runs on MVS 3.8j with these parts:
 - *UFSD*, if the UFS view is used. UFSD is a soft requirement: without it
   every UFS request is answered with #cmd("550 UFS service not available").
 
-FTPD 1.3 is built against LIBC/370 2.24.1, and its load module is
+FTPD 1.3 is built against LIBC/370 2.25.1, and its load module is
 link-edited authorized (AC(1)). Which libraries to install, how to
 authorize them and how to upgrade from an earlier release is the subject of
 @ug-install.
@@ -115,8 +115,8 @@ the book explains the subject:
     [The parameter #cmd("DEFDIRECTORY") sets the directory blocks of a
       partitioned data set that #cmd("MKD") creates. Before, it was always 10
       unless the client sent #cmd("SITE DIRECTORY=").], [@ug-site-keys],
-    [A #cmd("MAXSESSIONS") below 4 works. FTPD runs at least 4 worker threads
-      and warns in the log. Before, no session started.], [@ug-ops-ses],
+    [A #cmd("MAXSESSIONS") of 1, 2 or 3 works. FTPD runs one worker thread for
+      each allowed session. Before, no session started.], [@ug-ops-ses],
     [A text line that is longer than the record of the data set makes
       #cmd("STOR") and #cmd("APPE") fail with #cmd("451"), and a data set that
       the command created is removed. Before, FTPD cut the line without a

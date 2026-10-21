@@ -78,10 +78,8 @@ within 30 seconds loses the port.
     [Parameter], [Default], [Rules],
     [#cmd("MAXSESSIONS")], [10], [The number of sessions at the same time, 1 or
       more. A value below 1 (and a text that is not a number) gives 1, without
-      a warning. FTPD checks no upper limit. FTPD runs at least 4 worker
-      threads. A value below 4 works: FTPD accepts at most that many sessions
-      and writes the warning #cmd("MAXSESSIONS=n is below 4, worker pool raised to 4, at most n sessions are accepted")
-      to #cmd("STDOUT") at the start (@ref-stc-thr).],
+      a warning. FTPD checks no upper limit. FTPD runs one worker thread for
+      each session (@ref-stc-thr).],
     [#cmd("IDLETIMEOUT")], [300], [The seconds without a command after which FTPD
       sends #cmd("421") and closes the session. A value of 0 or below, or a
       text that is not a number, gives the warning #cmd("IDLETIMEOUT must be > 0") and 300.],

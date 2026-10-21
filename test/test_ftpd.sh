@@ -16,6 +16,7 @@
 #   6.  Cleanup (DELE/RMD)
 #   7.  Out of space (x37): permanent 552, no hang, data set scratched
 #   8.  Failed member STOR into a full PDS: 552, directory untouched
+#   16. Text STOR/RETR in RECFM=VB and VBA: one record per line (#185)
 #   9.  APPE: appends to a sequential data set, creates what is missing,
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
 #   10. SITE in any spelling: verb, keywords and values (quote form)
@@ -2090,6 +2091,82 @@ else
 fi
 [ -n "$JFL_ID" ] && ftp_run "site filetype=jes
 quote DELE $JFL_ID" /dev/null
+
+# ============================================================
+# TEST 16: Text STOR and RETR in RECFM=VB and VBA (#185)
+#
+# A variable-length data set holds records of different lengths, and a text
+# RETR has to give one line per record.  The binary stream libc370 hands out
+# for fopen "rb" runs on across record boundaries on RECFM=V, so reading with
+# fread(lrecl) used to concatenate the records and re-wrap them at LRECL
+# (15 lines came back as 3).  FB is the control: it never had the problem.
+# The lines differ in length, one is empty, one is a single character and one
+# is the longest the record takes (LRECL 80 less the 4-byte RDW).
+# ============================================================
+section "Test 16: Text STOR and RETR in RECFM=VB and VBA"
+
+VBFILE="$TMPDIR/test_vb.txt"
+awk 'BEGIN{
+    for (i = 1; i <= 15; i++) {
+        if (i == 4)       { print ""; continue }
+        if (i == 9)       { print "Z"; continue }
+        n = (i == 15) ? 76 : i * 5
+        s = sprintf("L%02d:", i)
+        while (length(s) < n) s = s "x"
+        print s
+    }
+}' > "$VBFILE"
+VBLINES=$(wc -l < "$VBFILE")
+
+for RF in FB VB VBA; do
+    DSN_VB="${HLQ}.TEST.TXT${RF}"
+    VBBACK="$TMPDIR/test_vb_back_$RF.txt"
+    rm -f "$VBBACK"
+    ftp_run "delete '$DSN_VB'" /dev/null
+
+    info "STOR (TYPE A) $VBLINES lines -> '$DSN_VB' RECFM=$RF"
+    FTP_OUT="$TMPDIR/ftp_vb_up_$RF.log"
+    ftp_run "$(cat <<CMDS
+site recfm=$RF
+site lrecl=80
+site blksize=3120
+site tracks
+site primary=1
+site secondary=1
+type ascii
+put $VBFILE '$DSN_VB'
+CMDS
+)" "$FTP_OUT"
+    if grep -q "^250" "$FTP_OUT"; then
+        pass "Text STOR into RECFM=$RF"
+    else
+        fail "Text STOR into RECFM=$RF"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+
+    FTP_OUT="$TMPDIR/ftp_vb_dn_$RF.log"
+    ftp_run "type ascii
+get '$DSN_VB' $VBBACK" "$FTP_OUT"
+    if [ -f "$VBBACK" ]; then
+        BACKLINES=$(tr -d '\r' < "$VBBACK" | wc -l)
+        if [ "$BACKLINES" -eq "$VBLINES" ]; then
+            pass "RECFM=$RF: $VBLINES lines in, $BACKLINES lines out"
+        else
+            fail "RECFM=$RF: $VBLINES lines in, $BACKLINES lines out"
+        fi
+        if tr -d '\r' < "$VBBACK" | diff -q "$VBFILE" - > /dev/null 2>&1; then
+            pass "RECFM=$RF: text reads back line for line"
+        else
+            fail "RECFM=$RF: text differs after the roundtrip"
+            tr -d '\r' < "$VBBACK" | diff -u "$VBFILE" - | head -20 | sed 's/^/    /'
+        fi
+    else
+        fail "RECFM=$RF: text RETR produced no file"
+        tail -5 "$FTP_OUT" | sed 's/^/    /'
+    fi
+
+    ftp_run "delete '$DSN_VB'" /dev/null
+done
 
 # ============================================================
 # Summary

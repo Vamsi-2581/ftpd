@@ -181,14 +181,17 @@ The data depends on the transfer type:
 )
 
 #idx("record format", "variable")#idx("empty line")
-In #cmd("TYPE A") one record is one line, whatever the record format is. For
-a data set of a variable record format (#cmd("V"), #cmd("VB"), #cmd("VBA")) FTPD
-reads one record at a time, so the line ends where the record ends. A record
+In #cmd("TYPE A") one record is one line for the fixed record formats and for
+the variable record formats #cmd("V"), #cmd("VB") and #cmd("VBA"). For a
+variable data set FTPD reads one record at a time, so the line ends where the
+record ends. Other record formats, such as #cmd("U") and the spanned formats,
+are not covered by this rule. A record
 that holds nothing but blanks is sent as an empty line. So a line that was
 empty when it was stored (@ug-data-stor) comes back empty. With
 #cmd("SITE TRAILING") the blanks are kept, and such a line comes back as a
-single blank. A record that holds the NL byte (#cmd("X'15'")) is cut at that
-byte into two lines.
+single blank. Each NL byte (#cmd("X'15'")) in a record ends a line, so a record
+with one NL byte gives two lines, and an NL byte at the end of the record
+gives an extra empty line.
 
 Before FTPD 1.3.0 FTPD read a variable data set as a stream of bytes across
 the record boundaries. A text transfer joined the records and cut the result

@@ -91,6 +91,31 @@ int ftpd_mvs_rnto(ftpd_session_t *sess, const char *arg)
                                                     asm("FTPMVRNT");
 
 /*
+** The DCB attributes SITE DCBDSN takes from a model data set.
+** recfm is the string SITE RECFM would take (F, FB, V, VB, U, with A for
+** ASA control characters).  note is empty, or names a model attribute that
+** could not be carried over (spanned, track overflow, machine control).
+*/
+typedef struct ftpd_dcbmodel {
+    char    recfm[4];
+    int     lrecl;
+    int     blksize;
+    char    note[96];
+} ftpd_dcbmodel_t;
+
+/*
+** Read RECFM, LRECL and BLKSIZE from the Format-1 DSCB of the cataloged data
+** set dsn (a plain, fully qualified name).  READ access is checked first,
+** against the session's identity.  Sends no reply.
+**
+** Returns 0 and fills *m, or -1 and fills err with the reason in words:
+** access denied, not cataloged, no readable DSCB, or no RECFM recorded.
+*/
+int ftpd_mvs_dcbmodel(ftpd_session_t *sess, const char *dsn,
+                      ftpd_dcbmodel_t *m, char *err, int errsz)
+                                                    asm("FTPMVDCM");
+
+/*
 ** Scratch a data set a failed transfer created, under the session's
 ** identity.  Sends no reply -- the caller has its own to send -- and logs
 ** the outcome for the operator.

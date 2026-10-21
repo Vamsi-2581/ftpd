@@ -29,6 +29,7 @@
 #       in both, 502 for SIZE/MDTM on data sets, 213 for UFS
 #   15. Settings that took effect nowhere: SITE TRUNCATE on STOR, SITE RDW and
 #       SBSENDEOL refused, SITE JESSTATUS filters the JES listing
+#   17. SITE DCBDSN: RECFM, LRECL and BLKSIZE taken from a model data set
 #
 # Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
 # reach.  Set FTPD_CONSOLE to a command that sends one operator command and
@@ -2174,6 +2175,116 @@ get '$DSN_VB' $VBBACK" "$FTP_OUT"
 
     ftp_run "delete '$DSN_VB'" /dev/null
 done
+
+# ============================================================
+# TEST 17: SITE DCBDSN takes RECFM, LRECL and BLKSIZE from a model (#180)
+#
+# The model is made with explicit SITE values that differ from every default
+# (VB 255 6233 against FB 80 3120).  A data set made after SITE DCBDSN=model
+# must carry the model's three values; an unknown model is refused with 501
+# and the next data set gets the defaults; a SITE LRECL given after DCBDSN
+# wins for LRECL only, and DCBDSN given after LRECL wins again.  The LIST line
+# is the read-back:  Volume Unit Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+# ============================================================
+section "Test 17: SITE DCBDSN"
+
+DCB_MODEL="${HLQ}.TEST.DCBMOD"
+DCB_NEW="${HLQ}.TEST.DCBNEW"
+DCB_TEXT="$TMPDIR/dcb_text.txt"
+printf 'one\ntwo\nthree\n' > "$DCB_TEXT"
+
+# "RECFM LRECL BLKSIZE" of a data set, as its LIST line shows them.
+dcb_attrs() {
+    local rel="${1#${HLQ}.}"
+    ftp_run "ls $rel" "$TMPDIR/dcb_ls.log"
+    awk -v d="$rel" '$NF == d { print $6, $7, $8 }' "$TMPDIR/dcb_ls.log" | head -1
+}
+
+# Replace data set $1 by a small text STOR made after the SITE commands in $2.
+dcb_store() {
+    ftp_run "delete '$1'" /dev/null
+    ftp_run "site tracks
+site primary=1
+site secondary=1
+$2
+type ascii
+put $DCB_TEXT '$1'" "$TMPDIR/dcb_stor.log"
+}
+
+dcb_store "$DCB_MODEL" "site recfm=VB
+site lrecl=255
+site blksize=6233"
+DCB_GOT=$(dcb_attrs "$DCB_MODEL")
+if [ "$DCB_GOT" = "VB 255 6233" ]; then
+    pass "the model data set exists as VB 255 6233"
+else
+    fail "model data set attributes: '$DCB_GOT'"
+fi
+
+dcb_store "$DCB_NEW" "site dcbdsn=$DCB_MODEL"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if [ "$DCB_GOT" = "VB 255 6233" ] \
+   && grep -q '^200 .*DCBDSN\|^200 SITE' "$TMPDIR/dcb_stor.log"; then
+    pass "SITE DCBDSN=model: a new data set is VB 255 6233"
+else
+    fail "SITE DCBDSN=model gave '$DCB_GOT'"; tail -6 "$TMPDIR/dcb_stor.log" | sed 's/^/    /'
+fi
+
+dcb_store "$DCB_NEW" "site dcbdsn='$DCB_MODEL'"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if [ "$DCB_GOT" = "VB 255 6233" ]; then
+    pass "SITE DCBDSN='model' (quoted) is accepted"
+else
+    fail "SITE DCBDSN='model' gave '$DCB_GOT'"
+fi
+
+dcb_store "$DCB_NEW" "site dcbdsn=$DCB_MODEL
+site lrecl=100"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if [ "$DCB_GOT" = "VB 100 6233" ]; then
+    pass "SITE LRECL after DCBDSN wins for LRECL; RECFM and BLKSIZE stay"
+else
+    fail "DCBDSN then LRECL=100 gave '$DCB_GOT'"
+fi
+
+dcb_store "$DCB_NEW" "site lrecl=100
+site dcbdsn=$DCB_MODEL"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if [ "$DCB_GOT" = "VB 255 6233" ]; then
+    pass "SITE DCBDSN after LRECL wins: the last one given counts"
+else
+    fail "LRECL=100 then DCBDSN gave '$DCB_GOT'"
+fi
+
+dcb_store "$DCB_NEW" "site dcbdsn=${HLQ}.TEST.NOSUCH"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if grep -q "^501 DCBDSN: ${HLQ}.TEST.NOSUCH is not cataloged" "$TMPDIR/dcb_stor.log" \
+   && [ "$DCB_GOT" = "FB 80 3120" ]; then
+    pass "a model that is not cataloged: 501, the data set gets the defaults"
+else
+    fail "unknown model: '$DCB_GOT'"; tail -6 "$TMPDIR/dcb_stor.log" | sed 's/^/    /'
+fi
+
+dcb_store "$DCB_NEW" "site dcbdsn=$DCB_MODEL
+site dcbdsn"
+DCB_GOT=$(dcb_attrs "$DCB_NEW")
+if [ "$DCB_GOT" = "FB 80 3120" ]; then
+    pass "a bare SITE DCBDSN returns to the defaults"
+else
+    fail "bare DCBDSN gave '$DCB_GOT'"
+fi
+
+for DCB_BAD in "${HLQ}.TEST.*" "${HLQ}.TEST.DCBMOD(MEM)" "${HLQ}..TEST"; do
+    ftp_run "site dcbdsn=$DCB_BAD" "$TMPDIR/dcb_bad.log"
+    if grep -q "^501 DCBDSN: " "$TMPDIR/dcb_bad.log"; then
+        pass "SITE DCBDSN=$DCB_BAD is refused with 501"
+    else
+        fail "SITE DCBDSN=$DCB_BAD"; tail -3 "$TMPDIR/dcb_bad.log" | sed 's/^/    /'
+    fi
+done
+
+ftp_run "delete '$DCB_MODEL'
+delete '$DCB_NEW'" /dev/null
 
 # ============================================================
 # Summary

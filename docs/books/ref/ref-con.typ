@@ -35,7 +35,10 @@ FTPD". This chapter lists the syntax and every message that a command writes.
       #cmd("FTPD011I SESSIONS:    n ACTIVE, m TOTAL"),
       #cmd("FTPD012I BYTES IN:    n"), #cmd("FTPD013I BYTES OUT:   n") and
       #cmd("FTPD014I TRACE:       ON") or #cmd("OFF"). The counters start at
-      zero when FTPD starts. #cmd("TOTAL") counts the sessions since the start.],
+      zero when FTPD starts. #cmd("TOTAL") counts the sessions since the start.
+      The two byte counts are the bytes that crossed data connections,
+      listings included, counted once. A session adds its bytes when it
+      ends, so a transfer in a session that is still open does not show yet.],
     [#cmd("SESSIONS")], [#cmd("FTPD015I ACTIVE SESSIONS: n / m"), the active
       sessions and #cmd("MAXSESSIONS").],
     [#cmd("CONFIG")], [The values that FTPD uses (@ref-con-config).],

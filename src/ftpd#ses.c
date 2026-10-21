@@ -378,6 +378,21 @@ ftpd_session_scratch(ftpd_session_t *sess)
 }
 
 /* --------------------------------------------------------------------
+** Put the STC identity back into ASXBSENV.
+**
+** A function of its own so ftpd_session_recover() can hand it to try(): the
+** MODESET inside racf_set_acee() is the one step of the recovery that can
+** ABEND again, and the client must be answered whether it does or not.
+** ----------------------------------------------------------------- */
+static int
+ftpd_session_reset_identity(ftpd_session_t *sess)
+{
+    racf_set_acee(sess->server->stc_acee);
+
+    return 0;
+}
+
+/* --------------------------------------------------------------------
 ** Per-command ABEND recovery.
 **
 ** Runs after try() catches an ABEND in ftpd_run_command().  libc370's
@@ -425,8 +440,23 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     ** (docs/FTPD_RAKF_SETUP.md, section 5).
     **
     ** This runs first because it must hold even if a later cleanup step
-    ** re-ABENDs. */
-    racf_set_acee(sess->server->stc_acee);
+    ** re-ABENDs.
+    **
+    ** Only on an authorized task, and under a try() of its own.  Without
+    ** authorization racf_set_acee() ABENDs S047 on its MODESET, and that is
+    ** also how a task that never could log anyone in gets here: an
+    ** unauthorized FTPD has no identity window to reset, and a second ABEND
+    ** at this point used to end the whole recovery before it reached the
+    ** WTO and the reply (#258).  Should the reset ABEND anyway, the client
+    ** is still answered below and the operator is told what is left. */
+    if (sess->server->authorized) {
+        int rc = try(ftpd_session_reset_identity, sess);
+
+        if (rc != 0)
+            ftpd_log_wto("FTPD077E IDENTITY RESET ABENDED S%03X -- "
+                         "ASXBSENV MAY STILL HOLD A USER ACEE",
+                         (unsigned)(rc > 0 ? (rc >> 12) & 0xFFF : 0));
+    }
 
     /* 2. Release the identity window's ENQ, which the ABEND skipped past.
     ** MVS DEQs a task's ENQs at task termination, but recovery keeps the
@@ -436,7 +466,10 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     **
     ** MUST follow step 1, and for the same reason leave() resets before it
     ** unlocks: release first and the next window's owner sets its ACEE,
-    ** which step 1 would then overwrite with the STC identity.
+    ** which step 1 would then overwrite with the STC identity.  A step 1
+    ** that ABENDed does not keep this step from running: a window that
+    ** stays locked stalls every session, a window left on a user identity
+    ** is what FTPD077E reports.
     **
     ** Ownership-safe without a tracking flag: unlock() is DEQ RET=HAVE
     ** (@@lkunlk.c -> @@enqdeq.c: pl.opt=HAVE, SVC 48, returns pl.rc — never

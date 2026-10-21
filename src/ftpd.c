@@ -123,7 +123,8 @@ main(int argc, char **argv)
     ** reported here: a failure is worth a line, but not one ahead of the
     ** message saying which server is starting.  FTPD warns and continues
     ** where UFSD gives up -- the commands that need authorization fail
-    ** individually and say so.
+    ** individually and say so -- the login too, which answers 530 without
+    ** touching RACF (server.authorized, #258).
     **
     ** Ask __isauth() first.  Which route authorizes the STC decides
     ** whether its own module storage is writable -- authorized at entry
@@ -134,6 +135,7 @@ main(int argc, char **argv)
     */
     apf_at_entry = __isauth();
     apf_rc = clib_apf_setup(argv[0]);
+    server.authorized = __isauth();
 
     /* --- Startup banner ------------------------------------------
     ** Which FTPD, built from which source, against which C runtime.  A

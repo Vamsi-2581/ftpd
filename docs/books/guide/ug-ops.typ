@@ -286,6 +286,17 @@ connection at once, without a reply, and writes a warning to the log. The
 client sees a closed connection. Sessions that are in the login state count
 as well.
 
+#idx("listener")#idx("connection burst")
+The listener looks for waiting connections once each second, and a single
+connection can wait up to one second for the look. At each look FTPD takes
+every connection that waits, not only the first. Clients that connect together
+are therefore greeted with #cmd("220") within about one second, and not one
+per second. The limit holds for such a burst: FTPD counts a connection that it
+has handed to the worker pool, and that no worker has started yet, as a
+session. When more clients connect together than #cmd("MAXSESSIONS") allows,
+the first ones are greeted and FTPD closes the rest without a reply. This is
+the behaviour of FTPD 1.3.0. FTPD 1.2.0 took one connection per second.
+
 FTPD always runs at least 4 worker threads. A #cmd("MAXSESSIONS") below 4 works
 and keeps its meaning: FTPD accepts at most that many sessions. At the start it
 writes a warning to the log, for example #cmd("MAXSESSIONS=2 is below 4, worker pool raised to 4, at most 2 sessions are accepted"). There is no

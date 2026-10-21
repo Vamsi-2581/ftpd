@@ -129,7 +129,10 @@ FTPD has three kinds of tasks:
 - The main task reads the console (@ref-con) and waits for the end. It looks at
   the console once each second.
 - The socket thread opens the listener, accepts the connections and hands each
-  to a worker. It checks every second whether FTPD is ending.
+  to a worker. It looks once each second, and at each look it accepts every
+  connection that waits. Once the main task has read a stop request, the
+  socket thread ends its wait at once and takes no further connection after
+  the one in hand. Before FTPD 1.3.0, it accepted one connection at each look.
 - The worker threads run the sessions. FTPD creates the pool with
   #cmd("MAXSESSIONS") as its size, but with at least 4 threads. One worker serves
   one session until the client quits or the connection closes.
@@ -140,8 +143,9 @@ to #cmd("STDOUT") at the start. It has no number and no console message. The
 session limit stays #cmd("MAXSESSIONS").
 
 The socket thread closes a connection at once, without a reply, when
-#cmd("MAXSESSIONS") sessions are active already. It writes a warning to
-#cmd("STDOUT").
+#cmd("MAXSESSIONS") sessions are active already. A connection that it has
+handed to the pool and that no worker has started yet counts as active. It
+writes a warning to #cmd("STDOUT").
 
 A worker thread runs every FTP command under the recovery of the C library.
 The ABEND of a command is described in the _FTPD User's Guide_, in "When a

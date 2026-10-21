@@ -137,5 +137,10 @@ the book explains the subject:
       log and with one console message #cmd("FTPD062W"). Before, FTPD read
       them without a word. #cmd("CONFIG") no longer writes #cmd("FTPD047I") and
       #cmd("FTPD048I").], [@ug-ops-config],
+    [The listener takes every connection that waits on its next look, which
+      it takes once each second. A burst of clients is greeted within about
+      one second. Before, it took one connection per look, and ten clients
+      that connected together were greeted over about ten seconds.],
+      [@ug-ops-ses],
   )
 ] <ug-intro-new-tab>

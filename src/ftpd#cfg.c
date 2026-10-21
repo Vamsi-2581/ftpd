@@ -72,6 +72,7 @@ ftpdcfg_defaults(ftpd_config_t *cfg)
     cfg->defaults.blksize = 3120;
     cfg->defaults.primary = 10;
     cfg->defaults.secondary = 5;
+    cfg->defaults.directory = 10;   /* what MKD allocated hardcoded (#130) */
     strcpy(cfg->defaults.spacetype, "TRK");
     /* Empty means "let the system choose", which is what FTPD has always
     ** done in practice: until #133 neither of these reached SVC 99 at all,
@@ -338,6 +339,16 @@ parse_keyvalue(ftpd_config_t *cfg, const char *key, const char *value)
         else
             cfg->defaults.secondary = v;
     }
+    else if (strcmp(key, "DEFDIRECTORY") == 0) {
+        /* A PDS with no directory blocks cannot hold a member, so 0 is not
+        ** "unset" here either. */
+        int v = atoi(value);
+        if (v < 1 || v > FTPD_SPACE_MAX)
+            ftpd_log(LOG_WARN, "%s: DEFDIRECTORY must be 1..%d, keeping %d",
+                     __func__, FTPD_SPACE_MAX, cfg->defaults.directory);
+        else
+            cfg->defaults.directory = v;
+    }
     else if (strcmp(key, "DEFSPACETYPE") == 0) {
         /* Spelled as the z/OS FTP.DATA statement does (TRACK/CYLINDER/
         ** BLOCK); the JCL short forms and the plural SITE spellings are
@@ -591,9 +602,10 @@ ftpdcfg_dump(const ftpd_config_t *cfg)
                                        : "(SYSTEM CHOOSES)",
                  cfg->defaults.volume[0] ? cfg->defaults.volume
                                          : "(SYSTEM CHOOSES)");
-    ftpd_log_wto("FTPD058I   DEFPRIMARY=%d DEFSECONDARY=%d DEFSPACETYPE=%s",
+    ftpd_log_wto("FTPD058I   DEFPRIMARY=%d DEFSECONDARY=%d DEFSPACETYPE=%s "
+                 "DEFDIRECTORY=%d",
                  cfg->defaults.primary, cfg->defaults.secondary,
-                 cfg->defaults.spacetype);
+                 cfg->defaults.spacetype, cfg->defaults.directory);
     ftpd_log_wto("FTPD047I   DASD VOLUMES=%d:", cfg->num_dasd);
     for (i = 0; i < cfg->num_dasd; i++) {
         ftpd_log_wto("FTPD048I     %s,%s",

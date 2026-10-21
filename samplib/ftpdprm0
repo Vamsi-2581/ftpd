@@ -134,3 +134,10 @@ DEFPRIMARY=10
 DEFSECONDARY=5
 DEFSPACETYPE=TRACK
 #
+# Directory blocks of a PDS that MKD creates (the PDS directory is fixed at
+# allocation).  A client overrides it per session with SITE DIRECTORY=.
+#
+# DEFDIRECTORY   1-16777215
+#
+DEFDIRECTORY=10
+#

@@ -1,6 +1,7 @@
 /* TSTSIT.C
 ** Tests for ftpd_site_dispatch() -- SITE keywords and keyword values are
-** case-insensitive (issue #189, RFC 959 section 5.3).
+** case-insensitive (issue #189, RFC 959 section 5.3), keywords may be
+** abbreviated to the z/OS minimum (#130), and SITE RETPD / DIRECTORY.
 **
 ** For every spelling pair the test runs the upper-case form and the variant
 ** against a fresh session and requires the same reply and the same session
@@ -76,11 +77,14 @@ fresh_session(void)
     server.config.defaults.secondary = 50;
     strcpy(server.config.defaults.unit, "3380");
     strcpy(server.config.defaults.volume, "SYSRES");
+    server.config.defaults.directory = 25;
     strcpy(sess.alloc.recfm, "FB");
     sess.alloc.lrecl = 80;
     sess.alloc.blksize = 3120;
     sess.alloc.primary = 100;
     sess.alloc.secondary = 50;
+    sess.alloc.dirblks = 25;
+    sess.alloc.retpd = 0;
     strcpy(sess.alloc.spacetype, "TRK");
     strcpy(sess.alloc.unit, "3380");
     strcpy(sess.alloc.volume, "SYSRES");
@@ -132,6 +136,7 @@ state_equal(const state_t *a, const state_t *b)
         && strcmp(a->alloc.volume, b->alloc.volume) == 0
         && strcmp(a->alloc.unit, b->alloc.unit) == 0
         && a->alloc.dirblks == b->alloc.dirblks
+        && a->alloc.retpd == b->alloc.retpd
         && a->filetype == b->filetype
         && a->fsmode == b->fsmode
         && a->prev_fsmode == b->prev_fsmode
@@ -162,7 +167,8 @@ run(const char *arg, state_t *st, int *code, char *text, int textsz)
 static void
 same(const char *canon, const char *variant)
 {
-    state_t a, b;
+    state_t a;
+    state_t b;
     int ca, cb;
     char ta[256], tb[256];
     char msg[160];
@@ -177,6 +183,43 @@ same(const char *canon, const char *variant)
     snprintf(msg, sizeof(msg), "\"%s\" leaves the same state as \"%s\"",
              variant, canon);
     CHECK(state_equal(&a, &b), msg);
+}
+
+/* The token is refused: "Unrecognized parameter" naming it, and nothing
+** changed -- the state is the one a SITE that did nothing leaves. */
+static void
+retpd_bad(const char *value, const char *msg)
+{
+    state_t st;
+    int code;
+    char text[256];
+    char arg[64];
+
+    snprintf(arg, sizeof(arg), "RETPD=5 RETPD=%s", value);
+    run(arg, &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 5 && strstr(text, "RETPD must be 0-9999") != NULL,
+          msg);
+}
+
+static void
+refused(const char *arg)
+{
+    state_t before;
+    state_t after;
+    int code;
+    char text[256];
+    char msg[160];
+
+    run("", &before, &code, text, sizeof(text));
+    run(arg, &after, &code, text, sizeof(text));
+
+    snprintf(msg, sizeof(msg), "\"%s\" is unrecognised and names the token",
+             arg);
+    CHECK(code == 200 && strstr(text, "Unrecognized parameter") != NULL
+          && strstr(text, arg) != NULL, msg);
+
+    snprintf(msg, sizeof(msg), "\"%s\" changes nothing", arg);
+    CHECK(state_equal(&before, &after), msg);
 }
 
 int
@@ -249,6 +292,108 @@ main(void)
     run("jesinterfacelevel=1", &st, &code, text, sizeof(text));
     CHECK(code == 200 && strstr(text, "Unrecognized parameter") != NULL,
           "jesinterfacelevel=1 is unrecognised too");
+
+    /* --- minimum abbreviations, as z/OS marks them (#130) -------------- */
+    same("PRIMARY=100", "PRI=100");
+    same("PRIMARY=100", "PRIM=100");
+    same("PRIMARY=100", "pri=100");
+    same("SECONDARY=7", "SEC=7");
+    same("TRACKS", "TR");
+    same("TRACKS", "TRA");
+    same("CYLINDERS", "CY");
+    same("CYLINDERS", "CYL");
+    same("BLOCKS", "BL");
+    same("BLOCKS", "BLO");
+    same("RECFM=VB", "REC=VB");
+    same("RECFM=VB", "RECF=VB");
+    same("LRECL=255", "LR=255");
+    same("LRECL=255", "LREC=255");
+    same("BLKSIZE=6240", "BLK=6240");
+    same("BLKSIZE=6240", "BLKS=6240");
+    same("BLKSIZE=6240", "BLOCKSIZE=6240");
+    same("BLKSIZE=6240", "BLOCKSI=6240");
+    same("DIRECTORY=20", "DIR=20");
+    same("UNIT=3390", "UNI=3390");
+    same("DIRECTORY=20", "D=20");
+    same("DIRECTORY=20", "DI=20");
+    same("UNIT=3390", "U=3390");
+    same("UNIT=3390", "UN=3390");
+    same("VOLUME=PUB001", "VOL=PUB001");
+    same("FILETYPE=JES", "FILE=JES");
+    same("TRAILING", "TRAIL");
+    same("TRAILING", "TRAILINGBLANKS");
+    same("TRUNCATE", "TRUN");
+    same("JESJOBNAME=MYJOB", "JESJOBN=MYJOB");
+    same("JESOWNER=ABC", "JESO=ABC");
+    same("JESSTATUS=ALL", "JESST=ALL");
+    same("DATACLAS=X", "DATAC=X");
+    same("DATACLAS=X", "DATACLASS=X");
+    same("STORCLAS=X", "STO=X");
+    same("MGMTCLAS=X", "MG=X");
+    same("RETPD=30", "RET=30");
+    same("RETPD=30", "ret=30");
+    same("RECFM=VB LRECL=255 PRIMARY=9", "REC=VB LR=255 PRI=9");
+
+    run("PRI=100", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.primary == 100, "PRI=100 sets the primary quantity");
+    run("TR", &st, &code, text, sizeof(text));
+    CHECK(strcmp(st.alloc.spacetype, "TRK") == 0, "TR keeps tracks");
+    run("CY", &st, &code, text, sizeof(text));
+    CHECK(strcmp(st.alloc.spacetype, "CYL") == 0, "CY selects cylinders");
+    run("BLOCKSIZE=6240", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.blksize == 6240, "BLOCKSIZE=6240 sets the block size");
+
+    /* Below the minimum, past the end, or in nobody's keyword: refused,
+    ** and nothing changes.  "T" and "S" would each name several keywords. */
+    refused("PR=100");
+    refused("P=100");
+    refused("SE=5");
+    refused("S=5");
+    refused("T");
+    refused("TRAI");
+    refused("TRU");
+    refused("B=1");
+    refused("BLOCKSIZEE=1");
+    refused("R=VB");
+    refused("RE=VB");
+    refused("L=80");
+    refused("JES=1");
+    refused("JESJ=X");
+    refused("J=X");
+    refused("PRIMARYY=100");
+    refused("BLKSIZEE=1");
+    refused("DCBDSN=A.B");
+    refused("DSNTYPE=LARGE");
+    refused("DIRECTORYMODE=X");
+
+    /* --- RETPD (#130) ------------------------------------------------ */
+    run("", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 0, "a fresh session has no retention period");
+    run("RETPD=30", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(text, "SITE command was accepted") == 0
+          && st.alloc.retpd == 30, "RETPD=30 sets 30");
+    run("RETPD=0", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 0 && strstr(text, "|") == NULL, "RETPD=0 is valid");
+    run("RETPD=9999", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 9999 && strstr(text, "|") == NULL,
+          "RETPD=9999 is the top of the range");
+    retpd_bad("10000", "RETPD=10000 is refused with a warning, 5 stays");
+    retpd_bad("abc", "RETPD=abc is refused, 5 stays");
+    retpd_bad("-1", "RETPD=-1 is refused, 5 stays");
+    retpd_bad("99999999999999", "an absurd RETPD is refused, 5 stays");
+    run("RETPD=5 RETPD", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.retpd == 0, "a bare RETPD goes back to no retention");
+
+    /* --- DIRECTORY and DEFDIRECTORY (#130) --------------------------- */
+    run("", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.dirblks == 25, "a session starts with DEFDIRECTORY");
+    run("DIRECTORY=40", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.dirblks == 40, "SITE DIRECTORY=40 overrides it");
+    run("DIRECTORY=40 DIRECTORY", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.dirblks == 25, "a bare DIRECTORY goes back to DEFDIRECTORY");
+    run("DIRECTORY=0", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.dirblks == 25 && strstr(text, "DIRECTORY must be") != NULL,
+          "DIRECTORY=0 is refused, DEFDIRECTORY stays");
 
     return mbt_test_summary("TSTSIT");
 }

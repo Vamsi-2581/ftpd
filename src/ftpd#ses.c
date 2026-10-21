@@ -60,7 +60,8 @@ ftpd_session_new(ftpd_server_t *server, int sock)
     strcpy(sess->alloc.spacetype, server->config.defaults.spacetype);
     strcpy(sess->alloc.volume, server->config.defaults.volume);
     strcpy(sess->alloc.unit, server->config.defaults.unit);
-    sess->alloc.dirblks = 0;
+    sess->alloc.dirblks = server->config.defaults.directory;
+    sess->alloc.retpd = 0;
 
     /* JES defaults from config */
     sess->jes_level = server->config.jes_level;

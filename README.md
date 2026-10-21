@@ -121,7 +121,8 @@ ftp mvshost 2121
 | BLKSIZE=*n* | Block size |
 | PRIMARY=*n* | Primary space allocation (1-16777215) |
 | SECONDARY=*n* | Secondary space allocation (0-16777215; 0 = none) |
-| DIRECTORY=*n* | PDS directory blocks |
+| DIRECTORY=*n* | PDS directory blocks (1-16777215), default `DEFDIRECTORY` |
+| RETPD=*days* | Retention period of new data sets (0-9999; 0 = none) |
 | TRACKS / CYLINDERS / BLOCKS | Space allocation unit |
 | FILETYPE=JES / SEQ | Switch to JES or dataset mode |
 | JESOWNER=*name* | JES job owner filter |
@@ -131,7 +132,14 @@ ftp mvshost 2121
 
 A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the
-session. `BLOCKS` counts the space in units of the current `BLKSIZE`.
+session (`SITE RETPD` returns to no retention). `BLOCKS` counts the space in
+units of the current `BLKSIZE`.
+
+Keywords can be abbreviated the way z/OS allows, so scripts written for z/OS
+work unchanged: `PRI=`, `SEC=`, `TR`, `CY`, `REC=`, `LR=`, `BLK=`, `DIR=`,
+`D=`, `VOL=`, `U=`, `RET=` and so on. A form that fits more than one keyword
+or is too short (`PR=`, `P=`, `T`) is answered with `Unrecognized parameter`
+and changes nothing.
 
 The verb, the keywords and their values are case-insensitive: `SITE`, `site`
 and `Site` are one command, as are `LRECL=80` and `lrecl=80`, `RECFM=FB` and

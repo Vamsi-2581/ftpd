@@ -19,6 +19,9 @@ typedef struct ftpd_dasd {
 ** for SITE PRIMARY / SECONDARY (1-16777215).                          */
 #define FTPD_SPACE_MAX      16777215
 
+/* Longest retention SITE RETPD takes: the z/OS FTP limit. */
+#define FTPD_RETPD_MAX      9999
+
 /* --- Server configuration --- */
 /*
 ** The three address fields below are all written by ftpd_adr_parse(), so
@@ -94,6 +97,8 @@ typedef struct ftpd_config {
                                     ** anything -- see ftpdcfg_load()   */
         char        unit[5];
         char        volume[7];
+        int         directory;      /* DEFDIRECTORY, 1..FTPD_SPACE_MAX:
+                                    ** directory blocks of a new PDS   */
     } defaults;
 
     /* DASD volumes for VTOC scanning */

@@ -62,6 +62,7 @@
 ** have been there all along. */
 #define TSTPRM_PRIMARY  200
 #define TSTPRM_SECOND   0       /* 0 is a REQUEST -- no secondary extents */
+#define TSTPRM_DIRBLKS  30      /* #130: DEFDIRECTORY, MKD's directory size */
 
 static const char * const parmlines[] = {
     "# TSTPRM -- ftpd#119 parmlib read-error probe, ftpd#100 space defaults",
@@ -72,6 +73,8 @@ static const char * const parmlines[] = {
     "DEFSECONDARY=0",           /* in range, and must NOT be overridden   */
     "DEFSPACETYPE=CYLINDER",
     "DEFSPACETYPE=FURLONGS",    /* not a space type: must be refused      */
+    "DEFDIRECTORY=30",
+    "DEFDIRECTORY=0",           /* out of range (1..): must be refused    */
     NULL
 };
 
@@ -183,6 +186,9 @@ main(int argc, char **argv)
         CHECK(strcmp(cfg.defaults.spacetype, "CYL") == 0,
               "healthy FTPDPRM: DEFSPACETYPE=CYLINDER parsed, "
               "unknown value refused");
+
+        CHECK_EQ(cfg.defaults.directory, TSTPRM_DIRBLKS,
+                 "healthy FTPDPRM: DEFDIRECTORY parsed, DEFDIRECTORY=0 refused");
 
         __dsfree("FTPDPRM");
     } else {

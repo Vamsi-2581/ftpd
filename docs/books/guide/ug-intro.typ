@@ -151,5 +151,11 @@ the book explains the subject:
       stayed allocated to the started task, #cmd("MKD") of it was answered
       with #cmd("550"), and the stop ended with the abend SA0A.],
       [@ug-data-dirfull],
+    [The procedure of the started task no longer needs the #cmd("HASPCKPT") and
+      #cmd("HASPACE1") DD statements. FTPD finds the JES2 checkpoint and the
+      spool itself. Keep a statement only when it is needed (another
+      #cmd("DSNPRFX"), or a checkpoint that is neither cataloged nor on an
+      online volume). Before, the JES view needed both.],
+      [@ug-install-jes],
   )
 ] <ug-intro-new-tab>

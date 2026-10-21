@@ -27,9 +27,11 @@ these DD statements:
     [#cmd("STDERR")], [Allocated by the sample. The code of FTPD does not write
       to it.],
     [#cmd("SYSUDUMP")], [A dump, if the address space abends.],
-    [#cmd("HASPCKPT"), #cmd("HASPACE1")], [The JES2 checkpoint and spool data
-      sets, for the JES view (@ug-other-jes). @ug-install-jes has the
-      statements.],
+    [#cmd("HASPCKPT"), #cmd("HASPACE1")], [Optional. The JES view (@ug-other-jes)
+      finds the JES2 checkpoint and spool data sets itself. Add the statements
+      only for a JES2 with another #cmd("DSNPRFX") than #cmd("SYS1"), or a
+      checkpoint that is neither cataloged nor on an online volume
+      (@ug-install-jes).],
   )
 ]
 

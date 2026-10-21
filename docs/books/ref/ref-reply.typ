@@ -111,8 +111,11 @@ causes are:
     [#cmd("Write error on data set after N bytes received: the data set is incomplete.")], [#cmd("STOR") or #cmd("APPE") could not write.],
     [#cmd("Write failed on the server after N bytes received: the file is incomplete.")], [#cmd("STOR") in UFS failed and UFSD gave no reason.],
     [#cmd("Unable to open JES checkpoint")],
-      [The job list could not read JES2. A cause is that the procedure of the started task
-      lacks the checkpoint data sets.],
+      [The job list could not read JES2. FTPD finds the checkpoint itself, so a cause is a
+      #cmd("HASPCKPT") or #cmd("HASPACE1") DD in the procedure of the started
+      task that names the wrong data set or volume, or a checkpoint that is
+      neither cataloged nor on an online volume ("The Procedure and JES" in the
+      _FTPD User's Guide_).],
     [#cmd("Unable to open JES internal reader"), #cmd("Failed to submit JCL to internal reader"), #cmd("Failed to close internal reader")],
       [Submission of a job failed.],
     [#cmd("Error reading spool data set for JOBnnnnn.")],

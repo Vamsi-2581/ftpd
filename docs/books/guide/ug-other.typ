@@ -13,9 +13,10 @@ to the other two and what each command does there.
 
 #idx("JES")#idx("job", "submit")#idx("FILETYPE")
 In the JES view a client submits jobs, lists them, reads their output and
-cancels them. The view needs the JES2 checkpoint and spool data sets in the
-procedure of the started task (@ug-ops-start). Without them every command of
-the view ends with #cmd("451 Unable to open JES checkpoint").
+cancels them. The view reads the JES2 checkpoint and the spool, which FTPD
+finds itself; the procedure of the started task needs no statements for them
+(@ug-install-jes). When FTPD cannot open the checkpoint, every command of the
+view ends with #cmd("451 Unable to open JES checkpoint").
 
 A client switches to the view with a #cmd("SITE") command (@ug-site) and back
 again with another one:

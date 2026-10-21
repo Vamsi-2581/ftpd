@@ -1387,8 +1387,8 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
         recfm_label(fp->recfm), lrecl);
 
     if (ftpd_data_open(sess) != 0) {
-        sess->cur_file = NULL;
         fclose(fp);
+        sess->cur_file = NULL;
         ftpd_session_reply(sess, FTP_425,
                            "Cannot open data connection");
         return 0;
@@ -1500,8 +1500,15 @@ ftpd_mvs_retr(ftpd_session_t *sess, const char *arg)
     ftpd_log(LOG_INFO, "RETR: %s %s after %ld bytes",
              io_err ? "read error on" : aborted ? "aborting" : "closing",
              fname, total);
-    sess->cur_file = NULL;
+
+    /* cur_file stays set until fclose() has returned, as in STOR (#223).
+    ** An ABEND inside the CLOSE does not return, and recovery reaches the
+    ** FILE and fopen's DD only through cur_file: cleared first, the DD stayed
+    ** allocated for the life of the address space.  Clearing right after the
+    ** return keeps what the early clear was for: once fclose() has freed the
+    ** FILE, a later ABEND must not close it a second time. */
     fclose(fp);
+    sess->cur_file = NULL;
     ftpd_data_close(sess);
 
     sess->xfer_count++;
@@ -2337,9 +2344,9 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
                        member[0] ? arg : dsn);
 
     if (ftpd_data_open(sess) != 0) {
-        sess->cur_file = NULL;
         sess->cur_new_dsn[0] = '\0';
         fclose(fp);
+        sess->cur_file = NULL;
         ftpd_session_reply(sess, FTP_425,
                            "Cannot open data connection");
         return 0;
@@ -2369,9 +2376,9 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
         int recnum = 0;
 
         if (eff_lrecl == 0) {
-            sess->cur_file = NULL;
             sess->cur_new_dsn[0] = '\0';
             fclose(fp);
+            sess->cur_file = NULL;
             ftpd_data_close(sess);
             ftpd_session_reply(sess, FTP_550,
                 "Dataset has zero record length");
@@ -2380,9 +2387,9 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
 
         record_buffer = calloc(1, eff_lrecl);
         if (!record_buffer) {
-            sess->cur_file = NULL;
             sess->cur_new_dsn[0] = '\0';
             fclose(fp);
+            sess->cur_file = NULL;
             ftpd_data_close(sess);
             ftpd_session_reply(sess, FTP_550,
                 "Memory allocation failed");

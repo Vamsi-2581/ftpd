@@ -188,7 +188,7 @@ that holds nothing but blanks is sent as an empty line. So a line that was
 empty when it was stored (@ug-data-stor) comes back empty. With
 #cmd("SITE TRAILING") the blanks are kept, and such a line comes back as a
 single blank. A record that holds the NL byte (#cmd("X'15'")) is cut at that
-byte into two lines, as mvsMF does.
+byte into two lines.
 
 Before FTPD 1.3.0 FTPD read a variable data set as a stream of bytes across
 the record boundaries. A text transfer joined the records and cut the result

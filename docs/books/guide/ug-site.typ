@@ -27,11 +27,14 @@ command:
   line #cmd("200") that names the problem on the first line and ends with
   #cmd("SITE command was accepted"). The other words of the command still
   apply. If several words are wrong, the reply names the first.
-- *#cmd("RETPD") is above the limit of the server, or the word is #cmd("RDW")
-  or a #cmd("SBSENDEOL") that FTPD does not handle:* the reply is a #cmd("501")
-  with the reason, such as
-  #cmd("501 RETPD=n exceeds the server limit of N days; keeping the current value"),
-  and the setting stays as it was. If the command has
+- *#cmd("RETPD") is above the limit of the server, the word is #cmd("RDW"),
+  a #cmd("SBSENDEOL") that FTPD does not handle, or a #cmd("DCBDSN") whose model
+  FTPD refuses:* the reply is a #cmd("501") with the reason, such as
+  #cmd("501 RETPD=n exceeds the server limit of N days; keeping the current value")
+  or
+  #cmd("501 DCBDSN: NAME is not cataloged; keeping the current values"),
+  and the setting stays as it was. For #cmd("DCBDSN") see the _FTPD Reference_,
+  "DCBDSN". If the command has
   more words, FTPD applies them, and the reply has two lines: the text above
   with #cmd("501-"), and #cmd("501 Other parameters on this command were applied.")
   A script must not read this #cmd("501") as "nothing changed".
@@ -64,6 +67,13 @@ _FTPD Reference_ lists the shortest forms in "The SITE Command".
     [#cmd("BLKSIZE=n")], [the block size, also written #cmd("BLOCKSIZE=n"). For a fixed record format that
       is not a multiple of the record length, FTPD rounds it down to one,
       and the reply says so with #cmd("BLOCKSIZE must be a multiple of LRECL for RECFM FB").],
+    [#cmd("DCBDSN=dsn")], [the record format, record length and block size of
+      a data set that exists, copied at once from its label. Give the full name,
+      with or without quotes. A name that is not cataloged, a pattern or a
+      member is refused with a #cmd("501"), and the values stay. A
+      #cmd("RECFM"), #cmd("LRECL") or #cmd("BLKSIZE") after it replaces its one
+      value. Without a value the three return to the defaults. See the
+      _FTPD Reference_, "DCBDSN".],
     [#cmd("PRIMARY=n")], [the primary space quantity, 1 to 16777215. Another
       value is refused with #cmd("PRIMARY must be 1-16777215; keeping the current value").],
     [#cmd("SECONDARY=n")], [the secondary quantity, 0 to 16777215. Zero is a

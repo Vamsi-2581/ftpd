@@ -36,8 +36,12 @@ kind = "application"
 # own key (mvslovers/libc370#693, fixed in 2.24.1). 2.24.0 is also the first
 # libc370 whose send() passes at most one 256-byte X'75' segment per call
 # (mvslovers/libc370#160), which closes the send side of #137.
+# 2.25.1 with cc370 1.6.1: the first libc370 whose thread manager starts a
+# worker for a pool of 1 to 3 (mvslovers/libc370#700). Before it, MAXSESSIONS
+# below 4 left every connection queued and never served (#168); FTPD no longer
+# raises the pool to 4 and creates one worker per allowed session again.
 cc370 = "1.6.1"
-libc370 = "2.24.1"
+libc370 = "2.25.1"
 mbt = "3.0"
 
 # ── Load module ──────────────────────────────────────────
@@ -98,12 +102,6 @@ sources = ["test/tstrec.c", "src/ftpd#rec.c"]
 # DUAL.
 [test.TSTJFL]
 sources = ["test/tstjfl.c", "src/ftpd#jfl.c"]
-
-# ftpd_pool_size() -- the worker pool is never smaller than 4, because libc370
-# starts no worker for a pool of 1-3 (libc370#700, #168).  ftpd#pol.c is free
-# of project and MVS headers, so this is DUAL like TSTADR.
-[test.TSTPOL]
-sources = ["test/tstpol.c", "src/ftpd#pol.c"]
 
 # ftpdcfg_load() -- a read error on DD:FTPDPRM must abandon the start (#119).
 # MVS-only: the vector is a real BSAM wrong-length record, built here by

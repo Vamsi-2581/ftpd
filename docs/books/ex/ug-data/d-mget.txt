@@ -1,0 +1,75 @@
+ftp> cd MYLIB
+250 The working directory "IBMUSER.MYLIB" is a partitioned data set
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+GAMMA   
+226 List completed successfully.
+ftp> lcd src
+Local directory now: /home/user/ftp-test/src
+ftp> mput *.txt
+mput one.txt [anpqy?]? y
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set one.txt
+250 Transfer completed successfully.
+5 bytes sent in 00:00 (0.11 KiB/s)
+mput three.txt [anpqy?]? n
+mput two.txt [anpqy?]? y
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set two.txt
+250 Transfer completed successfully.
+5 bytes sent in 00:00 (0.11 KiB/s)
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+GAMMA   
+ONE     
+TWO     
+226 List completed successfully.
+ftp> prompt
+Interactive mode off.
+ftp> mput *.txt
+local: one.txt remote: one.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set one.txt
+250 Transfer completed successfully.
+5 bytes sent in 00:00 (0.11 KiB/s)
+local: three.txt remote: three.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set three.txt
+250 Transfer completed successfully.
+7 bytes sent in 00:00 (0.16 KiB/s)
+local: two.txt remote: two.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set two.txt
+250 Transfer completed successfully.
+5 bytes sent in 00:00 (0.11 KiB/s)
+ftp> lcd ../dl
+Local directory now: /home/user/ftp-test/dl
+ftp> mget T*
+local: THREE remote: THREE
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set THREE FIXrecfm 80
+250 Transfer completed successfully.
+7 bytes received in 00:00 (0.15 KiB/s)
+local: TWO remote: TWO
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set TWO FIXrecfm 80
+250 Transfer completed successfully.
+5 bytes received in 00:00 (0.12 KiB/s)
+ftp> !ls
+THREE  TWO
+ftp> mdelete O*
+250 IBMUSER.MYLIB(ONE) deleted.
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+GAMMA   
+THREE   
+TWO     
+226 List completed successfully.
+ftp> quit
+221 Quit command received. Goodbye.

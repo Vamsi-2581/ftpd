@@ -1,0 +1,46 @@
+ftp> site directory=1
+200 SITE command was accepted
+ftp> mkdir SMALL
+257 'IBMUSER.SMALL' created.
+ftp> cd SMALL
+250 The working directory "IBMUSER.SMALL" is a partitioned data set
+ftp> prompt
+Interactive mode off.
+ftp> lcd mem
+Local directory now: /home/user/ftp-test/mem
+ftp> mput m*.txt
+local: m01.txt remote: m01.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set m01.txt
+250 Transfer completed successfully.
+11 bytes sent in 00:00 (0.24 KiB/s)
+[... the transfers of m02.txt to m19.txt are left out; each ends with 250 ...]
+local: m20.txt remote: m20.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set m20.txt
+250 Transfer completed successfully.
+11 bytes sent in 00:00 (0.25 KiB/s)
+local: m21.txt remote: m21.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set m21.txt
+552 Requested file action aborted: the directory of the PDS is most likely full (ABEND SB14). It cannot be extended; create the PDS with more directory blocks (SITE DIRECTORY=n, then MKD) and copy the members.
+11 bytes sent in 00:00 (0.24 KiB/s)
+local: m22.txt remote: m22.txt
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set m22.txt
+552 Requested file action aborted: the directory of the PDS is most likely full (ABEND SB14). It cannot be extended; create the PDS with more directory blocks (SITE DIRECTORY=n, then MKD) and copy the members.
+11 bytes sent in 00:00 (0.26 KiB/s)
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+M01     
+[... M02 to M19 ...]
+M20     
+226 List completed successfully.
+ftp> cd ..
+250 "IBMUSER." is the working directory name prefix.
+ftp> rmdir SMALL
+250 IBMUSER.SMALL deleted.
+ftp> quit
+221 Quit command received. Goodbye.

@@ -1,0 +1,37 @@
+ftp> site recfm=fb lrecl=10 blksize=3000
+200 SITE command was accepted
+ftp> put long.txt LONG
+local: long.txt remote: LONG
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.LONG
+451 File transfer failed. File contains records that are longer than the LRECL (10 data bytes). Use SITE TRUNCATE to cut them; the data set is incomplete.
+76 bytes sent in 00:00 (1.50 KiB/s)
+ftp> dir LONG
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+226 List completed successfully.
+ftp> site truncate
+200 SITE command was accepted
+ftp> put long.txt LONG
+local: long.txt remote: LONG
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.LONG
+250 Transfer completed successfully (data was truncated).
+76 bytes sent in 00:00 (1.83 KiB/s)
+ftp> get LONG long2.txt
+local: long2.txt remote: LONG
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IBMUSER.LONG FIXrecfm 10
+250 Transfer completed successfully.
+31 bytes received in 00:00 (0.65 KiB/s)
+ftp> !cat long2.txt
+AAAAAAAAAA
+short
+BBBBBBBBBB
+ftp> site truncate
+200 SITE command was accepted
+ftp> delete LONG
+250 IBMUSER.LONG deleted.
+ftp> quit
+221 Quit command received. Goodbye.

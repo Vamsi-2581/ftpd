@@ -1,0 +1,12 @@
+$ tnftp -n
+ftp> open localhost 2121
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+ftp> user IBMUSER
+331 Send password please.
+Password: 
+230 IBMUSER is logged on.  Working directory is "IBMUSER.".
+Remote system type is MVS.
+ftp> quit
+221 Quit command received. Goodbye.

@@ -1,0 +1,32 @@
+ftp> cd 'SYS1.PARMLIB'
+250 The working directory "SYS1.PARMLIB" is a partitioned data set
+ftp> get SMFPRM00 smfprm00.txt
+local: smfprm00.txt remote: SMFPRM00
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set SMFPRM00 FIXrecfm 80
+250 Transfer completed successfully.
+574 bytes received in 00:00 (13.17 KiB/s)
+ftp> !ls -l smfprm00.txt
+-rw-rw-r-- 1 user user 567 Oct 21 16:09 smfprm00.txt
+ftp> binary
+200 Representation type is Image
+ftp> get SMFPRM00 smfprm00.bin
+local: smfprm00.bin remote: SMFPRM00
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set SMFPRM00 FIXrecfm 80
+250 Transfer completed successfully.
+560 bytes received in 00:00 (13.01 KiB/s)
+ftp> !ls -l smfprm00.bin
+-rw-rw-r-- 1 user user 560 Oct 21 16:09 smfprm00.bin
+ftp> !od -c smfprm00.bin | head -3
+0000000   @   @   @   @ 326 327 343   ~ 362   k   @   @   @   @   @   @
+0000020 342 350 342 343 305 324   k   @ 321 326 302   @ 301 325 304   @
+0000040 342 343 305 327   @ 304 301 343 301   @ 303 326 323 323 305 303
+ftp> ascii
+200 Representation type is Ascii NonPrint
+ftp> get 'SYS1.PARMLIB(NOSUCH)' x.txt
+local: x.txt remote: 'SYS1.PARMLIB(NOSUCH)'
+229 Entering Extended Passive Mode (|||22000|)
+550 Request nonexistent member SYS1.PARMLIB(NOSUCH) to be sent.
+ftp> quit
+221 Quit command received. Goodbye.

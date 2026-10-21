@@ -1,0 +1,47 @@
+ftp> put report.txt REPORT
+local: report.txt remote: REPORT
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.REPORT
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.64 KiB/s)
+ftp> dir REPORT
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB       80  3120  PS   REPORT
+226 List completed successfully.
+ftp> get REPORT report2.txt
+local: report2.txt remote: REPORT
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IBMUSER.REPORT FIXrecfm 80
+250 Transfer completed successfully.
+73 bytes received in 00:00 (1.64 KiB/s)
+ftp> !diff report.txt report2.txt && echo identical
+identical
+ftp> binary
+200 Representation type is Image
+ftp> put blob.bin BLOB
+local: blob.bin remote: BLOB
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.BLOB
+250 Transfer completed successfully.
+300 bytes sent in 00:00 (7.03 KiB/s)
+ftp> dir BLOB
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB       80  3120  PS   BLOB
+226 List completed successfully.
+ftp> get BLOB blob2.bin
+local: blob2.bin remote: BLOB
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IBMUSER.BLOB FIXrecfm 80
+250 Transfer completed successfully.
+320 bytes received in 00:00 (7.20 KiB/s)
+ftp> !ls -l blob.bin blob2.bin
+-rw-rw-r-- 1 user user 300 Oct 21 16:08 blob.bin
+-rw-rw-r-- 1 user user 320 Oct 21 16:09 blob2.bin
+ftp> ascii
+200 Representation type is Ascii NonPrint
+ftp> quit
+221 Quit command received. Goodbye.

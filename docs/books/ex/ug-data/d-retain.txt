@@ -1,0 +1,36 @@
+ftp> site retpd=1
+200 SITE command was accepted
+ftp> put report.txt KEEPME
+local: report.txt remote: KEEPME
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.KEEPME
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.65 KiB/s)
+ftp> put report.txt KEEPME
+local: report.txt remote: KEEPME
+229 Entering Extended Passive Mode (|||22000|)
+550 IBMUSER.KEEPME is retained until 2026-10-22 (2026.295) and is not opened for writing before then.
+ftp> append b.txt KEEPME
+local: b.txt remote: KEEPME
+229 Entering Extended Passive Mode (|||22000|)
+550 IBMUSER.KEEPME is retained until 2026-10-22 (2026.295) and is not opened for appending before then.
+ftp> delete KEEPME
+250 IBMUSER.KEEPME deleted.
+ftp> site retpd
+200 SITE command was accepted
+ftp> put report.txt KEEPME
+local: report.txt remote: KEEPME
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.KEEPME
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.53 KiB/s)
+ftp> put report.txt KEEPME
+local: report.txt remote: KEEPME
+229 Entering Extended Passive Mode (|||22000|)
+125 Storing data set IBMUSER.KEEPME
+250 Transfer completed successfully.
+73 bytes sent in 00:00 (1.54 KiB/s)
+ftp> delete KEEPME
+250 IBMUSER.KEEPME deleted.
+ftp> quit
+221 Quit command received. Goodbye.

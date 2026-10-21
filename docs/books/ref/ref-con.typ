@@ -4,7 +4,7 @@
 
 #idx("console commands", "reference")
 The operator controls FTPD from the console with the MODIFY command and the
-STOP command. The _FTPD User's Guide_ shows how to use them, in "Operating
+STOP command. The _FTPD User's Guide_ shows how to use them, in "Running
 FTPD". This chapter lists the syntax and every message that a command writes.
 
 == Syntax <ref-con-syntax>

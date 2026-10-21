@@ -1,6 +1,6 @@
 #import "../bookmaster/bookmaster.typ": *
 
-= Security <ug-security>
+= Setting Up Security <ug-security>
 
 #idx("security")#idx("RAKF")
 FTPD has no user database of its own. RAKF verifies every user ID and
@@ -11,7 +11,7 @@ itself has. The tables, the profiles and the steps to change them are in
 `docs/FTPD_RAKF_SETUP.md` in the FTPD (ftpd) repository. This book does not
 repeat them.
 
-== Logging In <ug-security-login>
+== Checking How Users Log In <ug-security-login>
 
 #idx("login")#idx("password")
 A session ends in the state "logged in" only after RAKF has accepted the user
@@ -43,7 +43,7 @@ network as they are. FTPD does not do TLS itself. With #cmd("SSLPROXY=YES") it
 accepts #cmd("PBSZ") and #cmd("PROT") from a client that talks to a TLS proxy
 in front of FTPD (@ug-ops-config). It does not check that a proxy exists.]
 
-== The Gate: FTPAUTH <ug-security-ftpauth>
+== Allowing a User to Use FTP: FTPAUTH <ug-security-ftpauth>
 
 #idx("FTPAUTH")#idx("FACILITY class")
 After the password is right, FTPD asks RAKF whether the user has READ access to
@@ -62,7 +62,7 @@ not a safe default. RAKF gives ALTER access to resources that have no profile,
 so every user who knows a password can use FTP. The setup guide has the two
 lines to add.]
 
-== Access to Data Sets <ug-security-dsn>
+== Controlling Access to Data Sets <ug-security-dsn>
 
 #idx("data set", "access")#idx("DATASET class")
 For every command that touches a data set, FTPD asks RAKF whether the
@@ -99,7 +99,7 @@ read. The profile protects the contents: #cmd("RETR") of such a data set is
 refused with #cmd("550"). This is how the catalog works on MVS, and the same
 is true for #cmd("LISTCAT") in TSO.]
 
-== The Identity of the Started Task <ug-security-stc>
+== Giving the Started Task Its Identity <ug-security-stc>
 
 #idx("started task", "identity")#idx("FTPD004I")#idx("FTPD004W")
 The started task is not a user, and it has an identity of its own: the one that
@@ -141,12 +141,20 @@ it could gain authority for the moment. So do not give the started task
 access to data sets, and map it to a low identity if your RAKF can. Read the
 message at every start.]
 
-== Jobs That Users Submit <ug-security-jes>
+== Checking the Jobs That Users Submit <ug-security-jes>
 
 #idx("JES", "security")
-When a client stores a job in the JES view (@ug-other-jes), FTPD adds the
+When a client stores a job in the JES view (@ug-jes), FTPD adds the
 user ID and the password of the session to the JOB statement
 (#cmd("USER=") and #cmd("PASSWORD=")), so the job runs as that user and not as
 the started task. FTPD keeps the password in the memory of the session for
-this. FTPD does not look at the rest of the JCL. What the job may do is what
+this. FTPD looks for the JOB statement, adds #cmd("NOTIFY=DUMMY") when the
+statement has no #cmd("NOTIFY"), and does not look at the rest of the JCL. It
+adds the two operands only when it finds a JOB statement. What the job may do is what
 RAKF allows this user.
+
+#note[*Other users' jobs.* #cmd("get") and #cmd("delete") in the JES view find a
+job by its ID and do not compare its owner with the user ID of the session
+(@ug-jes-output). A user who has FTP access can fetch the output of another
+user's job when the ID is known, and can cancel it. Do not give FTP access to a
+user who must not have this.]

@@ -1,0 +1,77 @@
+ftp> append b.txt REPORT
+local: b.txt remote: REPORT
+229 Entering Extended Passive Mode (|||22000|)
+125 Appending to data set IBMUSER.REPORT
+250 Transfer completed successfully.
+15 bytes sent in 00:00 (0.34 KiB/s)
+ftp> get REPORT report3.txt
+local: report3.txt remote: REPORT
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IBMUSER.REPORT FIXrecfm 80
+250 Transfer completed successfully.
+88 bytes received in 00:00 (1.95 KiB/s)
+ftp> !cat report3.txt
+First line of the report
+Second line
+
+Fourth line after an empty one
+second member
+ftp> append b.txt NEWAPP
+local: b.txt remote: NEWAPP
+229 Entering Extended Passive Mode (|||22000|)
+125 Appending to data set IBMUSER.NEWAPP
+250 Transfer completed successfully.
+15 bytes sent in 00:00 (0.31 KiB/s)
+ftp> dir NEWAPP
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB       80  3120  PS   NEWAPP
+226 List completed successfully.
+ftp> append b.txt MYLIB
+local: b.txt remote: MYLIB
+229 Entering Extended Passive Mode (|||22000|)
+550 APPE needs a sequential data set or a new member: IBMUSER.MYLIB is a partitioned data set.
+ftp> rename REPORT OLDREP
+350 RNFR accepted. Please supply new name for RNTO.
+250 IBMUSER.REPORT renamed to IBMUSER.OLDREP
+ftp> dir OLD*
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB       80  3120  PS   OLDREP
+226 List completed successfully.
+ftp> prompt
+Interactive mode off.
+ftp> mget OLD*
+local: OLDREP remote: OLDREP
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending data set IBMUSER.OLDREP FIXrecfm 80
+250 Transfer completed successfully.
+88 bytes received in 00:00 (1.92 KiB/s)
+ftp> !ls -l OLDREP
+-rw-rw-r-- 1 user user 83 Oct 21 16:14 OLDREP
+ftp> delete OLDREP
+250 IBMUSER.OLDREP deleted.
+ftp> delete 'IBMUSER.NEWAPP'
+250 IBMUSER.NEWAPP deleted.
+ftp> delete NEWAPP
+550 DELE fails: IBMUSER.NEWAPP does not exist.
+ftp> rmdir MYLIB
+250 IBMUSER.MYLIB deleted.
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB001 3390 2026/10/21  1    1  FB       80  3120  PS   BLOB
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   CLIST
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   CNTL
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   EXEC
+PUB000 3390 2000/12/31  1    1  U         0 19069  PO   LOAD
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   SOURCE
+PUB000 3390 2026/10/21  1   52  U      4096  4096  PS   UFSHOME
+PUB001 3390 2026/10/21  1    1  VB      255  6233  PS   VARIABLE
+PUB001 3390 2026/10/21  1    1  FB      132  3036  PS   WIDE
+226 List completed successfully.
+ftp> quit
+221 Quit command received. Goodbye.

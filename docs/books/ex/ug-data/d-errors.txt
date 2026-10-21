@@ -1,0 +1,29 @@
+ftp> get NOSUCH x.txt
+local: x.txt remote: NOSUCH
+229 Entering Extended Passive Mode (|||22000|)
+550 Data set IBMUSER.NOSUCH not found
+ftp> get 'SYS1.NOSUCH' x.txt
+local: x.txt remote: 'SYS1.NOSUCH'
+229 Entering Extended Passive Mode (|||22000|)
+550 Data set SYS1.NOSUCH not found
+ftp> get TE* x.txt
+local: x.txt remote: TE*
+229 Entering Extended Passive Mode (|||22000|)
+501 A qualifier in "TE*" contains an invalid character
+ftp> get 'SYS1.PARM/LIB' x.txt
+local: x.txt remote: 'SYS1.PARM/LIB'
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid data set name "'SYS1.PARM/LIB'".  Use MVS Dsname conventions.
+ftp> get 'THISNAMEISFAR.TOOLONGFORADATASETNAME.QUALIFIER.A' x.txt
+local: x.txt remote: 'THISNAMEISFAR.TOOLONGFORADATASETNAME.QUALIFIER.A'
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid dataset name
+ftp> cd NOSUCH
+250 "IBMUSER.NOSUCH." is the working directory name prefix.
+ftp> ls
+229 Entering Extended Passive Mode (|||22000|)
+550 No data sets found.
+ftp> cd 'IBMUSER.'
+250 "IBMUSER." is the working directory name prefix.
+ftp> quit
+221 Quit command received. Goodbye.

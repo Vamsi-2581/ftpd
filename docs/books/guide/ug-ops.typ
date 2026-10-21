@@ -1,6 +1,6 @@
 #import "../bookmaster/bookmaster.typ": *
 
-= Operating FTPD <ug-ops>
+= Running FTPD <ug-ops>
 
 #idx("operating")#idx("started task")
 FTPD runs as a started task. The operator starts it, asks it questions and
@@ -27,7 +27,7 @@ these DD statements:
     [#cmd("STDERR")], [Allocated by the sample. The code of FTPD does not write
       to it.],
     [#cmd("SYSUDUMP")], [A dump, if the address space abends.],
-    [#cmd("HASPCKPT"), #cmd("HASPACE1")], [Optional. The JES view (@ug-other-jes)
+    [#cmd("HASPCKPT"), #cmd("HASPACE1")], [Optional. The JES view (@ug-jes)
       finds the JES2 checkpoint and spool data sets itself. Add the statements
       only for a JES2 with another #cmd("DSNPRFX") than #cmd("SYS1"), or a
       checkpoint that is neither cataloged nor on an online volume
@@ -64,12 +64,14 @@ product can read without the console:
     [4], [FTPD could not read the configuration. #cmd("FTPD009E") and
       #cmd("FTPD091E INITIALIZATION FAILED RC=4") tell it.],
     [8], [FTPD did not start: another FTPD holds the port (#cmd("FTPD002E")), the
-      address space has no communication area (#cmd("FTPD090E")), or FTPD
-      could not listen (#cmd("FTPD056E")).],
+      address space has no communication area (#cmd("FTPD090E")), FTPD
+      could not listen (#cmd("FTPD056E")), or FTPD could not create its worker
+      pool (the log at #cmd("STDOUT") says "failed to create thread
+      manager").],
   )
 ]
 
-== The Messages at Start <ug-ops-msgs>
+== Checking the Messages at Start <ug-ops-msgs>
 
 #idx("messages", "startup")
 Every message of FTPD starts with #cmd("FTPD") and a number, and ends with a
@@ -115,7 +117,7 @@ comes with the configuration too. It counts the lines of the file that name
 a setting FTPD no longer has (@ug-ops-config). The log names them. FTPD is not
 affected. Remove the lines to stop the message.
 
-== The Configuration <ug-ops-config>
+== Configuring FTPD <ug-ops-config>
 
 #idx("configuration")#idx("FTPDPRM")
 FTPD reads its configuration once, when it starts, from the DD name
@@ -126,7 +128,9 @@ The file has one setting on each line, in the form #cmd("KEY=value"). The rules:
 
 - Empty lines are ignored. A line that starts with #cmd("\#") is a comment.
 - The key may be in any case. The value is taken as written, with the blanks
-  at both ends removed.
+  at both ends removed. Only #cmd("SSLPROXY") is strict: its value must be
+  #cmd("YES") or #cmd("NO"), in all upper or all lower case. Any other value
+  is logged as a warning, and #cmd("SSLPROXY") stays off.
 - A line of the form #cmd("VOLSER,UNIT") used to name a DASD volume. No
   function of FTPD reads a volume table from the configuration. FTPD still
   recognises the line, so that an old file loads, and ignores it (see below). A volume for new data sets is chosen with
@@ -232,14 +236,15 @@ values are limited to 1 to 100.
 If the first #cmd("bind()") fails because the port is in use, FTPD looks at its
 own sockets before it waits. A socket that an earlier FTPD left on the port,
 and that no one can use any more, is closed (#cmd("FTPD053I")), and FTPD binds
-again at once. A start that works this way logs no bind error. The sweep closes
-every socket that sits on the port of FTPD, so do not start FTPD on a port that
+again after two seconds. A start that works this way logs no bind error. The
+sweep closes the sockets on the port whose address conflicts with
+#cmd("SRVBIND"), so do not start FTPD on a port that
 another program on the same system uses.
 
 You can stop FTPD with #cmd("/P FTPD") while it waits. It ends after at most one
 second of the wait with #cmd("FTPD051I BIND RETRY ABANDONED, FTPD IS STOPPING").
 
-== Console Commands <ug-ops-con>
+== Controlling FTPD from the Console <ug-ops-con>
 
 #idx("console commands")#idx("MODIFY")
 The operator talks to FTPD with the MODIFY command: #cmd("/F FTPD,command").
@@ -279,7 +284,7 @@ what the file says: a value that FTPD replaced, for example an unusable
 #cmd("DEFVOLUME"), shows with the replacement. When a client behaves in a way
 that you do not expect, start with #cmd("CONFIG") and #cmd("VERSION").
 
-== Sessions and Time-outs <ug-ops-ses>
+== Limiting Sessions and Time-outs <ug-ops-ses>
 
 #idx("sessions")#idx("time-out")
 Each client session has its own thread. FTPD accepts as many sessions as
@@ -312,7 +317,7 @@ A session that sends nothing for #cmd("IDLETIMEOUT") seconds gets
 commands is. Raise the value for clients that keep the control connection open
 for a long time.
 
-== The Log <ug-ops-log>
+== Reading the Log <ug-ops-log>
 
 #idx("log")#idx("STDOUT")
 FTPD writes to two places. The messages with a number go to the console. The
@@ -346,8 +351,9 @@ FTPD070E ABEND S0C4 RECOVERED CMD=RETR SOCKET=3 TOTAL=1
 
 with the ABEND code, the FTP command, the socket of the session and the number
 of recoveries since the start. A user ABEND shows as #cmd("U") and four digits.
-If FTPD could not even set up the recovery, the message says so in brackets, and
-the command did not run.
+If FTPD could not even set up the recovery, the message says so in parentheses,
+#cmd("FTPD070E ABEND RECOVERY (ESTAE CREATE FAILED) CMD=... SOCKET=... TOTAL=..."),
+and the command did not run.
 
 The client gets one of three replies:
 
@@ -372,6 +378,8 @@ I/O table of the started task for the DD of the file and says what it found:
 - #cmd("CLOSE ABENDED, DD RELEASED"): the DD is gone. The close ended in an
   ABEND, but the data set is free. The operator has nothing to do. FTPD 1.3.0
   writes this text. Before, it said #cmd("DD STILL HELD") in this case too.
+- #cmd("ABANDON AFTER ... RETURNED n -- SEE __fabandon() IN CLIBIO.H"): the
+  call that abandons the file returned a negative code.
 - #cmd("CLOSE ABENDED, DD STATE UNKNOWN"): FTPD had no DD name to look for, or
   no table to look in, and cannot tell. If a delete of the data set is refused,
   the DD is held.

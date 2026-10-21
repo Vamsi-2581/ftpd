@@ -25,12 +25,42 @@ to and from the host:
       This is the view a session starts in (@ug-data).],
     [JES], [submit a job by storing it, list jobs, fetch the spool output of
       a job, cancel a job. A client switches to it with
-      #cmd("SITE FILETYPE=JES") (@ug-other-jes).],
+      #cmd("site filetype=jes") (@ug-jes).],
     [UFS], [work in the Unix-like file systems that UFSD serves. A client
       switches to it by changing to a directory that starts with a slash
-      (@ug-other-ufs).],
+      (@ug-ufs).],
   )
 ] <ug-intro-tab>
+
+== Finding a Task <ug-intro-tasks>
+
+#idx("tasks")
+The chapters for the user follow the work that a user does. Each has a session
+that was typed at a real FTPD with a command line client:
+
+#tab(caption: [Where to find a task])[
+  #table(columns: (2.6in, 1fr),
+    [I want to ...], [Chapter],
+    [connect and log in, or find out why the login fails], [@ug-first],
+    [download or upload a data set, in text or in binary], [@ug-data-retr and
+      @ug-data-stor],
+    [create a new data set with #cmd("site recfm"), #cmd("site lrecl") and
+      #cmd("site blksize")], [@ug-data-create],
+    [read, write, list and delete the members of a partitioned data set],
+      [@ug-data-pds],
+    [move several data sets with #cmd("mget") and #cmd("mput")], [@ug-data-mget],
+    [rename or delete a data set], [@ug-data-manage],
+    [submit a job, see its status, fetch its output, delete it], [@ug-jes],
+    [work with UFS files], [@ug-ufs],
+    [find out what an error reply means], [@ug-errors],
+    [install FTPD, set up security, run the started task, remove FTPD],
+      [@ug-install, @ug-security, @ug-ops, @ug-remove],
+  )
+]
+
+The sessions are typed with #cmd("tnftp") (@ug-first-read). For each client
+command, the protocol command that FTPD receives is in the _FTPD Reference_, in
+"Client Commands and Protocol Commands".
 
 #idx("session")
 Each client connection is a _session_ with its own user, working directory
@@ -89,9 +119,9 @@ the book explains the subject:
       [@ug-site-case],
     [#cmd("APPE") appends to a sequential data set and creates what is
       missing. It refuses an existing member of a PDS. Before, it replaced
-      the data set like #cmd("STOR").], [@ug-data-appe],
+      the data set like #cmd("STOR").], [@ug-data-manage],
     [A UFS file system without free inodes answers #cmd("552") instead of
-      #cmd("452").], [@ug-other-ufs],
+      #cmd("452").], [@ug-ufs],
     [A connection that the worker pool refuses is answered with
       #cmd("421") and closed. Before, the control connection stayed open and
       the session was never freed.], [@ug-ops-ses],
@@ -127,7 +157,7 @@ the book explains the subject:
     [#cmd("SITE JESSTATUS") takes #cmd("ALL"), #cmd("INPUT"), #cmd("ACTIVE") or
       #cmd("OUTPUT") and filters the job list, #cmd("RETR") and #cmd("DELE") of
       the JES view. Before, FTPD stored any value and listed every job.],
-      [@ug-other-jes],
+      [@ug-jes],
     [#cmd("SITE RDW") and a #cmd("SITE SBSENDEOL") other than #cmd("CRLF") are
       answered with #cmd("501"). Before, the answer was #cmd("200") and
       nothing changed.], [@ug-site-keys],

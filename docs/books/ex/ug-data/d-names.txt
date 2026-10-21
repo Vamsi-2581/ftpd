@@ -1,0 +1,42 @@
+ftp> pwd
+Remote directory: 'IBMUSER.'
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   CLIST
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   CNTL
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   EXEC
+PUB000 3390 2000/12/31  1    1  U         0 19069  PO   LOAD
+PUB000 3390 2000/12/31  1    1  FB       80 19040  PO   SOURCE
+PUB000 3390 2026/10/21  1   52  U      4096  4096  PS   UFSHOME
+226 List completed successfully.
+ftp> cd test
+250 "IBMUSER.TEST." is the working directory name prefix.
+ftp> pwd
+Remote directory: 'IBMUSER.TEST.'
+ftp> cd 'SYS1.'
+250 "SYS1." is the working directory name prefix.
+ftp> pwd
+Remote directory: 'SYS1.'
+ftp> dir PARM*
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+Volume Unit    Referred Ext Used Recfm Lrecl BlkSz Dsorg Dsname
+MVSRES 3350 2026/10/21  1   12  F        80    80  PO   PARMLIB
+226 List completed successfully.
+ftp> cd 'SYS1.PARMLIB'
+250 The working directory "SYS1.PARMLIB" is a partitioned data set
+ftp> pwd
+Remote directory: 'SYS1.PARMLIB'
+ftp> dir IEAS*
+229 Entering Extended Passive Mode (|||22000|)
+150 Opening data connection for file list
+ Name     VV.MM   Created       Changed      Size  Init   Mod   Id
+IEASYS00
+IEASYS99
+226 List completed successfully.
+ftp> cd 'IBMUSER.'
+250 "IBMUSER." is the working directory name prefix.
+ftp> quit
+221 Quit command received. Goodbye.

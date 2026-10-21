@@ -189,7 +189,7 @@ of the full names, and still work.
       blanks at the end of a record in text mode. A record of one blank, as
       #cmd("STOR") writes for an empty line in a variable data set, is sent as
       an empty line with the blanks dropped and as a single blank with
-      them kept (_FTPD User's Guide_, "Fetching").],
+      them kept (_FTPD User's Guide_, "Downloading a Data Set").],
     [#cmd("JESJOBNAME=n")], [The job name for the job list. Upper case.
       #cmd("JESJOBNAME=") with no value ends the filter and
       lists all job names.],
@@ -481,7 +481,7 @@ the session goes on with the next command:
   expires.
 - *The order of the checks.* The name and the security check come first. Then
   come the #cmd("APPE") refusals for a member that exists and for a
-  partitioned data set without a member (_FTPD User's Guide_, "Appending").
+  partitioned data set without a member (_FTPD User's Guide_, "Appending, Renaming and Deleting").
   The retention check follows them and runs before FTPD allocates or opens
   anything.
 - *Not checked.* #cmd("DELE") and #cmd("RMD") do not look at the expiration

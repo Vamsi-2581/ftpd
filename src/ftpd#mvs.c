@@ -14,10 +14,12 @@
 #include "ftpd#dsn.h"
 #include "ftpd#lse.h"
 #include "ftpd#mvs.h"
+#include "ftpd#ret.h"
 #include "ftpd#xlt.h"
 #include <mvs/dynalloc.h>
 #include <mvs/idcams.h>
 #include <mvs/pds.h>
+#include <time.h>
 
 /* --------------------------------------------------------------------
 ** z/OS-compatible dataset name wildcard matcher.
@@ -2016,6 +2018,37 @@ ftpd_mvs_scratch(ftpd_session_t *sess, const char *dsn)
 }
 
 /* --------------------------------------------------------------------
+** Is this data set still under a retention period?
+**
+** OPEN for output of a data set whose expiration date has not passed does not
+** write: it raises IEC507D and the thread waits for an operator reply that
+** nobody sends (#198).  Asking the DSCB first lets STOR and APPE answer 550
+** instead.  The DSCB of the base data set decides, for a PDS member as well:
+** a PDS that MKD created under SITE RETPD refuses its first member too.
+**
+** Returns 1 and the date when retained.  0 when it is not -- and when the
+** DSCB cannot be read, in which case the OPEN does what it always did.
+** ----------------------------------------------------------------- */
+static int
+retention_active(const char *dsn, LOCWORK *lw, ftpd_ret_date_t *until)
+{
+    DSCB dscb;
+    time_t now;
+    struct tm tm;
+
+    memset(&dscb, 0, sizeof(dscb));
+    if (__dscbdv(dsn, lw->volser, &dscb) != 0)
+        return 0;
+
+    now = time(NULL);
+    if (localtime_r(&now, &tm) == NULL)
+        return 0;
+
+    return ftpd_ret_unexpired((const unsigned char *)dscb.dscb1.expdt,
+                              tm.tm_year + 1900, tm.tm_yday + 1, until);
+}
+
+/* --------------------------------------------------------------------
 ** STOR and APPE — receive data from client, write to dataset/member
 **
 ** One body for both: they differ in what happens to a data set that already
@@ -2099,6 +2132,29 @@ mvs_store(ftpd_session_t *sess, const char *arg, int append)
             "APPE needs a sequential data set or a new member: %s is a "
             "partitioned data set.", dsn);
         return 0;
+    }
+
+    /* A data set under a retention period is not opened for output without
+    ** the operator's say-so (IEC507D), and the session thread would wait for
+    ** it.  Refuse here, before the OPEN, for STOR and APPE alike (#198). */
+    if (ds_exists) {
+        ftpd_ret_date_t until;
+
+        if (retention_active(dsn, &lw, &until)) {
+            ftpd_log(LOG_INFO, "%s: %s retained until %04d.%03d, refused",
+                     verb, dsn, until.year, until.yday);
+            if (until.permanent)
+                ftpd_session_reply(sess, FTP_550,
+                    "%s has a permanent retention period and is not opened "
+                    "for %s.", dsn, append ? "appending" : "writing");
+            else
+                ftpd_session_reply(sess, FTP_550,
+                    "%s is retained until %04d-%02d-%02d (%04d.%03d) and is "
+                    "not opened for %s before then.", dsn, until.year,
+                    until.month, until.day, until.year, until.yday,
+                    append ? "appending" : "writing");
+            return 0;
+        }
     }
 
     /* Step 1: If dataset doesn't exist, create it via __dsalcf():

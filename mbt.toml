@@ -81,6 +81,12 @@ sources = ["test/tstlse.c", "src/ftpd#lse.c"]
 [test.TSTDSN]
 sources = ["test/tstdsn.c", "src/ftpd#dsn.c"]
 
+# ftpd_ret_unexpired() -- does the DSCB's expiration date make OPEN for output
+# ask the operator (IEC507D)?  STOR and APPE refuse with 550 instead (#198).
+# ftpd#ret.c is free of project and MVS headers, so this is DUAL like TSTDSN.
+[test.TSTRET]
+sources = ["test/tstret.c", "src/ftpd#ret.c"]
+
 # ftpdcfg_load() -- a read error on DD:FTPDPRM must abandon the start (#119).
 # MVS-only: the vector is a real BSAM wrong-length record, built here by
 # allocating the same data set through two DDs that disagree about BLKSIZE,

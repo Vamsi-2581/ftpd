@@ -19,6 +19,7 @@
 #include "ftpd.h"
 #include "ftpd#ses.h"
 #include "ftpd#sit.h"
+#include "ftpd#mvs.h"
 #include <mbtcheck.h>
 
 static ftpd_server_t    server;
@@ -62,6 +63,40 @@ ftpdcfg_volume_online(const char *volser, unsigned short *dasdtype)
     if (dasdtype)
         *dasdtype = 0;
     return strcmp(volser, "PUB001") == 0 || strcmp(volser, "SYSRES") == 0;
+}
+
+/* The model data set lookup is replaced: the real one needs a catalog, a
+** VTOC and RAKF.  Names stand for the cases the real one can answer. */
+static char model_asked[64];
+static int  model_calls;
+
+int
+ftpd_mvs_dcbmodel(ftpd_session_t *s, const char *dsn, ftpd_dcbmodel_t *m,
+                  char *err, int errsz)
+{
+    (void)s;
+    strncpy(model_asked, dsn, sizeof(model_asked) - 1);
+    model_calls++;
+    memset(m, 0, sizeof(*m));
+
+    if (strcmp(dsn, "MODEL.VB") == 0) {
+        strcpy(m->recfm, "VB");
+        m->lrecl = 255;
+        m->blksize = 6233;
+        return 0;
+    }
+    if (strcmp(dsn, "MODEL.SPAN") == 0) {
+        strcpy(m->recfm, "VB");
+        m->lrecl = 1000;
+        m->blksize = 4000;
+        strcpy(m->note, "RECFM attribute S of the model is not carried over");
+        return 0;
+    }
+    if (strcmp(dsn, "NO.ACCESS") == 0)
+        snprintf(err, errsz, "DCBDSN: access to %s denied", dsn);
+    else
+        snprintf(err, errsz, "DCBDSN: %s is not cataloged", dsn);
+    return -1;
 }
 
 static void
@@ -435,7 +470,7 @@ main(void)
     refused("J=X");
     refused("PRIMARYY=100");
     refused("BLKSIZEE=1");
-    refused("DCBDSN=A.B");
+    refused("DCBDSNX=A.B");
     refused("DSNTYPE=LARGE");
     refused("DIRECTORYMODE=X");
 
@@ -507,6 +542,62 @@ main(void)
     run("DIRECTORY=0", &st, &code, text, sizeof(text));
     CHECK(st.alloc.dirblks == 25 && strstr(text, "DIRECTORY must be") != NULL,
           "DIRECTORY=0 is refused, DEFDIRECTORY stays");
+
+    /* --- DCBDSN: RECFM/LRECL/BLKSIZE from a model data set (#180) ------ */
+    model_calls = 0;
+    run("DCBDSN=MODEL.VB", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(text, "SITE command was accepted") == 0
+          && strcmp(st.alloc.recfm, "VB") == 0 && st.alloc.lrecl == 255
+          && st.alloc.blksize == 6233 && strcmp(model_asked, "MODEL.VB") == 0,
+          "DCBDSN=MODEL.VB takes RECFM, LRECL and BLKSIZE of the model");
+    run("DCBDSN='model.vb'", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(model_asked, "MODEL.VB") == 0
+          && strcmp(st.alloc.recfm, "VB") == 0,
+          "quotes are dropped and the name is upper-cased");
+    same("DCBDSN=MODEL.VB", "dcbdsn=model.vb");
+    same("DCBDSN=MODEL.VB", "DCB=MODEL.VB");
+    same("DCBDSN=MODEL.VB", "dc=MODEL.VB");
+
+    run("DCBDSN=MODEL.VB LRECL=100", &st, &code, text, sizeof(text));
+    CHECK(strcmp(st.alloc.recfm, "VB") == 0 && st.alloc.lrecl == 100
+          && st.alloc.blksize == 6233,
+          "LRECL after DCBDSN wins, the rest comes from the model");
+    run("LRECL=100 DCBDSN=MODEL.VB", &st, &code, text, sizeof(text));
+    CHECK(st.alloc.lrecl == 255,
+          "DCBDSN after LRECL wins: the last one given counts");
+    run("RECFM=U DCBDSN", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.alloc.recfm, "FB") == 0
+          && st.alloc.lrecl == 80 && st.alloc.blksize == 3120,
+          "a bare DCBDSN goes back to DEFRECFM, DEFLRECL, DEFBLKSIZE");
+
+    run("DCBDSN=MODEL.SPAN", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.alloc.recfm, "VB") == 0
+          && st.alloc.lrecl == 1000
+          && strstr(text, "attribute S") != NULL
+          && strstr(text, "SITE command was accepted") != NULL,
+          "attributes FTPD cannot carry over are named in a warning");
+
+    run("RECFM=VB DCBDSN=NO.SUCH", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "NO.SUCH is not cataloged") != NULL
+          && strstr(text, "applied") != NULL
+          && strcmp(st.alloc.recfm, "VB") == 0 && st.alloc.lrecl == 80,
+          "a model that is not cataloged is 501 and changes nothing");
+    run("DCBDSN=NO.SUCH", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strcmp(st.alloc.recfm, "FB") == 0
+          && st.alloc.lrecl == 80 && st.alloc.blksize == 3120,
+          "a refused DCBDSN keeps the session's values");
+    run("DCBDSN=NO.ACCESS", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strstr(text, "denied") != NULL
+          && strcmp(st.alloc.recfm, "FB") == 0,
+          "a model the user may not read is refused");
+
+    model_calls = 0;
+    run("DCBDSN=A..B", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && model_calls == 0, "an invalid name is refused unread");
+    run("DCBDSN=MODEL.*", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && model_calls == 0, "a pattern is refused unread");
+    run("DCBDSN=MODEL.PDS(MEM)", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && model_calls == 0, "a member is refused unread");
 
     return mbt_test_summary("TSTSIT");
 }

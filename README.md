@@ -119,6 +119,7 @@ ftp mvshost 2121
 | RECFM=*fmt* | Record format (FB, VB, F, V, U) |
 | LRECL=*n* | Logical record length |
 | BLKSIZE=*n* | Block size |
+| DCBDSN=*dsn* | Take RECFM, LRECL and BLKSIZE from the cataloged data set *dsn* (fully qualified, quotes optional) for the data sets created next; a bare `DCBDSN` returns the three to their defaults |
 | PRIMARY=*n* | Primary space allocation (1-16777215) |
 | SECONDARY=*n* | Secondary space allocation (0-16777215; 0 = none) |
 | DIRECTORY=*n* | PDS directory blocks (1-16777215), default `DEFDIRECTORY` |
@@ -139,6 +140,12 @@ A parameter given without a value returns to the configured default — so
 `SITE PRIMARY` undoes an earlier `SITE PRIMARY=200` for the rest of the
 session (`SITE RETPD` returns to no retention). `BLOCKS` counts the space in
 units of the current `BLKSIZE`.
+
+`SITE DCBDSN=dsn` copies the three values at once, so the last of `DCBDSN`,
+`RECFM`, `LRECL` and `BLKSIZE` given wins for each value. A model that is not
+cataloged, has no readable DSCB or no RECFM, or that the user may not read, is
+answered `501` and nothing changes. RECFM `S`, `T` and `M` are not carried
+over; the `200` names it when the model has one.
 
 `SITE RETPD=n` with `n` above `MAXRETPD` in `FTPDPRM` (default 365 days) is
 answered `501` naming the limit, and the session keeps its retention period.

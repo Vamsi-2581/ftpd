@@ -546,6 +546,79 @@ ftpd_mvs_is_pds(const char *dsn)
 }
 
 /* --------------------------------------------------------------------
+** SITE DCBDSN: RECFM, LRECL and BLKSIZE of a model data set.
+**
+** READ access is asked of RAKF for the session's ACEE before the DSCB is
+** touched: LOCATE and OBTAIN check nothing, so without it any logged-in user
+** could read the attributes of a data set RAKF keeps from them.  No window
+** (ftpd_acee_enter) is needed -- racf_auth() takes the ACEE as an argument.
+**
+** Of the RECFM bits only F, V, U, B and A reach the allocation (the SVC 99
+** text units in ftpd_mvs_stor() know no others), and sess->alloc.recfm holds
+** three characters.  S, T and M are left out and named in m->note.
+** ----------------------------------------------------------------- */
+int
+ftpd_mvs_dcbmodel(ftpd_session_t *sess, const char *dsn,
+                  ftpd_dcbmodel_t *m, char *err, int errsz)
+{
+    LOCWORK lw;
+    DSCB dscb;
+    unsigned char rf;
+    int n = 0;
+    int rc;
+
+    memset(m, 0, sizeof(*m));
+
+    if (sess->acee) {
+        rc = racf_auth(sess->acee, "DATASET", dsn, RACF_ATTR_READ);
+        if (!ftpd_racf_allowed(rc)) {
+            ftpd_log(LOG_WARN, "%s: READ access denied to %s for %s",
+                     __func__, dsn, sess->user);
+            snprintf(err, errsz, "DCBDSN: access to %s denied", dsn);
+            return -1;
+        }
+    }
+
+    memset(&lw, 0, sizeof(lw));
+    if (__locate(dsn, &lw) != 0) {
+        snprintf(err, errsz, "DCBDSN: %s is not cataloged", dsn);
+        return -1;
+    }
+
+    memset(&dscb, 0, sizeof(dscb));
+    if (__dscbdv(dsn, lw.volser, &dscb) != 0) {
+        snprintf(err, errsz, "DCBDSN: no format 1 DSCB for %s", dsn);
+        return -1;
+    }
+
+    rf = dscb.dscb1.recfm;
+    if ((rf & RECFU) == RECFU)
+        m->recfm[n++] = 'U';
+    else if (rf & RECFV)
+        m->recfm[n++] = 'V';
+    else if (rf & RECFF)
+        m->recfm[n++] = 'F';
+    else {
+        snprintf(err, errsz, "DCBDSN: %s has no RECFM recorded", dsn);
+        return -1;
+    }
+    if (rf & RECFB)
+        m->recfm[n++] = 'B';
+    if (rf & RECFA)
+        m->recfm[n++] = 'A';
+    m->recfm[n] = '\0';
+
+    if (rf & (RECFS | RECFT | RECMC))
+        snprintf(m->note, sizeof(m->note),
+                 "RECFM attribute %s of %s is not carried over",
+                 (rf & RECFS) ? "S" : (rf & RECFT) ? "T" : "M", dsn);
+
+    m->lrecl = dscb.dscb1.lrecl;
+    m->blksize = dscb.dscb1.blksz;
+    return 0;
+}
+
+/* --------------------------------------------------------------------
 ** Format and send dataset list entry on data connection
 ** ----------------------------------------------------------------- */
 static void

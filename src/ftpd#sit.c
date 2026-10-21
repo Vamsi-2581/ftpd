@@ -15,6 +15,8 @@
 */
 #include "ftpd.h"
 #include "ftpd#ses.h"
+#include "ftpd#dsn.h"
+#include "ftpd#mvs.h"
 #include "ftpd#sit.h"
 #include "ftpd#jfl.h"
 #ifdef FTPD_DEBUG_ABEND
@@ -97,6 +99,7 @@ static const site_keyword_t site_keywords[] = {
     { "BLOCKS",          2 },
     { "CYLINDERS",       2 },
     { "DATACLASS",       5 },
+    { "DCBDSN",          2 },
     { "DIRECTORY",       1 },
     { "FILETYPE",        4 },
     { "JESJOBNAME",      7 },
@@ -269,6 +272,66 @@ site_apply_one(ftpd_session_t *sess,
                 "BLOCKSIZE must be a multiple of LRECL for RECFM FB");
         }
         sess->alloc.blksize = blk;
+        return 0;
+    }
+
+    /* DCBDSN=model copies the model's RECFM, LRECL and BLKSIZE into the
+    ** session right now.  Nothing remembers that a model was used, so a
+    ** RECFM, LRECL or BLKSIZE given afterwards simply overwrites its part and
+    ** a later DCBDSN overwrites all three: the last one given wins, with no
+    ** state beyond the three values.  A bare DCBDSN returns all three to the
+    ** configured defaults, like the keywords it stands in for.
+    **
+    ** A model that cannot be used is refused (501) and the current values stay:
+    ** carrying on would let the next STOR create a data set with attributes
+    ** the client believes it replaced. */
+    if (strcmp(key, "DCBDSN") == 0) {
+        ftpd_dcbmodel_t m;
+        char dsn[FTPD_MAX_DSN_LEN + 3];
+        char err[128];
+        int len;
+        int i;
+
+        if (val[0] == '\0') {
+            strcpy(sess->alloc.recfm, cfg->defaults.recfm);
+            sess->alloc.lrecl = cfg->defaults.lrecl;
+            sess->alloc.blksize = cfg->defaults.blksize;
+            return 0;
+        }
+
+        /* The name is fully qualified, with or without quotes. */
+        len = (int)strlen(val);
+        i = (val[0] == '\'') ? 1 : 0;
+        if (len > i && val[len - 1] == '\'')
+            len--;
+        len -= i;
+        if (len < 1 || len > FTPD_MAX_DSN_LEN) {
+            if (deny[0] == '\0')
+                snprintf(deny, denysz, "DCBDSN: not a data set name; "
+                         "keeping the current values");
+            return 0;
+        }
+        site_copy_upper(dsn, sizeof(dsn), val + i);
+        dsn[len] = '\0';
+
+        if (strchr(dsn, '(') != NULL || !ftpd_dsn_valid(dsn, 0)) {
+            if (deny[0] == '\0')
+                snprintf(deny, denysz, "DCBDSN: %s is not a plain data set "
+                         "name; keeping the current values", dsn);
+            return 0;
+        }
+
+        if (ftpd_mvs_dcbmodel(sess, dsn, &m, err, sizeof(err)) != 0) {
+            if (deny[0] == '\0')
+                snprintf(deny, denysz, "%s; keeping the current values", err);
+            return 0;
+        }
+
+        strcpy(sess->alloc.recfm, m.recfm);
+        sess->alloc.lrecl = m.lrecl;
+        sess->alloc.blksize = m.blksize;
+        if (m.note[0] != '\0')
+            site_warn(warn, warnsz, m.note);
         return 0;
     }
 

@@ -139,7 +139,18 @@ sources = ["test/tstque.c", "src/ftpd#*.c"]
 # so it needs no socket, no UCB scan and no log anchor.
 [test.TSTSIT]
 host = false
-sources = ["test/tstsit.c", "src/ftpd#sit.c", "src/ftpd#jfl.c"]
+sources = ["test/tstsit.c", "src/ftpd#sit.c", "src/ftpd#jfl.c",
+           "src/ftpd#dsn.c"]
+
+# ftpd_mvs_dcbmodel() -- SITE DCBDSN reads RECFM, LRECL and BLKSIZE of a
+# model data set from its Format-1 DSCB (#180).  MVS-only: catalog and VTOC.
+# The scratch data sets are PARM.FB, .VBA, .U and .PDS, created and deleted by
+# the test; every ftpd#*.c comes along (ftpd#mvs.c reaches into most of them)
+# and ftpd.c is not in the glob.  Keep parm short, see TSTPRM.
+[test.TSTDCB]
+host = false
+parm = "IBMUSER.FTPD.TDCB"
+sources = ["test/tstdcb.c", "src/ftpd#*.c"]
 
 # ftpd_mvs_retr() -- the FILE stays reachable through sess->cur_file until
 # fclose() has returned, so ABEND recovery can still abandon it and release

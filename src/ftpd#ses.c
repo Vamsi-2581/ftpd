@@ -9,11 +9,13 @@
 #include "ftpd#aut.h"               /* identity window for the scratch */
 #include "ftpd#mvs.h"               /* ftpd_mvs_scratch()              */
 #include "ftpd#cmd.h"
+#include "ftpd#abd.h"               /* is the abandoned DD still held? */
 #include "ftpd#dat.h"
 #include "ftpd#ufs.h"
 #include "libufs.h"                 /* UFSFILE, ufs_fclose()          */
 #include <mvs/lock.h>               /* unlock() — identity window ENQ */
 #include <mvs/file.h>               /* __fabandon()                   */
+#include <mvs/dd.h>                 /* __tiot()                       */
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <mvs/socket.h>
@@ -538,20 +540,33 @@ ftpd_session_recover(ftpd_session_t *sess, unsigned abcode, const char *verb)
     ** x37 on a data set it created and now wants to scratch it.
     **
     ** Clear the tracking field BEFORE the call so a failure here can never
-    ** cause a double close on a subsequent recovery.  A positive rc is the
-    ** ABEND code from a close that failed anyway, and means the DD is still
-    ** held -- the one case where the scratch in the session loop will still
-    ** be refused. */
+    ** cause a double close on a subsequent recovery.
+    **
+    ** A positive rc is the ABEND code of a CLOSE that failed, and says
+    ** nothing about the DD: __fabandon() unallocates after a failed CLOSE
+    ** too, and the first recovered SB14 of a process abends SA0A there with
+    ** the DD freed all the same (#232, libc370#705).  So the TIOT decides
+    ** whether the scratch in the session loop will still be refused -- the
+    ** DD name is copied first, out of the FILE the call is about to free. */
     fp = sess->cur_file;
     sess->cur_file = NULL;
     if (fp) {
-        int arc = __fabandon(fp);
+        char ddname[sizeof(fp->ddname)];
+        int arc;
 
-        if (arc != 0)
+        memcpy(ddname, fp->ddname, sizeof(ddname));
+        ddname[sizeof(ddname) - 1] = '\0';
+        arc = __fabandon(fp);
+
+        if (arc > 0) {
+            int state = ftpd_abd_dd_state(__tiot(), ddname);
+
+            ftpd_log_wto("FTPD076W ABANDON AFTER %s RETURNED %d -- %s",
+                         verb, arc, ftpd_abd_close_text(state));
+        } else if (arc < 0) {
             ftpd_log_wto("FTPD076W ABANDON AFTER %s RETURNED %d -- "
-                         "%s", verb, arc,
-                         arc > 0 ? "CLOSE ABENDED, DD STILL HELD"
-                                 : "SEE __fabandon() IN CLIBIO.H");
+                         "SEE __fabandon() IN CLIBIO.H", verb, arc);
+        }
     }
 
     return 0;

@@ -2027,8 +2027,10 @@ if grep -q "^501 SITE RDW is not supported" "$FTP_OUT"; then
 else
     fail "SITE RDW"; tail -6 "$FTP_OUT" | sed 's/^/    /'
 fi
-if grep -q "^501 SBSENDEOL=LF is not supported" "$FTP_OUT" \
-   && [ "$(grep -c "^200 SITE command was accepted" "$FTP_OUT")" -eq 1 ]; then
+# The 200 for SBSENDEOL=CRLF must come right after the 501 for =LF; the
+# multi-line JESSTATUS reply further down ends in the same 200 line.
+if grep -A1 "^501 SBSENDEOL=LF is not supported" "$FTP_OUT" \
+   | grep -q "^200 SITE command was accepted"; then
     pass "SITE SBSENDEOL=LF is refused with 501, SBSENDEOL=CRLF is accepted"
 else
     fail "SITE SBSENDEOL"; tail -6 "$FTP_OUT" | sed 's/^/    /'

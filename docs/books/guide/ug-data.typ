@@ -280,10 +280,9 @@ directory blocks:
   the data set or who created it. If you created it with #cmd("MKD"), you know
   the value of #cmd("SITE DIRECTORY") you used, or #cmd("DEFDIRECTORY") of the
   server if you set none (@ug-site).
-+ Make the name of the new partitioned data set free. #cmd("MKD") answers
-  #cmd("550") for a name that exists. Either give the new data set another
-  name, or rename the full one first with #cmd("RNFR") and #cmd("RNTO")
-  (@ug-data-manage).
++ Choose a name for the new partitioned data set that is free. #cmd("MKD")
+  answers #cmd("550") for a name that exists, so give the new data set
+  another name than the full one.
 + Set a number higher than that of the full data set with
   #cmd("SITE DIRECTORY=n"), and create the new data set with #cmd("MKD").
   #cmd("SITE DIRECTORY") acts on #cmd("MKD") only. A #cmd("STOR") that creates

@@ -54,8 +54,7 @@ PASVADR=ANY
 # --- Limits ---
 #
 # MAXSESSIONS is the most simultaneous sessions; a connection beyond it is
-# closed.  FTPD always runs at least 4 worker threads, so a value below 4
-# still works and logs a warning at start.
+# closed.
 #
 MAXSESSIONS=10
 IDLETIMEOUT=300

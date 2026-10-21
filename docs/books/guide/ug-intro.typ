@@ -103,5 +103,8 @@ the book explains the subject:
     [A member #cmd("STOR") or #cmd("APPE") into a partitioned data set with a
       full directory answers #cmd("552") with the remedy. Before, the answer
       was #cmd("451"), and a retry failed the same way.], [@ug-data-dirfull],
+    [#cmd("STATS") counts each transferred byte once, and only for sessions
+      that have ended. Before, a transfer of a data set counted two to three
+      times.], [@ug-ops-con],
   )
 ] <ug-intro-new-tab>

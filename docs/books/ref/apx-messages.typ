@@ -64,8 +64,10 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD010I STATUS: ACTIVE") or #cmd("INACTIVE")], [The answer to
       #cmd("STATS"), line 1.],
     [#cmd("FTPD011I SESSIONS:    n ACTIVE, n TOTAL")], [#cmd("STATS"), line 2.],
-    [#cmd("FTPD012I BYTES IN:    n")], [#cmd("STATS"), line 3.],
-    [#cmd("FTPD013I BYTES OUT:   n")], [#cmd("STATS"), line 4.],
+    [#cmd("FTPD012I BYTES IN:    n")], [#cmd("STATS"), line 3. The bytes
+      received on data connections by the sessions that have ended.],
+    [#cmd("FTPD013I BYTES OUT:   n")], [#cmd("STATS"), line 4. The bytes
+      sent on data connections by the sessions that have ended.],
     [#cmd("FTPD014I TRACE:       ON") or #cmd("OFF")], [#cmd("STATS"), line 5.],
     [#cmd("FTPD015I ACTIVE SESSIONS: n / n")], [The answer to #cmd("SESSIONS").],
     [#cmd("FTPD016I FTPD version (commit)")], [The answer to #cmd("VERSION"),

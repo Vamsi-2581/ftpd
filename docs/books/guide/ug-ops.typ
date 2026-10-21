@@ -237,7 +237,8 @@ answer comes as messages on the console.
     [Command], [Answer],
     [#cmd("STATS")], [#cmd("FTPD010I") to #cmd("FTPD014I"): the status, the
       number of active and of all sessions since the start, the bytes received
-      and sent, and the state of the trace.],
+      and sent, and the state of the trace. The bytes are those of the
+      sessions that have ended.],
     [#cmd("SESSIONS")], [#cmd("FTPD015I ACTIVE SESSIONS: 2 / 10"): the active
       sessions and #cmd("MAXSESSIONS").],
     [#cmd("CONFIG")], [The configuration that FTPD uses: the messages

@@ -78,7 +78,8 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD021E TRACE: SYNTAX: TRACE ON|OFF|DUMP")], [#cmd("TRACE") with a
       word that is not #cmd("ON"), #cmd("OFF") or #cmd("DUMP"), or with none.],
     [#cmd("FTPD040I") to #cmd("FTPD049I")], [The answer to #cmd("CONFIG"). The
-      messages #cmd("FTPD057I") and #cmd("FTPD058I") belong to it. See
+      messages #cmd("FTPD057I"), #cmd("FTPD058I") and #cmd("FTPD061I") belong
+      to it. See
       @ref-con-config.],
   )
 ]
@@ -124,6 +125,9 @@ sees are the reply codes in @ref-reply.
       volume (@ref-prm-def).],
     [#cmd("FTPD060W DEFUNIT=unit DOES NOT MATCH DEFVOLUME=volume (A type) -- UNIT IGNORED")], [The unit has four digits and they differ from the device type
       of the volume. FTPD drops #cmd("DEFUNIT").],
+    [#cmd("FTPD061I   MAXRETPD=n")], [Part of #cmd("CONFIG"). The most days that
+      #cmd("SITE RETPD") takes (@ref-site-retpd-limit). The message is new in
+      FTPD 1.3.0.],
   )
 ]
 
@@ -136,7 +140,8 @@ sees are the reply codes in @ref-reply.
       ended in a system ABEND, and FTPD recovered. The ABEND code, the FTP
       command, the socket of the session and the number of recoveries since
       the start follow. For #cmd("SB37"), #cmd("SD37") and #cmd("SE37") the
-      client gets #cmd("552"), for all others #cmd("451") (see "When a Command Abends" in the _FTPD User's Guide_).],
+      client gets #cmd("552"), and for #cmd("SB14") during a #cmd("STOR") or
+      #cmd("APPE") as well (a full directory). For all others the client gets #cmd("451") (see "When a Command Abends" in the _FTPD User's Guide_).],
     [#cmd("FTPD070E ABEND Unnnn RECOVERED CMD=verb SOCKET=n TOTAL=n")], [The same
       for a user ABEND.],
     [#cmd("FTPD070E ABEND RECOVERY (ESTAE CREATE FAILED) CMD=verb SOCKET=n TOTAL=n")], [FTPD could not set up the recovery for the command.],

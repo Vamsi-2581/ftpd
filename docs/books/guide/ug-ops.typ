@@ -165,8 +165,9 @@ with its default and its range.
       The address and the port range that FTPD offers for passive transfers.
       The range must be open in every firewall between the client and the
       host.],
-    [Sessions], [#cmd("MAXSESSIONS"), #cmd("IDLETIMEOUT"), #cmd("BANNER"),
-      #cmd("SSLPROXY").],
+    [Sessions], [#cmd("MAXSESSIONS"), #cmd("IDLETIMEOUT"), #cmd("MAXRETPD"),
+      #cmd("BANNER"), #cmd("SSLPROXY"). #cmd("MAXRETPD") is the most days of
+      retention that a client may ask for with #cmd("SITE RETPD") (@ug-site).],
     [New data sets], [#cmd("DEFRECFM"), #cmd("DEFLRECL"), #cmd("DEFBLKSIZE"),
       #cmd("DEFPRIMARY"), #cmd("DEFSECONDARY"), #cmd("DEFSPACETYPE"),
       #cmd("DEFDIRECTORY"), #cmd("DEFUNIT"), #cmd("DEFVOLUME"). The attributes and the space that a
@@ -240,8 +241,8 @@ answer comes as messages on the console.
     [#cmd("SESSIONS")], [#cmd("FTPD015I ACTIVE SESSIONS: 2 / 10"): the active
       sessions and #cmd("MAXSESSIONS").],
     [#cmd("CONFIG")], [The configuration that FTPD uses: the messages
-      #cmd("FTPD040I") to #cmd("FTPD049I"), #cmd("FTPD057I") and
-      #cmd("FTPD058I").],
+      #cmd("FTPD040I") to #cmd("FTPD049I"), #cmd("FTPD057I"),
+      #cmd("FTPD058I") and #cmd("FTPD061I").],
     [#cmd("VERSION")], [Two lines #cmd("FTPD016I"): the version and commit of
       FTPD, and the version of the C library. #cmd("FTPD006W") follows if the
       program was built from a modified tree.],
@@ -321,11 +322,13 @@ of recoveries since the start. A user ABEND shows as #cmd("U") and four digits.
 If FTPD could not even set up the recovery, the message says so in brackets, and
 the command did not run.
 
-The client gets one of two replies:
+The client gets one of three replies:
 
 - *The data set is full:* the ABEND is #cmd("SB37"), #cmd("SD37") or
   #cmd("SE37"). The reply is #cmd("552 Requested file action aborted: out of space on the data set (ABEND SB37). Allocate more space with SITE PRIMARY/SECONDARY and CYLINDERS, or ask the administrator to raise DEFPRIMARY."). The reply is a permanent one, because a client that tries again
   would run into the same limit (@ug-data-space).
+- *The directory of a partitioned data set is full:* the ABEND is #cmd("SB14")
+  during a #cmd("STOR") or #cmd("APPE"). The reply is #cmd("552 Requested file action aborted: the directory of the PDS is most likely full (ABEND SB14). It cannot be extended; create the PDS with more directory blocks (SITE DIRECTORY=n, then MKD) and copy the members."). It is permanent as well (@ug-data-dirfull).
 - *Any other ABEND:* #cmd("451 Requested action aborted: local error in processing.").
 
 When a #cmd("STOR") had just created the data set, FTPD scratches it, because

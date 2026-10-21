@@ -395,6 +395,10 @@ The first reply is for #cmd("STOR"), the second for #cmd("APPE"). The data set
 is not touched, and the session works on. A data set with the expiration date
 99365 or 99366 never expires. The reply for it is
 #cmd("550 NAME has a permanent retention period and is not opened for writing.")
+A data set with the expiration date 99000 is no calendar date, but it is
+retained all the same. It gets its own reply,
+#cmd("550 NAME has the expiration date 99000 and is not opened for writing.")
+For #cmd("APPE") the last word of both replies is #cmd("appending").
 
 - A data set expires on its expiration date. On that day #cmd("STOR") and
   #cmd("APPE") work again.

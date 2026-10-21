@@ -16,7 +16,7 @@
 #   6.  Cleanup (DELE/RMD)
 #   7.  Out of space (x37): permanent 552, no hang, data set scratched
 #   8.  Failed member STOR into a full PDS: 552, directory untouched
-#   16. Text STOR/RETR in RECFM=VB and VBA: one record per line (#185)
+#   16. Text STOR/RETR in RECFM=VB, VBA and U: one record per line (#185, #245)
 #   9.  APPE: appends to a sequential data set, creates what is missing,
 #       refuses an existing PDS member (550, unchanged), 502 for UFS
 #   10. SITE in any spelling: verb, keywords and values (quote form)
@@ -2093,7 +2093,7 @@ fi
 quote DELE $JFL_ID" /dev/null
 
 # ============================================================
-# TEST 16: Text STOR and RETR in RECFM=VB and VBA (#185)
+# TEST 16: Text STOR and RETR in RECFM=VB, VBA and U (#185, #245)
 #
 # A variable-length data set holds records of different lengths, and a text
 # RETR has to give one line per record.  The binary stream libc370 hands out
@@ -2102,8 +2102,13 @@ quote DELE $JFL_ID" /dev/null
 # (15 lines came back as 3).  FB is the control: it never had the problem.
 # The lines differ in length, one is empty, one is a single character and one
 # is the longest the record takes (LRECL 80 less the 4-byte RDW).
+#
+# RECFM=U has no records of its own, only blocks, and a "rb" stream on it runs
+# on across the block boundaries just as on V (#245).  A text STOR writes one
+# block per line; a text RETR has to give one line per block.  U has no LRECL
+# (the block size is the limit), so none is requested for it.
 # ============================================================
-section "Test 16: Text STOR and RETR in RECFM=VB and VBA"
+section "Test 16: Text STOR and RETR in RECFM=VB, VBA and U"
 
 VBFILE="$TMPDIR/test_vb.txt"
 awk 'BEGIN{
@@ -2118,17 +2123,19 @@ awk 'BEGIN{
 }' > "$VBFILE"
 VBLINES=$(wc -l < "$VBFILE")
 
-for RF in FB VB VBA; do
+for RF in FB VB VBA U; do
     DSN_VB="${HLQ}.TEST.TXT${RF}"
     VBBACK="$TMPDIR/test_vb_back_$RF.txt"
     rm -f "$VBBACK"
     ftp_run "delete '$DSN_VB'" /dev/null
 
+    if [ "$RF" = "U" ]; then VBLRECL="site blksize=3120"; else VBLRECL="site lrecl=80"; fi
+
     info "STOR (TYPE A) $VBLINES lines -> '$DSN_VB' RECFM=$RF"
     FTP_OUT="$TMPDIR/ftp_vb_up_$RF.log"
     ftp_run "$(cat <<CMDS
 site recfm=$RF
-site lrecl=80
+$VBLRECL
 site blksize=3120
 site tracks
 site primary=1

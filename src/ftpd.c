@@ -19,6 +19,7 @@
 
 #include "ftpd.h"
 #include "ftpd#ses.h"
+#include "ftpd#pol.h"
 #include <mvs/crt.h>
 #include <mvs/apf.h>
 #include <mvs/enq.h>
@@ -429,9 +430,24 @@ initialize(ftpd_server_t *server)
     server->sock_task = cthread_create_ex(socket_thread, server, NULL,
                                           32 * 1024);
 
-    /* Create worker thread pool */
+    /* Create worker thread pool.
+    **
+    ** The pool is never smaller than FTPD_POOL_MIN: libc370's thread manager
+    ** starts no worker for a pool of 1-3, so every connection would be
+    ** queued and never served (libc370#700, ftpd#168).  The session limit
+    ** below stays MAXSESSIONS.  Drop ftpd_pool_size() when FTPD requires a
+    ** libc370 that has fixed #700.
+    */
+    if (server->config.max_sessions < FTPD_POOL_MIN) {
+        ftpd_log(LOG_WARN, "%s: MAXSESSIONS=%d is below %d, worker pool "
+                 "raised to %d, at most %d sessions are accepted", __func__,
+                 server->config.max_sessions, FTPD_POOL_MIN,
+                 ftpd_pool_size(server->config.max_sessions),
+                 server->config.max_sessions);
+    }
+
     server->mgr = cthread_manager_init(
-        server->config.max_sessions,
+        ftpd_pool_size(server->config.max_sessions),
         ftpd_session_run,
         server,
         64 * 1024

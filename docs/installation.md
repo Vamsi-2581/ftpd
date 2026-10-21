@@ -463,7 +463,8 @@ Expect `COND CODE 0000`.
 > install, `FTPD.AFTPDLOD` holds SMP's accepted copy of the module; a
 > re-run that scratched it would leave the SMP inventory reporting an install
 > that is no longer on the system, and nothing would say so. To start over,
-> reject the SYSMOD first — see [Removing FTPD](#11-removing-ftpd).
+> remove FTPD first, libraries included — see
+> [Removing FTPD](#11-removing-ftpd).
 
 ---
 
@@ -535,7 +536,7 @@ the first failure rather than building on it:
 | `RECV` | receives the SYSMOD into the SMP inventory |
 | `APPLYCHK` | dry run — `APPLY` only proceeds if this ends RC 0 |
 | `APPLY` | copies the load module into `FTPD.LINKLIB` |
-| `ACCEPT` | makes this level the base a later `RESTORE` returns to |
+| `ACCEPT` | copies the module into `FTPD.AFTPDLOD`, the base a later `RESTORE` of a PTF returns to |
 | `CLEANUP` | scratches the staging library, which is now spent |
 
 The SYSMOD travels inline in the job — there is no third file to upload.
@@ -863,11 +864,16 @@ Because the installation is SMP-managed, there is a defined way back — but it
 is **not** the `RESTORE` followed by `REJECT` that SMP documentation leads you
 to expect. The install job accepts the FMID in the same run as the APPLY, and
 an accepted function SYSMOD refuses both: `RESTORE` because it was accepted,
-`REJECT` because accepting removed the control statements it works from. The
-route that does work is a `UCLIN` job.
+and `REJECT` because the SMPPTS no longer holds the SYSMOD (`PURGE=YES` in its
+system entry on the system measured).
 
-The full procedure, with the job to submit and the messages to check, is in
-[uninstall.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/uninstall.md).
+The way that works is a dummy function, `TFTPDEL`, which deletes every release
+of FTPD through `++VER DELETE` and takes the load module out of both libraries
+with it. A short `UCLIN` job then frees the ids, and a `LIST` proves it. A way
+that uses `UCLIN` alone stays as the fallback.
+
+The full procedure, with the jobs to submit and the messages to check, is in
+[uninstall.md](https://github.com/mvslovers/ftpd/blob/main/docs/uninstall.md).
 
 **This is for removing FTPD, not for upgrading it.** An upgrade installs over
 the release before it — see sections 2a and 2b — and needs none of this.

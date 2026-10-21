@@ -27,7 +27,7 @@ was never cut (the libc370 2.0 port made the next release 1.2.0) and is unspent
 and unassigned. Burned: `TFTP100` (1.0.0–1.0.2), `TFTP110` (1.1.0, released
 2026-09-14) and `TFTP120` (1.2.0, released 2026-10-13; free on the maintainer's
 word, no `LIST` was run on any stand before it shipped). `docs/uninstall.md`
-names every spent id; add `TFTP130` there with 1.3.0.
+names every spent id and carries `TFTP130`; add each later id there.
 
 Never re-spend an id, and never install a test package under the real one: a
 test needs a throwaway id **and** throwaway module names, because SMP keys
@@ -61,7 +61,12 @@ Before the tag:
    removed or kept on purpose. A change to the edition digit (`-0` Draft,
    `-1` First Edition) also renames the PDFs in `docs/books/Makefile`.
 4. `docs/installation.md` and `docs/uninstall.md` agree with the books on the
-   libc370 level and the FMID.
+   libc370 level and the FMID. `docs/uninstall.md` holds the FMID table, the
+   `DELETE` list of the dummy function `TFTPDEL` and the `UCLIN` jobs: add the
+   new id to the `DELETE` list, to both `UCLIN` jobs and to their `LIST`
+   statements. The jobs and captures there were measured on 1.2.0; run them
+   once on a throwaway container with the release candidate installed from
+   the SMP package, and compare the output with the text.
 
 After the tag, with the release page created by the workflow:
 

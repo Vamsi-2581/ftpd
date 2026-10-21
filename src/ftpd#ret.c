@@ -31,18 +31,21 @@ ftpd_ret_unexpired(const unsigned char expdt[3], int cur_year, int cur_yday,
     int year;
     int yday;
     int permanent;
+    int open_ended;
     int m;
     int left;
 
     year = expdt[0] < 100 ? 2000 + expdt[0] : 1900 + expdt[0];
     yday = (expdt[1] << 8) | expdt[2];
 
-    if (yday < 1 || yday > 366)
+    open_ended = (expdt[0] == 99 && yday == 0);
+
+    if (!open_ended && (yday < 1 || yday > 366))
         return 0;
 
     permanent = (expdt[0] == 99 && yday >= 365);
 
-    if (!permanent) {
+    if (!permanent && !open_ended) {
         if (year < cur_year)
             return 0;
         if (year == cur_year && yday <= cur_yday)
@@ -54,12 +57,15 @@ ftpd_ret_unexpired(const unsigned char expdt[3], int cur_year, int cur_yday,
         until->year = year;
         until->yday = yday;
         until->permanent = permanent;
+        until->open_ended = open_ended;
 
-        left = yday;
-        for (m = 1; m < 12 && left > month_days(year, m); m++)
-            left -= month_days(year, m);
-        until->month = m;
-        until->day = left;
+        if (!open_ended) {
+            left = yday;
+            for (m = 1; m < 12 && left > month_days(year, m); m++)
+                left -= month_days(year, m);
+            until->month = m;
+            until->day = left;
+        }
     }
 
     return 1;

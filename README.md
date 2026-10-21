@@ -145,7 +145,9 @@ answered `501` naming the limit, and the session keeps its retention period.
 
 A data set whose retention period has not expired is not opened for output:
 `STOR` and `APPE` answer `550` and name the expiration date, instead of waiting
-for an operator reply (IEC507D). A PDS created with `SITE RETPD` is retained as
+for an operator reply (IEC507D). That includes a data set carrying the
+expiration date 99000, which is no calendar date but is retained all the same.
+A PDS created with `SITE RETPD` is retained as
 a whole, so it takes no member until the period is over. `DELE` and `RMD` still
 remove a retained data set.
 

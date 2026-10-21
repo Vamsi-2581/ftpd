@@ -64,6 +64,17 @@ main(void)
     CHECK(ftpd_ret_unexpired(b, 2026, 293, &d) == 1 && !d.permanent
           && d.year == 2099, "99100 is April 2099, not permanent");
 
+    /* 99000 is a date by no calendar, yet OPEN for output asks the operator
+    ** for it (IEC507D, measured on MVS/CE, #204). */
+    b[0] = 99; b[1] = 0x00; b[2] = 0x00;
+    CHECK(ftpd_ret_unexpired(b, 2026, 293, &d) == 1 && d.open_ended == 1
+          && !d.permanent && d.year == 2099 && d.yday == 0
+          && d.month == 0 && d.day == 0,
+          "99000 is retained, open-ended");
+    b[0] = 98; b[1] = 0x00; b[2] = 0x01;
+    CHECK(ftpd_ret_unexpired(b, 2026, 293, &d) == 1 && d.open_ended == 0,
+          "98001 is a date, not open-ended");
+
     b[0] = 0x1A; b[1] = 0x01; b[2] = 0x43;
     CHECK(ftpd_ret_unexpired(b, 2026, 294, &d) == 1 && d.year == 2026
           && d.yday == 323, "X'1A0143' (SITE RETPD=30 on 2026.293) is 2026.323");
@@ -73,7 +84,8 @@ main(void)
           && d.yday == 294, "a year byte of 126 is the year since 1900");
 
     expdt(b, 2026, 0);
-    CHECK(ftpd_ret_unexpired(b, 2026, 293, NULL) == 0, "day 0 is not a date");
+    CHECK(ftpd_ret_unexpired(b, 2026, 293, NULL) == 0,
+          "26000 is not a date and not 99000: no retention");
     expdt(b, 2030, 400);
     CHECK(ftpd_ret_unexpired(b, 2026, 293, NULL) == 0, "day 400 is not a date");
 

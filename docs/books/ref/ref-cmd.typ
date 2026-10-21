@@ -186,7 +186,8 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       record format and length are those of the data set), the data, and
       #cmd("250 Transfer completed successfully."). In #cmd("TYPE A") one
       record is one line, also for the record formats #cmd("V"), #cmd("VB") and
-      #cmd("VBA") (_FTPD User's Guide_, "Fetching"). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
+      #cmd("VBA"). For record format #cmd("U") one block is one line
+      (_FTPD User's Guide_, "Fetching"). UFS: #cmd("150 Opening data connection for PATH") and #cmd("226 Transfer complete"). JES: the output
       of a job (@ref-cmd-jes).],
     [#cmd("STOR")], [MVS: #cmd("125 Storing data set NAME"), the data, and
       #cmd("250 Transfer completed successfully."). Creates the data set or

@@ -184,15 +184,20 @@ sees are the reply codes in @ref-reply.
     [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- SEE __fabandon() IN CLIBIO.H")], [The cleanup of the file returned an error code that the
       header #cmd("clibio.h") of the C library describes (n is less than 0).],
     [#cmd("FTPD077E IDENTITY RESET ABENDED Sxxx -- ASXBSENV MAY STILL HOLD A USER ACEE")], [While FTPD recovered from the ABEND of a command, the reset of the
-      identity of the started task ended in an ABEND itself (Sxxx is its code\; S000 means that the recovery for the reset could not be set up).
-      The field #cmd("ASXBSENV") of the address space may still point to the
-      security environment of the user of that session, and the other
-      sessions may act under it. The recovery goes on: the lock that protects
-      the identity is released, #cmd("FTPD070E") is written, and the client is
-      answered. FTPD writes #cmd("FTPD077E") before #cmd("FTPD070E"), only on
-      a task that is authorized, and never when #cmd("FTPD003W") was written
-      at the start. Stop FTPD and start it again, and report the ABEND code.
-      Since FTPD 1.3.0.],
+      identity of the started task ended in a system ABEND itself. Sxxx is
+      its code. The field #cmd("ASXBSENV") of the address space may still hold
+      the ACEE of the user of that session, and until it is written again the
+      other sessions authorize as that user. The recovery goes on: the lock
+      that protects the identity is released, #cmd("FTPD070E") is written, and
+      the client is answered. FTPD writes #cmd("FTPD077E") before
+      #cmd("FTPD070E"), and only on a task that is APF authorized. An FTPD
+      that is not authorized (see #cmd("FTPD003W")) does not write it. Stop
+      FTPD, start it again and report the ABEND code. Since FTPD 1.3.0.],
+    [#cmd("FTPD077E IDENTITY RESET ABENDED Unnnn -- ASXBSENV MAY STILL HOLD A USER ACEE")], [The same for a user ABEND. Unnnn is its code.],
+    [#cmd("FTPD077E IDENTITY RESET NOT RUN, ESTAE FAILED -- ASXBSENV MAY STILL HOLD A USER ACEE")], [FTPD could not set up the recovery for the reset, so the reset did
+      not run. The field #cmd("ASXBSENV") may hold the ACEE of a user, as
+      above, and the recovery goes on in the same way. There is no ABEND code.
+      Stop FTPD and start it again.],
   )
 ]
 

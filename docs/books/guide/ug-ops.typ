@@ -358,9 +358,12 @@ and the command did not run.
 The first step of the recovery puts the identity of the started task back. If
 that step ends in an ABEND itself, FTPD goes on with the recovery and writes
 #cmd("FTPD077E IDENTITY RESET ABENDED Sxxx -- ASXBSENV MAY STILL HOLD A USER ACEE")
-before the #cmd("FTPD070E"). The address space may then still carry the
-security environment of the user of that session. Stop FTPD, start it again and
-report the ABEND code. FTPD 1.3.0 writes this message.
+before the #cmd("FTPD070E"). For a user ABEND the code reads
+#cmd("Unnnn"). If the recovery for the reset could not be set up, the reset did
+not run, and the text reads #cmd("IDENTITY RESET NOT RUN, ESTAE FAILED") without
+a code. The address space may then still carry the security environment of the
+user of that session. Stop FTPD, start it again and report the ABEND code, if
+there is one. FTPD 1.3.0 writes this message.
 
 The client gets one of three replies:
 

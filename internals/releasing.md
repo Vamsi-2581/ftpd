@@ -80,8 +80,10 @@ Before the tag:
    with the pinned typst; use the same version.
 3. The edition notice in `docs/books/ml06-0001.typ` and
    `docs/books/ml06-0002.typ` names the release, and the "Draft" paragraph is
-   removed or kept on purpose. A change to the edition digit (`-0` Draft,
-   `-1` First Edition) also renames the PDFs in `docs/books/Makefile`.
+   removed or kept on purpose. The heading line of the notice ("Draft Edition"
+   or "First Edition") says the same as the edition digit (`-0` Draft, `-1`
+   First Edition); a change to the digit changes the heading and renames the
+   PDFs in `docs/books/Makefile`.
 4. `docs/installation.md` and `docs/uninstall.md` agree with the books on the
    libc370 level and the FMID. `docs/uninstall.md` holds the FMID table, the
    `DELETE` list of the dummy function `TFTPDEL` and the `UCLIN` jobs: add the

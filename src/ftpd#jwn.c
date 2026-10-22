@@ -363,9 +363,16 @@ ftpd_jwn_tally(ftpd_jwn_tally_t *t, ftpd_jwn_sess_t *st, int op,
     if (res->reason == FTPD_JWN_R_ERR_RC ||
         res->reason == FTPD_JWN_R_ERR_COMPONENT) {
         t->err++;
-        if (t->err <= FTPD_JWN_ERRLINES)
+        if (t->err > FTPD_JWN_ERRLINES) {
+            t->err_more++;
+            return FTPD_JWN_LINE_NONE;
+        }
+        if (op == FTPD_JWN_OP_LIST || !st)
             return FTPD_JWN_LINE_ERROR;
-        t->err_more++;
+        st->err++;
+        if (st->err <= FTPD_JWN_ERRSESSMAX)
+            return FTPD_JWN_LINE_ERROR;
+        st->err_more++;
         return FTPD_JWN_LINE_NONE;
     }
 

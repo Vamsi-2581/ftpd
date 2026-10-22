@@ -423,7 +423,7 @@ jes_op_name(int op)
 ** ----------------------------------------------------------------- */
 static int
 job_access(ftpd_session_t *sess, const JESJOB *job, int op,
-           ftpd_jwn_tally_t *tally)
+           ftpd_jwn_tally_t *tally, ftpd_jwn_cache_t *cache)
 {
     ftpd_jwn_ctx_t ctx;
     ftpd_jwn_res_t res;
@@ -437,6 +437,7 @@ job_access(ftpd_session_t *sess, const JESJOB *job, int op,
     ctx.user = sess->user;
     ctx.auth_fn = jes_racf_auth;
     ctx.auth_arg = sess->acee;
+    ctx.cache = cache;
 
     decision = ftpd_jwn_check(&ctx, op, (const char *)job->owner,
                               (const char *)job->jobname,
@@ -526,6 +527,7 @@ ftpd_jes_owner_ok(ftpd_session_t *sess, const char *value,
     ctx.user = sess->user;
     ctx.auth_fn = jes_racf_auth;
     ctx.auth_arg = sess->acee;
+    ctx.cache = NULL;
 
     if ((kind == FTPD_JWN_NR_ALL || kind == FTPD_JWN_NR_OTHER) &&
         ctx.acee_present && sess->user[0] &&
@@ -617,7 +619,7 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     visible = 0;
     if (job && job_matches_status(sess, job)) {
         ftpd_jwn_tally_init(&tally);
-        visible = job_access(sess, job, FTPD_JWN_OP_LISTJOB, &tally)
+        visible = job_access(sess, job, FTPD_JWN_OP_LISTJOB, &tally, NULL)
                   == FTPD_JWN_ALLOW;
     }
     if (!visible) {
@@ -712,6 +714,7 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
     JESJOB **joblist = NULL;
     JESFILT filt_type;
     ftpd_jwn_tally_t tally;
+    ftpd_jwn_cache_t cache;
     const char *filter;
     const char *owner;
     int i;
@@ -764,6 +767,7 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
     }
 
     ftpd_jwn_tally_init(&tally);
+    ftpd_jwn_cache_init(&cache);
 
     /* Header — z/OS format */
     if (ftpd_data_printf(sess,
@@ -790,7 +794,7 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
             if (!job_matches_status(sess, job))
                 continue;
 
-            if (job_access(sess, job, FTPD_JWN_OP_LIST, &tally) !=
+            if (job_access(sess, job, FTPD_JWN_OP_LIST, &tally, &cache) !=
                 FTPD_JWN_ALLOW)
                 continue;
 
@@ -943,7 +947,7 @@ find_job(ftpd_session_t *sess, const char *jobid_arg, int op,
     }
 
     ftpd_jwn_tally_init(&tally);
-    *decision = job_access(sess, job, op, &tally);
+    *decision = job_access(sess, job, op, &tally, NULL);
     if (*decision == FTPD_JWN_HIDE) {
         jesjobfr(&joblist);
         return NULL;

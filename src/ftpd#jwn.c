@@ -144,6 +144,51 @@ ftpd_jwn_level(const ftpd_jwn_ctx_t *ctx, const char *entity,
     return FTPD_JWN_LV_ERR;
 }
 
+void
+ftpd_jwn_cache_init(ftpd_jwn_cache_t *c)
+{
+    if (c)
+        memset(c, 0, sizeof(*c));
+}
+
+/* The level of a foreign job: from the cache if its key was asked in this
+** command, otherwise from RACF (and then remembered unless the answer is
+** unusable or the cache is full).  RC values are 0, 4 and 8 whenever a
+** level is stored, so they fit a char. */
+static int
+level_cached(const ftpd_jwn_ctx_t *ctx, const char *entity, int want_update,
+             ftpd_jwn_res_t *res)
+{
+    ftpd_jwn_cache_t *c = ctx->cache;
+    char key[FTPD_JWN_KEYLEN + 1];
+    int i, level;
+
+    if (!c)
+        return ftpd_jwn_level(ctx, entity, want_update, res);
+
+    strncpy(key, entity, FTPD_JWN_KEYLEN);
+    key[FTPD_JWN_KEYLEN] = '\0';
+
+    for (i = 0; i < c->n; i++) {
+        if (c->e[i].update == (char)(want_update != 0) &&
+            strcmp(c->e[i].key, key) == 0) {
+            res->rc = c->e[i].rc;
+            res->racf_calls = 0;
+            return c->e[i].level;
+        }
+    }
+
+    level = ftpd_jwn_level(ctx, entity, want_update, res);
+    if (level != FTPD_JWN_LV_ERR && c->n < FTPD_JWN_CACHEMAX) {
+        strcpy(c->e[c->n].key, key);
+        c->e[c->n].update = (char)(want_update != 0);
+        c->e[c->n].level = (char)level;
+        c->e[c->n].rc = (char)res->rc;
+        c->n++;
+    }
+    return level;
+}
+
 int
 ftpd_jwn_decide(int op, int level)
 {
@@ -208,7 +253,7 @@ ftpd_jwn_check(const ftpd_jwn_ctx_t *ctx, int op, const char *owner,
     }
     res->elen = n;
 
-    res->level = ftpd_jwn_level(ctx, entity, op == FTPD_JWN_OP_DELE, res);
+    res->level = level_cached(ctx, entity, op == FTPD_JWN_OP_DELE, res);
     res->reason = reason_of(res->level);
     res->decision = ftpd_jwn_decide(op, res->level);
     return res->decision;

@@ -33,6 +33,7 @@
 #define FTPD_JWN_ERRLINES   8       /* ERR lines written per command    */
 #define FTPD_JWN_WARNMAX    16      /* denied lines written per session */
 #define FTPD_JWN_PRTSZ      (FTPD_JWN_COMPMAX + 1)
+#define FTPD_JWN_CACHEMAX   16      /* cache keys per command           */
 
 /* What the caller is doing.  Only a delete asks for UPDATE. */
 #define FTPD_JWN_OP_LIST    0       /* listing of the spool             */
@@ -81,11 +82,26 @@
 typedef int (*ftpd_jwn_auth_fn)(void *arg, const char *entity,
                                 int want_update);
 
+/* Levels found during one command, by the first FTPD_JWN_KEYLEN characters
+** of the entity (what RAKF compares).  A stack variable of the caller; it
+** lives one command.  The 17th key is not stored and not evicted for: it is
+** asked every time, which is always right and only costs more. */
+typedef struct ftpd_jwn_cache {
+    int             n;
+    struct {
+        char        key[FTPD_JWN_KEYLEN + 1];
+        char        update;     /* asked for UPDATE as well             */
+        char        level;      /* FTPD_JWN_LV_*                        */
+        char        rc;         /* RACF return code the level came from */
+    } e[FTPD_JWN_CACHEMAX];
+} ftpd_jwn_cache_t;
+
 typedef struct ftpd_jwn_ctx {
     int                 acee_present;   /* the session has an ACEE      */
     const char         *user;           /* sess->user, upper case       */
     ftpd_jwn_auth_fn    auth_fn;        /* NULL: foreign jobs are hidden */
     void               *auth_arg;
+    ftpd_jwn_cache_t   *cache;          /* NULL: ask RACF every time    */
 } ftpd_jwn_ctx_t;
 
 typedef struct ftpd_jwn_res {
@@ -112,6 +128,8 @@ typedef struct ftpd_jwn_sess {
     int denied;         /* RETR, DELE, LIST JOBnnnnn refusals           */
     int denied_more;    /* refusals after the first FTPD_JWN_WARNMAX    */
 } ftpd_jwn_sess_t;
+
+void ftpd_jwn_cache_init(ftpd_jwn_cache_t *c)               asm("FTPJWNCI");
 
 /* 1 if s is 1..8 characters of FTPD_JWN_CHARS, else 0. */
 int ftpd_jwn_component_ok(const char *s)                    asm("FTPJWNCO");

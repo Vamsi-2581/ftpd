@@ -706,7 +706,10 @@ after `S RAKFPROF`.
   several lines (example F: three per block).
 - Job fields (job name, owner, class, step names) are sanitized before FTPD
   writes them to the control or data connection or to the log.
-- Submitting: only the first JOB card of a `STOR` stream is processed.
+- Submitting: FTPD adds `USER=` and `PASSWORD=` only to the first JOB card of a
+  `STOR` stream. Every further JOB card in the same stream runs as a job of its
+  own, without them, under the default account. Such a job has no owner, so it
+  falls under the `*` profile (section 7), and the `250` reply names its job id.
 
 ### Check it
 

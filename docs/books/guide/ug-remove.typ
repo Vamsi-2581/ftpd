@@ -146,8 +146,8 @@ Read the three SMP steps one by one. The receive ends with return code 04:
 The apply deletes the load module from the target library. It also ends with
 return code 04, because SMP does not find the release that you remove in the
 restore data set (#cmd("HMA2461")). The output below comes from a system that
-carried 1.2.0, so the message names #cmd("TFTP120"); on a system with 1.3.0 it
-names #cmd("TFTP130"):
+carried 1.3.0, so the message names #cmd("TFTP130"), the release that you
+remove:
 
 #screen(raw(read("../ex/ug-remove/dummy-apply.txt")))
 
@@ -168,9 +168,10 @@ the output of the failed step; do not repeat the job before you know what it
 did.
 
 *What has been measured.* The job was run on a test system with a fresh
-SMP installation of release 1.2.0. FTPD 1.3.0, a system with a history of
-upgrades, and a dummy function with a #cmd("++MAC") element instead of none
-have not been measured. Whatever the system, the #cmd("LIST") in step 4 is
+SMP installation of release 1.3.0, and on one that had been upgraded from
+1.2.0 to 1.3.0; both ended as shown. A system with an older history, and a
+dummy function with a #cmd("++MAC") element instead of none, have not been
+measured. Whatever the system, the #cmd("LIST") in step 4 is
 the proof.
 
 == Step 3: Free the Ids <ug-remove-free>
@@ -257,7 +258,7 @@ the step above the 04 that you expect. The job has ten #cmd("LIST")
 statements, and all ten must show the id as not found. A stanza that names
 #cmd("TYPE = FUNCTION") is an entry that is still there, whether it shows the
 status #cmd("REC APP ACC") or only a #cmd("DELBY") of its successor. This is
-what the statements #cmd("LIST CDS SYSMOD(TFTP120)") and
+what the statements #cmd("LIST CDS SYSMOD(TFTP130)") and
 #cmd("LIST CDS SYSMOD(TFTPDEL)") print after step 2, before step 3 has run:
 
 #screen(raw(read("../ex/ug-remove/list-present.txt")))
@@ -347,9 +348,10 @@ the ids your system never had; the statements after it are still processed. It
 is no sign that a line did what you wanted, and a step that ends with return
 code 08 can also hide a statement that failed for another reason. Read every
 message, and take the #cmd("LIST") as the only proof. This is the output of the
-step #cmd("UCLCDS") on a system that had installed 1.2.0 from the release, so
-that the first line named #cmd("TFTP120"), and #cmd("TFTP130") and
-#cmd("TFTP100") were never in its zone:
+step #cmd("UCLCDS") on a system that had installed 1.3.0 from the release, so
+that the first line named #cmd("TFTP130"). #cmd("TFTP120") is in the zone as
+the mark that the install left; #cmd("TFTP110") and #cmd("TFTP100") were never
+in it:
 
 #screen(raw(read("../ex/ug-remove/uclcds.txt")))
 
@@ -360,7 +362,8 @@ return code 08, SMP does not execute the next #cmd("UCLIN") of the same
 step: it answers #cmd("HMA2293 ** CONTROL STATEMENT IGNORED DUE TO PREVIOUS
 ERROR") and does nothing. With both blocks in one step, the ids that the
 system never had would leave the ACDS untouched. Measured on a system with
-1.2.0: the #cmd("UCLIN CDS") block ended with return code 08 at
+1.2.0, in a test with a #cmd("DEL SYSMOD") for an id that the zone did not
+hold: the #cmd("UCLIN CDS") block ended with return code 08 at
 #cmd("DEL SYSMOD(TFTP130)"), the #cmd("UCLIN ACDS") block that followed was
 ignored, the step ended with return code 12, and
 #cmd("LIST ACDS SYSMOD(TFTP120)") still showed the entry.

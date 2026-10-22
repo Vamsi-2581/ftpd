@@ -303,9 +303,8 @@ job; there is no third file to send.
 === What a Good Run Looks Like <ug-install-good>
 
 On a new installation, every step ends with #cmd("COND CODE 0000"). The
-screens below are the SMP output of a new installation of release 1.2.0,
-measured on a test system; in 1.3.0 the SYSMOD is #cmd("TFTP130") and the
-message names it. The #cmd("RECV") step receives the SYSMOD:
+screens below are the SMP output of a new installation of release 1.3.0,
+measured on a test system. The #cmd("RECV") step receives the SYSMOD:
 
 #screen(raw(read("../ex/ug-install/receive.txt")))
 
@@ -328,8 +327,8 @@ superseded:
 
 #screen(```
 HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
-HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP120
-HMA2461 SYSMOD TFTP110 NOT FOUND ON SMPSCDS LIBRARY
+HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP130
+HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050 APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```)
 
@@ -623,9 +622,13 @@ the allocation: stop FTPD (@ug-install-stop), run the install job
 with #cmd("COND CODE 0004") (@ug-install-good). The banner must name the new
 release and the new C library; #cmd("LIBC370 2.10.3") on the second line means
 that the started task still runs 1.2.0. Check the member list and look for
-#cmd("HMA2380") in the job log, not the condition codes. The upgrade from
-1.2.0 to 1.3.0 has not been measured; the 1.2.0 release was measured as an
-upgrade from 1.1.0.
+#cmd("HMA2380") in the job log, not the condition codes. This was measured on
+a test system that carried 1.2.0, installed through SMP: the #cmd("APPLY")
+ended with #cmd("COND CODE 0004") and #cmd("HMA2461 SYSMOD TFTP120 NOT FOUND"),
+and the #cmd("ACCEPT") with 0000. If the configuration member of
+1.2.0 still has a line for #cmd("JESINTERFACELEVEL"), #cmd("AUTHUSER") or a
+volume, the start also prints #cmd("FTPD062W"); the lines have no effect and
+can go.
 
 === From 1.0.x <ug-install-from10>
 

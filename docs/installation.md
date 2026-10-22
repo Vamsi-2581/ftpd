@@ -109,7 +109,7 @@ nobody can log in**, and no configuration option turns that off.
 
 The setup — the identity of the started task and the `FTPAUTH` FACILITY
 profile — is step 8, and the full reference is
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).
 
 **FTPD 1.3.0 needs RAKF 2.0.0 or later.** Its JES spool authorization asks the
 RAKF class `JESSPOOL`, which RAKF 2.0.0 introduced. The identity that the
@@ -280,6 +280,11 @@ decision from you **before** you install; they are listed first.
    1.2.0. Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380
    COPY SUCCESSFUL` — not the condition codes.
 
+   If your `FTPDPRM0` still has a `JESINTERFACELEVEL`, an `AUTHUSER` or a
+   volume line, the start also prints `FTPD062W … SETTING(S) IN DD:FTPDPRM HAVE
+   NO EFFECT AND WERE IGNORED`. The lines did nothing before either; delete
+   them.
+
 **Coming from 1.1.0 or 1.0.x?** 1.3.0 deletes `TFTP120` only. On a system
 where `TFTP110` or `TFTP100` still owns the load module, the 1.3.0 install
 copies **nothing** and still ends `RC 00`. Upgrade release by release: a 1.1.0
@@ -425,8 +430,8 @@ On an upgrade the `APPLY` step ends **`COND CODE 0004`**, not `0000`:
 
 ```
 HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
-HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP110
-HMA2461 SYSMOD TFTP100 NOT FOUND ON SMPSCDS LIBRARY
+HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP130
+HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050 APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```
 
@@ -842,7 +847,7 @@ On RAKF 2.0.0 that line is the mapping, and its group must be allowed SVC 244
 
 The complete reference — dataset access levels per FTP command, per-user HLQ
 patterns, RAKFCL equivalents and the reasoning behind the invariant — is
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).
 
 ---
 
@@ -919,9 +924,9 @@ Three namespaces, selected per session:
   answer `550 UFS service not available`.
 
 The command set and the `SITE` keywords are documented in
-[ZOS_FTP_REFERENCE.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/internals/ZOS_FTP_REFERENCE.md);
+[ZOS_FTP_REFERENCE.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/internals/ZOS_FTP_REFERENCE.md);
 the architecture is in
-[FTPD_CONCEPT.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/internals/FTPD_CONCEPT.md).
+[FTPD_CONCEPT.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/internals/FTPD_CONCEPT.md).
 
 ---
 
@@ -977,4 +982,4 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | `S0C4` at start, JESMSGLG holds only the `IEF450I` — no `FTPD000I`, no banner | FTPD 1.0.0 started from an **APF-authorised** LINKLIB. The module is then key 0 and the first store into its own storage abends before the first WTO. Upgrade to 1.0.1, or take the APF entry back out and let SVC 244 authorise instead — step 2 |
 
 For the RAKF message reference, see
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).

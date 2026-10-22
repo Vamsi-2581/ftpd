@@ -18,10 +18,15 @@ tables and adds TSO commands for them (`ADDUSER`, `ALTUSER`, `DELUSER`,
 `SYS1.SECURE.SHADOW`, and the mapping of a started task by its name
 (section 2). Where RAKF 2.0.0 changes something, this guide says so in a box.
 
-**The JES spool authorization of FTPD 1.3.0 (section 7) needs RAKF 2.0.0 or
-later**, the release whose class table contains `JESSPOOL`. The identity that
-the started task `FTPD` runs under must be in a group that has READ on
-`FACILITY SVC244`, such as `STARTED` in the shipped `users.txt`. Otherwise FTPD
+**FTPD 1.3.0 does not need RAKF 2.0.0 to run.** RAKF itself, for the login, is
+required; the release matters for one thing only. **Letting users see the jobs
+of other users (section 7) needs RAKF 2.0.0 or later**, the release whose class
+table contains `JESSPOOL`. On a RAKF 1.2.x FTPD installs and starts, and every
+user sees, reads and cancels only the own jobs; section 7 says what RAKF writes
+to the console in that case.
+
+The identity that the started task `FTPD` runs under must be in a group that
+has READ on `FACILITY SVC244`, such as `STARTED` in the shipped `users.txt`. Otherwise FTPD
 cannot obtain APF authorization (`RAKF000A` for `FACILITY SVC244`,
 `FTPD003W APF SETUP FAILED RC=4`). Section 2 says which identity the task gets.
 
@@ -389,6 +394,8 @@ gating anything.
 FTPD 1.3.0 decides for every job whether the logged-in user may list it, read
 its output and delete it. This applies to the JES mode of FTP (`SITE FILETYPE=JES`:
 `LIST`, `NLST`, `RETR`, `DELE`). The RAKF class `JESSPOOL` holds the rules.
+RAKF 2.0.0 introduced that class: FTPD runs without it, but then no user can
+see the jobs of others, and a profile is the only way to allow it.
 
 > **FTPD always shows, reads and deletes your own jobs; a profile of the class
 > JESSPOOL regulates what you may see and delete of the jobs of others.**

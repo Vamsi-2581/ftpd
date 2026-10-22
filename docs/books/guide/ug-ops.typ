@@ -369,14 +369,24 @@ are:
   count is in this line.
 - *#cmd("JES op error ... reason=ERR"):* RAKF gave an answer that FTPD cannot
   use, or the job has a name that cannot be an entity. FTPD hides the job.
-  This line is at the level ERROR, with at most eight lines for one command and
-  then #cmd("JES LIST error: user=USERID and n more ERR jobs").
+  This line is at the level ERROR. A plain #cmd("dir") or #cmd("ls") writes at
+  most eight of them for one command and then
+  #cmd("JES LIST error: user=USERID and n more ERR jobs"). For
+  #cmd("dir JOBnnnnn"), #cmd("RETR") and #cmd("DELE") the lines are also
+  limited for the whole session, see below.
 
 FTPD writes at most 16 lines of the form #cmd("denied") for a session, so that
 a client cannot fill the log. When it left more out, it writes
 #cmd("JES denied: user=USERID and n more denied") when the session ends. The
 line #cmd("SITE JESOWNER refused") counts in the same 16. The line with
 #cmd("reason=NOACEE") does not: FTPD writes it once for each command.
+
+The lines with #cmd("reason=ERR") of #cmd("dir JOBnnnnn"), #cmd("RETR") and
+#cmd("DELE") have their own limit of 16 for a session, which comes after the
+limit of eight for one command. The ERR lines of a plain #cmd("dir") or
+#cmd("ls") do not count in it. When FTPD left lines out, it writes
+#cmd("JES error: user=USERID and n more ERR") at the level ERROR when the
+session ends, after the #cmd("JES denied") line if there is one.
 
 == When a Command Abends <ug-ops-abend>
 

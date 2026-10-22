@@ -625,8 +625,7 @@ that the started task still runs 1.2.0. Check the member list and look for
 #cmd("HMA2380") in the job log, not the condition codes. This was measured on
 a test system that carried 1.2.0, installed through SMP: the #cmd("APPLY")
 ended with #cmd("COND CODE 0004") and #cmd("HMA2461 SYSMOD TFTP120 NOT FOUND"),
-the #cmd("ACCEPT") with 0000, and the started task printed
-#cmd("FTPD 1.3.0") and #cmd("LIBC370 2.25.1"). If the configuration member of
+and the #cmd("ACCEPT") with 0000. If the configuration member of
 1.2.0 still has a line for #cmd("JESINTERFACELEVEL"), #cmd("AUTHUSER") or a
 volume, the start also prints #cmd("FTPD062W"); the lines have no effect and
 can go.

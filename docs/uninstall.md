@@ -440,8 +440,9 @@ Step `UCLACDS` gives the same, without the `LMOD` statement.
 return code 08, SMP does not execute the next `UCLIN` of the same step: it
 answers `HMA2293 ** CONTROL STATEMENT IGNORED DUE TO PREVIOUS ERROR` and does
 nothing. With both blocks in one step, the ids that the system never had would
-leave the ACDS untouched. Measured on a system with 1.2.0: the `UCLIN CDS`
-block ended with return code 08 at `DEL SYSMOD(TFTP130)`, the `UCLIN ACDS`
+leave the ACDS untouched. Measured on a system with 1.2.0, in a test with a `DEL SYSMOD` for an id
+that the zone did not hold: the `UCLIN CDS` block ended with return code 08 at
+`DEL SYSMOD(TFTP130)`, the `UCLIN ACDS`
 block that followed was ignored, the step ended with return code 12, and
 `LIST ACDS SYSMOD(TFTP120)` still showed the entry.
 

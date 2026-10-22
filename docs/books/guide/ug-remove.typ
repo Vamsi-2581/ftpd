@@ -362,7 +362,8 @@ return code 08, SMP does not execute the next #cmd("UCLIN") of the same
 step: it answers #cmd("HMA2293 ** CONTROL STATEMENT IGNORED DUE TO PREVIOUS
 ERROR") and does nothing. With both blocks in one step, the ids that the
 system never had would leave the ACDS untouched. Measured on a system with
-1.2.0: the #cmd("UCLIN CDS") block ended with return code 08 at
+1.2.0, in a test with a #cmd("DEL SYSMOD") for an id that the zone did not
+hold: the #cmd("UCLIN CDS") block ended with return code 08 at
 #cmd("DEL SYSMOD(TFTP130)"), the #cmd("UCLIN ACDS") block that followed was
 ignored, the step ended with return code 12, and
 #cmd("LIST ACDS SYSMOD(TFTP120)") still showed the entry.

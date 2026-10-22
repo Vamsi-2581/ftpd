@@ -212,5 +212,19 @@ the book explains the subject:
       #cmd("FTPD077E") tells the operator that the reset of the identity
       ended in an ABEND during a recovery.],
       [@ug-install-auth, @ug-ops-abend],
+    [In #cmd("TYPE A") a #cmd("RETR") of a data set with variable or undefined
+      record format sends one line for each record or block. Before, FTPD read
+      the data set as a stream of bytes across the record boundaries, joined
+      the records and cut the result again every #cmd("LRECL") bytes. Load
+      modules (record format #cmd("U")) belong in #cmd("TYPE I").],
+      [@ug-data-retr],
+    [#cmd("FTPD076W") says whether the data set stays allocated to the started
+      task after a close that ended in an ABEND: #cmd("DD STILL HELD") or
+      #cmd("DD RELEASED"). Before, it said #cmd("DD STILL HELD") in both
+      cases.], [@ug-ops-abend],
+    [The log lines with #cmd("reason=ERR") of #cmd("dir JOBnnnnn"),
+      #cmd("RETR") and #cmd("DELE") in the JES view are limited to 16 for a
+      session. FTPD writes #cmd("JES error: user=USERID and n more ERR") when
+      the session ends. Before, there was no limit.], [@ug-ops-log],
   )
 ] <ug-intro-new-tab>

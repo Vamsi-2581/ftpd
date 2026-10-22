@@ -96,7 +96,7 @@ want it: <https://github.com/mvslovers/ufsd/releases>, with its own guide at
 Note that UFSD has to be **running**, not just installed — it is a started task
 FTPD talks to across address spaces.
 
-FTPD 1.2.0 carries `libufs` from UFSD 1.4.0 and was tested against a running
+FTPD 1.3.0 carries `libufs` from UFSD 1.4.0 and was tested against a running
 UFSD 1.4.0. UFSD 1.4.0 changed only the C library it is built with; its server
 and the `libufs` interface are unchanged from 1.3.0.
 
@@ -109,7 +109,7 @@ nobody can log in**, and no configuration option turns that off.
 
 The setup — the identity of the started task and the `FTPAUTH` FACILITY
 profile — is step 8, and the full reference is
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).
 
 **FTPD 1.3.0 needs RAKF 2.0.0 or later.** Its JES spool authorization asks the
 RAKF class `JESSPOOL`, which RAKF 2.0.0 introduced. The identity that the
@@ -214,43 +214,50 @@ that is not finished.
 
 ---
 
-## 2a. Upgrading from 1.1.0
+## 2a. Upgrading from 1.2.0
 
-A fresh install can skip this section. From 1.1.0, the upgrade is a
-**drop-in**: 1.2.0 installs into the same data sets, under the same started
-task procedure and APF entry, and reads the same `FTPDPRM0`.
+A fresh install can skip this section. From 1.2.0, the upgrade is a
+**drop-in** as far as SMP and the data sets go: 1.3.0 installs into the same
+data sets, under the same started task procedure and APF entry, and reads the
+same `FTPDPRM0`.
 
-| | 1.1.0 | 1.2.0 |
+| | 1.2.0 | 1.3.0 |
 |---|---|---|
-| FMID | `TFTP110` | `TFTP120`, deletes `TFTP110` |
+| FMID | `TFTP120` | `TFTP130`, deletes `TFTP120` |
 | Libraries | `FTPD.LINKLIB`, … | unchanged |
-| C library | LIBC/370 1.0.6 | LIBC/370 2.10.3 |
+| C library | LIBC/370 2.10.3 | LIBC/370 2.25.1 |
 
-1. **Stop FTPD** (`/P FTPD`, step 5).
-2. **Skip the allocation job** (step 4). The data sets exist already, and the
+1. **Read section 8 first.** 1.3.0 no longer logs on as `FTPD`/`USER` at
+   startup, and its JES spool authorization needs RAKF 2.0.0 or later. On a
+   system whose RAKF maps no identity by STC name, the started task now runs
+   as `STC`/`STCGROUP`.
+2. **Stop FTPD** (`/P FTPD`, step 5).
+3. **Skip the allocation job** (step 4). The data sets exist already, and the
    job allocates them `NEW`, so it would fail.
-3. **Run the install job** (step 6). The `APPLY` ends `COND CODE 0004` on
-   `HMA2461 SYSMOD TFTP110 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
+4. **Run the install job** (step 6). The `APPLY` ends `COND CODE 0004` on
+   `HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
    result of a replacement; see *One return code that looks wrong and is not*
    in section 2b.
-4. **Start FTPD** (`/S FTPD`) and read the banner. It must name the new
+5. **Start FTPD** (`/S FTPD`) and read the banner. It must name the new
    release and the new C library:
 
    ```
-   FTPD000I FTPD 1.2.0 (xxxxxxx) STARTING
-   FTPD005I LIBC370 2.10.3 (A790DC4)
+   FTPD000I FTPD 1.3.0 (xxxxxxx) STARTING
+   FTPD005I LIBC370 2.25.1 (FCDE4E8)
    ```
 
-   `LIBC370 1.0.6` on the second line means the started task still runs 1.1.0.
-   Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380 COPY
-   SUCCESSFUL` — not the condition codes.
+   `LIBC370 2.10.3` on the second line means the started task still runs
+   1.2.0. Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380
+   COPY SUCCESSFUL` — not the condition codes.
 
-**Coming from 1.0.x?** 1.2.0 deletes `TFTP110` only. On a system where
-`TFTP100` still owns the load module, the 1.2.0 install copies **nothing** and
-still ends `RC 00`. Upgrade to 1.1.0 first, following section 2b with the
-1.1.0 package from the
-[releases page](https://github.com/mvslovers/ftpd/releases/tag/v1.1.0), then
-come back here.
+**Coming from 1.1.0 or 1.0.x?** 1.3.0 deletes `TFTP120` only. On a system
+where `TFTP110` or `TFTP100` still owns the load module, the 1.3.0 install
+copies **nothing** and still ends `RC 00`. Upgrade step by step instead: a
+1.0.x system goes to 1.1.0 first, following section 2b with the 1.1.0 package
+from the [releases page](https://github.com/mvslovers/ftpd/releases/tag/v1.1.0);
+a 1.1.0 system goes to 1.2.0, installed the same way as above from the
+[1.2.0 package](https://github.com/mvslovers/ftpd/releases/tag/v1.2.0)
+(`TFTP120` deletes `TFTP110`, banner `LIBC370 2.10.3`); then come back here.
 
 ---
 
@@ -804,7 +811,7 @@ On RAKF 2.0.0 that line is the mapping, and its group must be allowed SVC 244
 
 The complete reference — dataset access levels per FTP command, per-user HLQ
 patterns, RAKFCL equivalents and the reasoning behind the invariant — is
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).
 
 ---
 
@@ -881,9 +888,9 @@ Three namespaces, selected per session:
   answer `550 UFS service not available`.
 
 The command set and the `SITE` keywords are documented in
-[ZOS_FTP_REFERENCE.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/internals/ZOS_FTP_REFERENCE.md);
+[ZOS_FTP_REFERENCE.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/internals/ZOS_FTP_REFERENCE.md);
 the architecture is in
-[FTPD_CONCEPT.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/internals/FTPD_CONCEPT.md).
+[FTPD_CONCEPT.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/internals/FTPD_CONCEPT.md).
 
 ---
 
@@ -939,4 +946,4 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | `S0C4` at start, JESMSGLG holds only the `IEF450I` — no `FTPD000I`, no banner | FTPD 1.0.0 started from an **APF-authorised** LINKLIB. The module is then key 0 and the first store into its own storage abends before the first WTO. Upgrade to 1.0.1, or take the APF entry back out and let SVC 244 authorise instead — step 2 |
 
 For the RAKF message reference, see
-[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
+[FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).

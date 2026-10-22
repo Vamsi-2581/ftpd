@@ -348,13 +348,22 @@ as before:
       #cmd("550 Jobid JOBnnnnn not found for JESJOBNAME=n, JESSTATUS=s, JESOWNER=o")
       if there is none, if the job is not in the status of
       #cmd("SITE JESSTATUS"), if the session may not see it, or if the ID has a
-      #cmd("*") or a pattern. It is the reply of #cmd("RETR") and #cmd("DELE").],
+      #cmd("*") or a pattern. For an ID of the right form it is the reply of
+      #cmd("RETR") and #cmd("DELE"); they refuse a pattern with #cmd("501").],
     [#cmd("RETR JOBnnnnn")], [All output files of the job, each followed by
-      the line #cmd(" !! END OF JES SPOOL FILE !!").],
+      the line #cmd(" !! END OF JES SPOOL FILE !!"). FTPD makes the argument
+      upper case and checks its form before it asks JES2: #cmd("JOB"),
+      #cmd("STC") or #cmd("TSU") and exactly five digits. Anything else is
+      answered with #cmd("501 Invalid job ID"), and #cmd("501 Missing job ID")
+      is the reply to no argument.],
     [#cmd("RETR JOBnnnnn.n")], [The output file number n, counted from 1. The
       input files of the job are not counted.],
     [#cmd("DELE JOBnnnnn")], [Cancels the job and removes its output:
-      #cmd("250 Cancel successful"). #cmd("550 Access denied - cannot cancel JOBnnnnn")
+      #cmd("250 Cancel successful"). The form of the argument is checked as for
+      #cmd("RETR"), without the number of a spool file: a malformed ID, a
+      pattern and an ID with a point get #cmd("501 Invalid job ID"), and
+      #cmd("501 Missing job ID") is the reply to no argument.
+      #cmd("550 Access denied - cannot cancel JOBnnnnn")
       when JES2 refuses, and for a job of another user that the session may
       read but not update.],
   )

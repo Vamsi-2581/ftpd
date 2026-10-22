@@ -118,12 +118,18 @@ last column is the section with the session.
 #tab(caption: [Errors in the JES and UFS views])[
   #table(columns: (1.8in, 1fr, 1.5in),
     [Reply], [Cause and remedy], [Section],
+    [#cmd("501 Invalid job ID")],
+      [#cmd("get") or #cmd("delete") with an ID that is not #cmd("JOB"),
+      #cmd("STC") or #cmd("TSU") and five digits. A pattern such as
+      #cmd("JOB*") is one case, and so is an ID with a point after
+      #cmd("delete"). Type the ID as #cmd("dir") shows it.], [@ug-jes-badid],
     [#cmd("550 Jobid JOBnnnnn not found for JESJOBNAME=..., JESSTATUS=..., JESOWNER=...")],
-      [JES2 does not know the job, the filter #cmd("JESSTATUS") excludes it,
-      the ID has a #cmd("*") or a pattern, or the job belongs to another user
-      and no profile of the class #cmd("JESSPOOL") lets you see it. The reply
-      does not say which. Check the ID with #cmd("dir") and set the status back
-      to #cmd("all").], [@ug-jes-output, @ug-jes-others],
+      [The ID has the right form, but JES2 does not know the job, the filter
+      #cmd("JESSTATUS") excludes it, or the job belongs to another user and no
+      profile of the class #cmd("JESSPOOL") lets you see it. #cmd("dir") with a
+      pattern gets it too. The reply does not say which. Check the ID with
+      #cmd("dir") and set the status back to #cmd("all").],
+      [@ug-jes-output, @ug-jes-others],
     [#cmd("550 Access denied - cannot cancel JOBnnnnn")],
       [#cmd("delete") of a job of another user that you may read but not
       update. Ask the administrator for the right.], [@ug-jes-others],

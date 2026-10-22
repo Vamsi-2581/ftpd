@@ -195,8 +195,10 @@ Narrow the filters to see the others.
 any case, is read as a job ID and gives the list of the spool files of that job
 (the next section). It is not a filter. To list jobs with a name that starts
 with #cmd("JOB"), use #cmd("site jesjobname"). A job that does not exist, one
-that the user may not see (@ug-jes-others) and an ID with #cmd("*") or a
-pattern all get the reply of #cmd("get"): #cmd("550 Jobid ... not found ...").]
+that the user may not see (@ug-jes-others) get the reply of #cmd("get"):
+#cmd("550 Jobid ... not found ..."). So does an ID with #cmd("*") or a pattern,
+which #cmd("dir") answers with the same #cmd("550"), where #cmd("get") and
+#cmd("delete") refuse it with #cmd("501 Invalid job ID") (the next section).]
 
 == Reading the Output of a Job <ug-jes-output>
 
@@ -241,12 +243,15 @@ The error replies are:
   #table(columns: (2.6in, 1fr),
     [Reply], [Cause],
     [#cmd("501 Missing job ID")], [No argument.],
+    [#cmd("501 Invalid job ID")], [The job ID is not #cmd("JOB"), #cmd("STC")
+      or #cmd("TSU") followed by exactly five digits, as in #cmd("JOB*"),
+      #cmd("JOB1") or #cmd("ABC00001"). FTPD does not ask JES2.
+      See @ug-jes-badid.],
     [#cmd("550 Jobid JOB00042 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=USERID")],
       [JES2 does not know the job, the job is not in the status that
       #cmd("JESSTATUS") names, or the job belongs to another user and the user
       may not see it (@ug-jes-others). One text answers all three cases, and it
-      shows the filters of the session. A job ID with #cmd("*") or a pattern
-      such as #cmd("JOB000*") is answered like a job that does not exist.],
+      shows the filters of the session.],
     [#cmd("550 Spool file 5 not found for Jobid JOB00042, 3 spool file(s) available")],
       [The number after the point is 0 or larger than the number of output
       files. The text says how many files the job has.],
@@ -258,6 +263,40 @@ The error replies are:
       [The client closed the data connection.],
   )
 ]
+
+=== A Job ID That FTPD Refuses <ug-jes-badid>
+
+#idx("job", "job ID")#idx("501")
+#cmd("get") and #cmd("delete") take one job ID. FTPD checks its form before it
+asks JES2: the job ID is #cmd("JOB"), #cmd("STC") or #cmd("TSU") followed by
+exactly five digits (for #cmd("get") with an optional point and the number of
+the spool file, as in #cmd("JOB00042.3")). The check comes after FTPD has made
+the letters upper case, so #cmd("job00042") is a valid ID. Every other
+argument is answered with #cmd("501 Invalid job ID"), and no job is looked up,
+read or cancelled. A wildcard such as #cmd("JOB*") is one of them. The session
+fetches and cancels with IDs of the wrong form, fetches a job of the right
+form that does not exist, lists with a pattern, lists the jobs, and cancels
+the job:
+
+#screen(raw(read("../ex/ug-jes/j-badid.txt"), block: true))
+
+- *#cmd("get JOB*"), #cmd("get JOB1"), #cmd("get ABC00001"):* the three forms
+  of #cmd("501 Invalid job ID"): a pattern, too few digits, and a prefix that
+  is none of the three. The line #cmd("229 Entering Extended Passive Mode")
+  before each answers the #cmd("EPSV") that #cmd("tnftp") sends before #cmd("RETR")
+  (_FTPD Reference_, "Client Commands and Protocol Commands"); the
+  #cmd("501") answers the #cmd("RETR").
+- *#cmd("get JOB99999"):* the form is right. JES2 does not know the job, and
+  the reply is the #cmd("550") of the table above.
+- *#cmd("delete JOB*") and #cmd("delete JOB00035.1"):* the same
+  #cmd("501"). #cmd("delete") has no spool file number: the point makes the
+  ID invalid. The job is still in the list afterwards.
+- *#cmd("dir JOB*"):* not changed. A list with an argument that starts with
+  #cmd("JOB") is a request for the spool files of one job, and a pattern gets
+  the #cmd("550 Jobid ... not found ...") of a job that does not exist.
+
+Before FTPD 1.3.0 the three #cmd("get") and both #cmd("delete") of the example
+went to JES2 and ended in #cmd("550 Jobid ... not found ...").
 
 #note[*The job ID and the status.* #cmd("get"), #cmd("delete") and
 #cmd("dir JOBnnnnn") find the job by its exact ID. The filters #cmd("JESOWNER")
@@ -359,13 +398,15 @@ The reply is #cmd("250 Cancel successful"). The second #cmd("delete") of the
 same job gets the #cmd("550"): the job is gone. The other errors are:
 
 - #cmd("501 Missing job ID") without an argument.
+- #cmd("501 Invalid job ID") when the argument is not #cmd("JOB"), #cmd("STC")
+  or #cmd("TSU") with five digits, also for an ID with #cmd("*") or a pattern
+  and for one with a point (@ug-jes-badid).
 - #cmd("550 Access denied - cannot cancel JOB00042") when JES2 refuses, and
   when the job belongs to another user and the profile gives only #cmd("READ")
   (@ug-jes-others).
 - #cmd("550 Failed to cancel JOB00042 (rc=n)") for any other code of JES2.
-- #cmd("550 Jobid ... not found ...") for a job that JES2 does not know, for a
-  job of another user that the profile hides, and for an ID with #cmd("*") or a
-  pattern.
+- #cmd("550 Jobid ... not found ...") for a job that JES2 does not know and
+  for a job of another user that the profile hides.
 
 #cmd("site filetype=seq") ends the JES view, and #cmd("pwd") shows the working
 directory of the view that was active before. Any other value of #cmd("FILETYPE") ends the view too.

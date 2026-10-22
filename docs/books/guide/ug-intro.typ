@@ -197,6 +197,11 @@ the book explains the subject:
       #cmd("DSNPRFX"), or a checkpoint that is neither cataloged nor on an
       online volume). Before, the JES view needed both.],
       [@ug-install-jes],
+    [#cmd("get") and #cmd("delete") in the JES view check the job ID before
+      they ask JES2. An ID that is not #cmd("JOB"), #cmd("STC") or #cmd("TSU")
+      with five digits, such as #cmd("JOB*"), is answered with
+      #cmd("501 Invalid job ID"). Before, it went to JES2 and was answered with
+      #cmd("550 Jobid ... not found ...").], [@ug-jes-badid],
     [#cmd("SITE DCBDSN=dsn") takes the record format, record length and block
       size of a cataloged data set for the data sets that follow. Before,
       #cmd("DCBDSN") was an unknown word.], [@ug-site-keys],

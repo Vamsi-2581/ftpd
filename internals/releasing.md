@@ -34,6 +34,27 @@ test needs a throwaway id **and** throwaway module names, because SMP keys
 element ownership on `MOD(name)`, not on the target library. See the root
 `CLAUDE.md` for the full rule and the measurements behind it.
 
+## Before every libc370 version raise
+
+Before **every** raise of the libc370 version FTPD is built against, run
+Test 18 case 1 (`test/test_ftpd.sh`) on MVS with an empty JESSPOOL class. An
+RC 0 there is a blocker and is not fixed by adjusting the table.
+
+Why: the JES spool authorization (#90) takes the SAF return code of
+`racf_auth()` as it comes and reads RC 4 ("no profile") as "foreign jobs are
+hidden". Only libc370 2.25.1 was measured. If a libc370 returned 0 for a class
+without profiles, every job on the spool would be open to every user, and if
+it returned 8, every foreign job would be shut; neither is a thing for the
+table in `ftpd_jwn_level` to cover up.
+
+Run it on a throwaway container (RAKF 2.0.0, see the header of Test 18 for the
+variables) with `FTPD_GATE=1`, `FTPD_IMAGE` (image and digest) and, without a
+console, `FTPD_LIBC370`. The output names the libc370 version, the RAKF level
+(detected, not assumed) and the image with its digest, so the run belongs to a
+version. In gate mode a RAKF level other than 2.0.0, an unknown image or
+libc370 version, and every FINDING make the run fail; cases that were SKIPPED
+go into the release notes.
+
 ## The books
 
 ML06-0001 (User's Guide) and ML06-0002 (Reference) live in `docs/books/` and

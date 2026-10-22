@@ -2312,11 +2312,8 @@ delete '$DCB_NEW'" /dev/null
 # of the plan, section 3.3) and loaded with the batch procedures RAKFUSER and
 # RAKFPROF.  Every example is proven once first: its command sequence
 # (RDEF, PE) is run in batch and the JESSPOOL lines it produces are compared
-# with the lines the fixture file uses.  The universal line of the example is
-# written into PROFILES first (RDEF * CL(JESSPOOL) is refused by RAKF 2.0.0
-# and is reported on its own line as KNOWN); the other commands of the
-# example follow.  A proof that fails is a FINDING about the examples, not a
-# failure of the server; it makes a gate run fail.  A KNOWN line does not.
+# with the lines the fixture file uses.  A proof that fails is a FINDING
+# about the examples, not a failure of the server; it makes a gate run fail.
 #
 # Environment (all optional):
 #   FTPD_GATE=1       release gate: RAKF other than 2.0.0, an unknown image or
@@ -2543,7 +2540,6 @@ jw_fx_lines() {
             'MIKE1.*||NONE' 'MIKE1.*|MIKE2|UPDATE' \
             'MIKE2.*||NONE' 'MIKE2.*|MIKE1|UPDATE' ;;
     Bn) printf '%s\n' '*||READ' '*|OPS|UPDATE' ;;
-    U-*) jw_fx_lines "${1#U-}" | head -1 ;;
     BROKEN) printf '%s\n' '*|ADMIN|UPDATE' ;;
     *)  return 1 ;;
     esac
@@ -2977,14 +2973,14 @@ jw_have() {   # key...: true if all have an id
 jw_proof() {
     local ex="$1" got exp
     exp=$(jw_fx_render "$ex")
-    jw_fx "U-$ex" || return
-    jw_fx_cmds "$ex" | tail -n +2 | jw_tso RAKFPROF
+    jw_fx 0 || return
+    jw_fx_cmds "$ex" | jw_tso RAKFPROF
     JW_CUR=""
     cp "$TMPDIR/jw_tso.out" "$TMPDIR/jw_proof.out"
     jw_get "$JW_PROF" "$TMPDIR/jw_proof.prof"
     got=$(grep '^JESSPOOL' "$TMPDIR/jw_proof.prof")
     if [ "$got" = "$exp" ]; then
-        pass "Proof $ex: the universal line and the commands of the example write the lines of the example"
+        pass "Proof $ex: the command sequence writes the lines of the example"
         return
     fi
     jw_finding "Proof $ex: the command sequence of plan 3.3 does not write the lines of the example"
@@ -2993,26 +2989,8 @@ jw_proof() {
     echo "    written:";  echo "$got" | sed 's/^/      /'
 }
 
-# RDEF * CL(JESSPOOL) on its own, on a PROFILES without JESSPOOL lines.
-# RAKF 2.0.0 refuses it; a RAKF that accepts it is reported as such.  Either
-# way the run goes on and the gate is not touched.
-jw_known_rdef() {
-    local got
-    jw_fx 0 || return
-    echo "RDEF * CL(JESSPOOL) UACC(NONE)" | jw_tso RAKFPROF
-    JW_CUR=""
-    jw_get "$JW_PROF" "$TMPDIR/jw_proof.prof"
-    got=$(grep '^JESSPOOL' "$TMPDIR/jw_proof.prof")
-    if [ "$got" = "$(jw_fx_render N)" ]; then
-        pass "RDEF * CL(JESSPOOL) writes the universal line (the RAKF in use accepts it)"
-    else
-        echo -e "  ${YELLOW}KNOWN${NC}: RDEF * CL(JESSPOOL) does not write the universal line on this RAKF"
-    fi
-}
-
 if [ "$JW_SETUP" = 1 ]; then
     for ex in A B D E F; do jw_proof "$ex"; done
-    jw_known_rdef
 fi
 
 # Runs a block only if the setup worked.

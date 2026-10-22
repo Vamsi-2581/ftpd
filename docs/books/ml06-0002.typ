@@ -15,8 +15,7 @@
     MVS 3.8j (ftpd 1.3.0), and to all subsequent releases and modifications
     until otherwise indicated in new editions.
 
-    *Draft.* FTPD 1.3 is still in development, and so is this book: chapters
-    still to be written say so.
+    *Draft.* This book is a draft edition.
 
     Comments on this book may be addressed to the issue tracker of the
     mvslovers/ftpd repository on GitHub.

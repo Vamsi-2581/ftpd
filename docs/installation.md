@@ -250,6 +250,11 @@ same `FTPDPRM0`.
    1.2.0. Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380
    COPY SUCCESSFUL` — not the condition codes.
 
+   If your `FTPDPRM0` still has a `JESINTERFACELEVEL`, an `AUTHUSER` or a
+   volume line, the start also prints `FTPD062W … SETTING(S) IN DD:FTPDPRM HAVE
+   NO EFFECT AND WERE IGNORED`. The lines did nothing before either; delete
+   them.
+
 **Coming from 1.1.0 or 1.0.x?** 1.3.0 deletes `TFTP120` only. On a system
 where `TFTP110` or `TFTP100` still owns the load module, the 1.3.0 install
 copies **nothing** and still ends `RC 00`. Upgrade step by step instead: a
@@ -394,8 +399,8 @@ On an upgrade the `APPLY` step ends **`COND CODE 0004`**, not `0000`:
 
 ```
 HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
-HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP110
-HMA2461 SYSMOD TFTP100 NOT FOUND ON SMPSCDS LIBRARY
+HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP130
+HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050 APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```
 

@@ -3367,9 +3367,9 @@ delete JOB*
 delete job*
 --
 delete *"
-jw_ids ADMA '*' > "$TMPDIR/jw_ids.after"
 JW_W=1
 for n in 3 4 5; do jw_seg $n | grep -q '^550' || JW_W=0; done
+jw_ids ADMA '*' > "$TMPDIR/jw_ids.after"
 if [ $JW_W = 1 ] && cmp -s "$TMPDIR/jw_ids.before" "$TMPDIR/jw_ids.after"; then
     pass "Fall 8: DELE JOB*, job* and * by an administrator are refused and remove no job"
 else

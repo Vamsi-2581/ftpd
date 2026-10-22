@@ -1,0 +1,37 @@
+ftp> site filetype=jes
+200 SITE command was accepted
+ftp> get JOB* x.txt
+local: x.txt remote: JOB*
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid job ID
+ftp> get JOB1 x.txt
+local: x.txt remote: JOB1
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid job ID
+ftp> get ABC00001 x.txt
+local: x.txt remote: ABC00001
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid job ID
+ftp> get JOB99999 x.txt
+local: x.txt remote: JOB99999
+229 Entering Extended Passive Mode (|||22000|)
+550 Jobid JOB99999 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=IBMUSER
+ftp> delete JOB*
+501 Invalid job ID
+ftp> delete JOB00035.1
+501 Invalid job ID
+ftp> dir JOB*
+229 Entering Extended Passive Mode (|||22000|)
+550 Jobid JOB* not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=IBMUSER
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=IBMUSER
+JOBNAME  JOBID    OWNER    STATUS CLASS
+IBMUSER  TSU00001 IBMUSER  OUTPUT  TSU 
+MBTDEPL  JOB00034 IBMUSER  OUTPUT  A   RC=0000
+FTPHELLO JOB00035 IBMUSER  OUTPUT  A   RC=0000
+250 List completed successfully.
+ftp> delete JOB00035
+250 Cancel successful
+ftp> quit
+221 Quit command received. Goodbye.

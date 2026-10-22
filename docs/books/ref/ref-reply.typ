@@ -135,6 +135,12 @@ causes are:
   in a command that does not take one.
 - #cmd("501 Missing job ID"): in the JES view, #cmd("RETR") or #cmd("DELE")
   without an argument.
+- #cmd("501 Invalid job ID"): in the JES view, #cmd("RETR") or #cmd("DELE")
+  with an argument that is not #cmd("JOB"), #cmd("STC") or #cmd("TSU") followed
+  by exactly five digits, after the letters are made upper case. A pattern such
+  as #cmd("JOB*") is one case. For #cmd("RETR") the number of a spool file may
+  follow a point (#cmd("JOB00042.3")); for #cmd("DELE") a point makes the ID
+  invalid. FTPD does not ask JES2. Since FTPD 1.3.0.
 - #cmd("501 JESOWNER is not permitted"): #cmd("SITE JESOWNER") with a user ID
   or #cmd("*") that the session may not read, or with a value that is not
   allowed. With more words on the line the reply is #cmd("501-JESOWNER is not permitted")

@@ -2741,7 +2741,12 @@ ls $id -"
     JT_L=0; JT_R=0; JT_J=0
     jw_seg 4 | grep -qw "$id" && JT_L=1
     if [ -s "$TMPDIR/jw_got" ] && ! jw_seg 5 | grep -q '^550'; then JT_R=1; fi
-    if jw_seg 6 | grep -q '^250' && ! jw_seg 6 | grep -q '^550'; then JT_J=1; fi
+    # Only a JOBnnnnn id lists the spool files of a job; any other id (STC,
+    # TSU) gives the ordinary job listing, so the file listing answers nothing.
+    case "$id" in
+    JOB*) if jw_seg 6 | grep -q '^250' && ! jw_seg 6 | grep -q '^550'; then JT_J=1; fi ;;
+    *)    JT_J=$JT_L ;;
+    esac
     if [ $JT_L$JT_R$JT_J = 111 ]; then JT_CLASS=ALLOW
     elif [ $JT_L$JT_R$JT_J = 000 ]; then JT_CLASS=HIDE
     else JT_CLASS=MIXED; fi

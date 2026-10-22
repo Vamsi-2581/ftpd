@@ -20,6 +20,8 @@
 #include "ftpd#ses.h"
 #include "ftpd#sit.h"
 #include "ftpd#mvs.h"
+#include "ftpd#jes.h"
+#include "ftpd#jwn.h"
 #include <mbtcheck.h>
 
 static ftpd_server_t    server;
@@ -63,6 +65,29 @@ ftpdcfg_volume_online(const char *volser, unsigned short *dasdtype)
     if (dasdtype)
         *dasdtype = 0;
     return strcmp(volser, "PUB001") == 0 || strcmp(volser, "SYSRES") == 0;
+}
+
+/* The JESSPOOL probe behind SITE JESOWNER is replaced: the real one asks
+** RACF.  The classification of the value is the real one (ftpd#jwn.c); only
+** the answer to "may this session see that owner" is the test's. */
+static int  owner_probe_ok = 1;
+static int  owner_probes;
+
+int
+ftpd_jes_owner_ok(ftpd_session_t *s, const char *value, char *canon,
+                  int canonsz)
+{
+    int kind = ftpd_jwn_narrows(s->user, value, canon, canonsz);
+
+    if (kind == FTPD_JWN_NR_RESET || kind == FTPD_JWN_NR_OWN)
+        return 1;
+    if (kind == FTPD_JWN_NR_ALL || kind == FTPD_JWN_NR_OTHER) {
+        owner_probes++;
+        if (owner_probe_ok)
+            return 1;
+    }
+    canon[0] = '\0';
+    return 0;
 }
 
 /* The model data set lookup is replaced: the real one needs a catalog, a
@@ -598,6 +623,47 @@ main(void)
     CHECK(code == 501 && model_calls == 0, "a pattern is refused unread");
     run("DCBDSN=MODEL.PDS(MEM)", &st, &code, text, sizeof(text));
     CHECK(code == 501 && model_calls == 0, "a member is refused unread");
+
+    /* --- JESOWNER narrows, never widens (#90) ----------------------- */
+    run("JESOWNER=ibmuser", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_owner, "IBMUSER") == 0,
+          "JESOWNER=<own userid> is stored upper case");
+    run("JESOWNER=", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && st.jes_owner[0] == '\0',
+          "an empty JESOWNER resets the filter");
+    run("JESOWNER=*", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_owner, "*") == 0,
+          "JESOWNER=* is stored when the probe passes");
+
+    owner_probes = 0;
+    run("JESOWNER=ABC*", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strcmp(text, "JESOWNER is not permitted") == 0
+          && st.jes_owner[0] == '\0' && owner_probes == 0,
+          "JESOWNER=ABC* is 501 with the fixed text, nothing stored");
+    run("JESO=ABC*", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.jes_owner[0] == '\0',
+          "the abbreviation JESO=ABC* is 501 as well");
+    run("JESOWNER=ABCDEFGHI", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.jes_owner[0] == '\0' && owner_probes == 0,
+          "nine characters are 501, not cut to eight");
+    run("JESOWNER=A.B", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.jes_owner[0] == '\0',
+          "a character outside A-Z 0-9 $ # @ is 501");
+
+    owner_probe_ok = 0;
+    run("JESOWNER=ABC", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && strcmp(text, "JESOWNER is not permitted") == 0
+          && st.jes_owner[0] == '\0',
+          "a foreign userid without READ is 501 and not stored");
+    run("JESOWNER=*", &st, &code, text, sizeof(text));
+    CHECK(code == 501 && st.jes_owner[0] == '\0',
+          "* without READ on the universal profile is 501");
+    run("JESOWNER=IBMUSER", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strcmp(st.jes_owner, "IBMUSER") == 0,
+          "the own userid needs no right");
+    run("JESOWNER=", &st, &code, text, sizeof(text));
+    CHECK(code == 200, "a reset needs no right");
+    owner_probe_ok = 1;
 
     return mbt_test_summary("TSTSIT");
 }

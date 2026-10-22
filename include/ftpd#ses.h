@@ -4,6 +4,7 @@
 ** FTPD Session Management
 */
 #include "ftpd#xlt.h"
+#include "ftpd#jwn.h"
 
 /* Forward declaration — full definition in libufs.h */
 struct libufs_ufs;
@@ -54,6 +55,7 @@ struct ftpd_session {
     char            jes_owner[9];   /* JESOWNER filter               */
     char            jes_jobname[9]; /* JESJOBNAME filter             */
     char            jes_status[8];  /* JESSTATUS filter              */
+    ftpd_jwn_sess_t jwn;            /* spool refusals of this session */
 
     /* SITE allocation defaults */
     ftpd_alloc_t    alloc;

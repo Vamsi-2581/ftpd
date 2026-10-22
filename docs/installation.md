@@ -111,6 +111,14 @@ The setup — the identity of the started task and the `FTPAUTH` FACILITY
 profile — is step 8, and the full reference is
 [FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.2.0/docs/FTPD_RAKF_SETUP.md).
 
+**FTPD 1.3.0 needs RAKF 2.0.0 or later.** Its JES spool authorization asks the
+RAKF class `JESSPOOL`, which RAKF 2.0.0 introduced. The identity that the
+started task `FTPD` runs under must be in a group that has READ on `FACILITY
+SVC244`, such as `STARTED` in the shipped `users.txt`. Otherwise FTPD cannot
+obtain APF authorization (`RAKF000A` for `FACILITY SVC244`, `FTPD003W APF SETUP
+FAILED RC=4`). Without JESSPOOL profiles every user sees and deletes only their
+own jobs; section 7 of the RAKF setup guide explains how to give others access.
+
 ### Authorisation
 
 FTPD is link-edited `AC(1)` and needs to be APF-authorised for the ACEE

@@ -18,6 +18,13 @@ tables and adds TSO commands for them (`ADDUSER`, `ALTUSER`, `DELUSER`,
 `SYS1.SECURE.SHADOW`, and the mapping of a started task by its name
 (section 2). Where RAKF 2.0.0 changes something, this guide says so in a box.
 
+**The JES spool authorization of FTPD 1.3.0 (section 7) needs RAKF 2.0.0 or
+later**, the release whose class table contains `JESSPOOL`. The identity that
+the started task `FTPD` runs under must be in a group that has READ on
+`FACILITY SVC244`, such as `STARTED` in the shipped `users.txt`. Otherwise FTPD
+cannot obtain APF authorization (`RAKF000A` for `FACILITY SVC244`,
+`FTPD003W APF SETUP FAILED RC=4`). Section 2 says which identity the task gets.
+
 > Some systems (MVS/CE) add a `RAKFCL` command processor that wraps table
 > editing in RACF-like syntax. It is a distribution extension, not part of RAKF,
 > and nothing here depends on it.
@@ -73,10 +80,10 @@ DATASET SYS1.SECURE.*                               RAKFADM UPDATE
 
 | Columns | Field |
 |:-------:|-------|
-| 1 – 8 | class — `DATASET `, `FACILITY`, `DASDVOL ` |
+| 1 – 8 | class — `DATASET `, `FACILITY`, `DASDVOL `, `JESSPOOL` |
 | 9 – 52 | resource or data set name, generic `*` allowed |
 | 53 – 60 | group — **blank means universal access** |
-| 61 – 66 | permission — `NONE`, `READ`, `UPDATE`, `ALTER` |
+| 61 – 68 | permission — `NONE`, `READ`, `UPDATE`, `CONTROL`, `ALTER` |
 
 ### Three rules that are easy to miss
 
@@ -377,7 +384,345 @@ gating anything.
 
 ---
 
-## 7. Troubleshooting
+## 7. JESSPOOL — who may see and delete other users' jobs
+
+FTPD 1.3.0 decides for every job whether the logged-in user may list it, read
+its output and delete it. This applies to the JES mode of FTP (`SITE FILETYPE=JES`:
+`LIST`, `NLST`, `RETR`, `DELE`). The RAKF class `JESSPOOL` holds the rules.
+
+> **FTPD always shows, reads and deletes your own jobs; a profile of the class
+> JESSPOOL regulates what you may see and delete of the jobs of others.**
+> A JESSPOOL profile never restricts a user's own jobs; it only decides what a
+> user may see and delete of other users' jobs.
+
+The profiles regulate the FTP channel only. They say nothing about who can
+read the spool through TSO, SDSF or another interface.
+
+Without any JESSPOOL profile nothing else is visible: every user sees, reads and
+deletes only their own jobs, and `SITE JESOWNER=*` or another user's id is
+refused with `501`. That is the state of FTPD 1.3.0 without any action.
+
+### What FTPD asks RACF
+
+For a job of another owner FTPD builds the entity
+
+```
+<owner>.<jobname>.<jobid>          for example   ABC.PAYROLL.JOB00042
+```
+
+and asks RACF for READ on it in the class `JESSPOOL` (and, for `DELE`, for
+UPDATE). The owner comes first because RAKF compares only the first **8**
+characters of an entity: with the owner first, a profile `OWNER.*` is a rule
+about a user. A job without an owner has the entity `.<jobname>.<jobid>`.
+
+| Access to the entity | `LIST`, `LIST JOBnnnnn`, `RETR` | `DELE` |
+|----------------------|----------------------------------|--------|
+| no profile covers it, or `NONE` | the job is hidden | hidden |
+| `READ` | listed and read | `550 Access denied - cannot cancel <jobid>` |
+| `UPDATE`, `CONTROL`, `ALTER` | listed and read | `250 Cancel successful` |
+
+A hidden job is answered with the same `550 Jobid <id> not found for
+JESJOBNAME=…, JESSTATUS=…, JESOWNER=…` as a job that does not exist, so the
+reply does not tell whether the job exists.
+
+`SITE JESOWNER=<value>` only narrows the view, never widens it. The value is one
+user id (compared whole: `ABC` does not match `ABCD`) or `*` for all owners.
+`*` and another user's id need READ on the profile that would cover that
+user's jobs; without it the answer is `501`. A pattern such as `ABC*`, a value
+of more than eight characters and a character outside `A–Z 0–9 $ # @` are `501`
+as well; a value is never cut to eight characters.
+
+> **Change from FTPD 1.2.0:** `SITE JESOWNER=` compared a prefix and accepted any
+> value (`200`), and any user could list, read and delete the jobs of everyone.
+> If you relied on seeing or deleting other users' jobs, define the profiles
+> below **before** you upgrade.
+
+### Rules for profiles
+
+1. **Write an owner profile only where an owner gives something to others or
+   takes it away, and always with the star: `OWNER.*`** (for example `ABC.*`).
+   Your own jobs need no profile. Always write the owner profile with the
+   star, `OWNER.*`. Do not rely on a profile without a star in the class
+   JESSPOOL: prefix matching is designed for DATASET only.
+2. **At most one `*` profile**, if you mean all owners. No `OWN*` next to
+   `OWN.*`, no profile that names job name characters (`ABC.PROD*`).
+3. **Why:** among several matching profiles the **last** one in EBCDIC order
+   wins, not the longest. `OWN*` beats `OWN.*` (`.` sorts before `*`), and a
+   `*` profile loses against every more specific profile, except for owners
+   that sort before `*`: the empty owner (`.`) and a user id that starts with
+   `$`. For a user id that starts with `$` there is no effective owner profile
+   against a `*` profile: the profile for `$ABC` sorts before `*` and loses
+   against it. (Derived from the EBCDIC collating order, not measured.)
+4. **Look first** whether a generic JESSPOOL profile exists. A second line with
+   the same key, or a duplicate line, aborts the reload (`U0300`, below).
+5. Job name and job ID make no difference (only eight characters count). There
+   is no profile per job.
+6. **Required line: `SYSTEM.*` with `NONE` next to every universal reader
+   line.** All started tasks run under the owner `SYSTEM`; as soon as a
+   universal line grants READ, the logs of all started tasks, including that
+   of FTPD, are open to every reader. Nothing enforces this line. Check under
+   which owner your own started-task logs are listed before you rely on it, and
+   do not create a user `SYSTEM` (it would then count as the owner of those
+   jobs and see them whatever the profiles say).
+7. **Every entity that has a line with an id needs a line without an id (the
+   universal access) for the same entity: `OWNER.*`, `SYSTEM.*` and `*`
+   itself.** See the warning below for what happens otherwise.
+8. **Put the administrators' line into every owner block.** As soon as an owner
+   profile exists, a role that should see that owner's jobs needs a line in it:
+   a block without it falls back to its own universal access (`NONE`) and, as
+   the last matching profile, wins against `*`.
+9. **One connected group is enough.** The right comes from any group the user
+   is connected to in `USERS` (the default group included), not from
+   OPERATIONS. A requested but not connected group gives nothing. FTPD
+   requests no group at login. In the class JESSPOOL the OPERATIONS attribute
+   grants no access; it does so only in the classes DATASET, TAPEVOL and
+   DASDVOL (as in IBM RACF).
+10. **The prefix trap:** `MIKE1.*` does not match `MIKE10.JOBE.JOB00016` (the
+    prefix of the profile is `MIKE1.`); that job falls to `*`. Likewise
+    `MIKE1` is not the owner of the jobs of `MIKE10` and vice versa.
+11. **The owner needs no line.** Their own jobs are decided before RACF.
+12. **Jobs without an owner** fall under `*`. A reader of `*` (READ) sees them,
+    and no profile can exclude them (`.` sorts before `*`); `SYSTEM.*` with
+    `NONE` does not cover them.
+13. **Every user id that occurs as the owner of jobs and may log in over FTP
+    lists, reads and deletes its own jobs, whatever the JESSPOOL profiles
+    say.** To keep such a user id out, deny it the FTP login (FACILITY
+    `FTPAUTH`), not the spool. When you create a user id, check that it is not
+    already the owner of jobs.
+14. **The owner of a job is chosen by the submitting client; the JESSPOOL view
+    of a job is not audit evidence.**
+
+Do not raise the JESSPOOL entity maximum above 8 without adjusting the FTPD key
+(`FTPD_JWN_KEYLEN` in the source).
+
+### Create the profiles with the RAKF commands
+
+Create the profiles with the RAKF commands `RDEFINE` and `PERMIT` and reload the
+in-core tables with `S RAKFPROF`, rather than editing
+`SYS1.SECURE.CNTL(PROFILES)` by hand. The commands come with RAKF 2.0.0.
+
+```
+RDEFINE 'resource' CLASS(class) UACC(NONE|READ|UPDATE|CONTROL|ALTER)      (alias RDEF)
+PERMIT  'resource' CLASS(class) ID(group) ACCESS(NONE|READ|UPDATE|CONTROL|ALTER)   (alias PE)
+```
+
+- **Who may run them:** the user must be connected to the group `RAKFADM` and
+  should have the SPECIAL authority (RAKF 2.0.0 `HELP` for `RDEFINE` and
+  `PERMIT`: "You must be connected to the RAKFADM group." and "The issuing user
+  should have the SPECIAL authority. Update access to the SYS1.SECURE.* dataset
+  is necessary or the issuing user should have the OPERATIONS authority along
+  with the SPECIAL authority."). SPECIAL is column 30 of `USERS` (section 1).
+- `RDEFINE` creates the universal line of a profile, `PERMIT` adds a line for
+  a group. `PERMIT` is refused for a profile without a universal line
+  (`PERMIT: No universal access record found`), so the trap of rule 7 does not
+  exist when you use the commands. For each
+  profile `RDEFINE` comes before `PERMIT`.
+- **A reload is part of every sequence.** Without `S RAKFPROF` the profile is
+  not in effect. A successful reload is acknowledged on the console with
+  `RAKFPROF7  RAKF PROFILES UPDATED`. Profile changes apply from the next
+  command of a running session; a changed group membership applies after a new
+  login.
+- The commands sort the records and remove comment lines from `PROFILES`;
+  comments in the file are lost with the first command. They accept up to
+  1495 (`RDEFINE`) or 1500 (`PERMIT`) records (from the RAKF source, not
+  measured), fewer than the loader (2000).
+- `RDEFINE` refuses an existing profile ("Profile already defined"); `PERMIT`
+  replaces the access of an existing combination of class, profile and id
+  instead of writing a second line (from the RAKF source, not measured).
+- The class must be known to the running RAKF; an unknown class is refused with
+  RC 8 (`Class … unknown to RAKF`).
+
+Keep a copy of `PROFILES` before the first change.
+
+### Examples
+
+Each example is a sequence of commands; the lines below it show what `PROFILES`
+contains afterwards. Test 18 of FTPD runs each of these sequences on RAKF 2.0.0
+and compares the lines.
+
+**A. Auditors read all jobs except the started tasks; everyone else only their
+own.**
+
+```
+RDEF * CL(JESSPOOL) UACC(NONE)
+PE * CL(JESSPOOL) ID(AUDIT) ACCESS(READ)
+RDEF SYSTEM.* CL(JESSPOOL) UACC(NONE)
+S RAKFPROF
+```
+
+```
+         1         2         3         4         5         6
+123456789012345678901234567890123456789012345678901234567890123456
+JESSPOOL*                                                   NONE
+JESSPOOL*                                           AUDIT   READ
+JESSPOOLSYSTEM.*                                            NONE
+```
+
+`*` `NONE` closes foreign jobs for everyone, AUDIT reads foreign jobs (READ, no
+delete) except the started-task logs (`SYSTEM.*` `NONE`). Everyone keeps their
+own jobs. Jobs without an owner fall under `*`: an auditor can read them and
+they cannot be excluded.
+
+**B. Everyone reads everything, only OPS deletes.**
+
+```
+RDEF * CL(JESSPOOL) UACC(READ)
+PE * CL(JESSPOOL) ID(OPS) ACCESS(UPDATE)
+RDEF SYSTEM.* CL(JESSPOOL) UACC(NONE)
+S RAKFPROF
+```
+
+```
+JESSPOOL*                                                   READ
+JESSPOOL*                                           OPS     UPDATE
+JESSPOOLSYSTEM.*                                            NONE
+```
+
+Everyone also deletes their own jobs. **The line `SYSTEM.*` `NONE` is
+required** (rule 6): without it all started-task logs are open to every reader.
+It closes them for OPS as well; to open them for OPS add `SYSTEM.*` with the id
+`OPS` and `READ` right behind it. Jobs without an owner are readable for
+everyone and cannot be excluded.
+
+**C. Nothing.** Create no profile: everyone sees, reads and deletes only their
+own jobs.
+
+**D. Everyone sees and deletes their own jobs; the group ADMIN sees and deletes
+all.**
+
+```
+RDEF * CL(JESSPOOL) UACC(NONE)
+PE * CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+S RAKFPROF
+```
+
+```
+JESSPOOL*                                                   NONE
+JESSPOOL*                                           ADMIN   UPDATE
+```
+
+Members of ADMIN (one connected group is enough, rule 9) see, read and delete all
+foreign jobs, the started-task logs and jobs without an owner included. If
+ADMIN should not get the started-task logs, add `SYSTEM.*` `NONE`; without an
+ADMIN line in that block ADMIN is shut out as well (rule 8).
+
+**E. Everyone reads everything except the started-task logs; ADMIN deletes;
+everyone deletes their own.**
+
+```
+RDEF * CL(JESSPOOL) UACC(READ)
+PE * CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+RDEF SYSTEM.* CL(JESSPOOL) UACC(NONE)
+S RAKFPROF
+```
+
+```
+JESSPOOL*                                                   READ
+JESSPOOL*                                           ADMIN   UPDATE
+JESSPOOLSYSTEM.*                                            NONE
+```
+
+`SYSTEM.*` `NONE` is required (rule 6) and closes the started-task logs for
+ADMIN as well; if the administrators should read them, add `SYSTEM.*` with the
+id `ADMIN` and `UPDATE`. Jobs without an owner are readable for everyone.
+
+**F. A pair, MIKE1 and MIKE2, may read and delete each other's jobs; ADMIN all;
+otherwise everyone sees only their own.**
+
+```
+RDEF * CL(JESSPOOL) UACC(NONE)
+PE * CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+RDEF MIKE1.* CL(JESSPOOL) UACC(NONE)
+PE MIKE1.* CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+PE MIKE1.* CL(JESSPOOL) ID(MIKE2) ACCESS(UPDATE)
+RDEF MIKE2.* CL(JESSPOOL) UACC(NONE)
+PE MIKE2.* CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+PE MIKE2.* CL(JESSPOOL) ID(MIKE1) ACCESS(UPDATE)
+S RAKFPROF
+```
+
+```
+JESSPOOL*                                                   NONE
+JESSPOOL*                                           ADMIN   UPDATE
+JESSPOOLMIKE1.*                                             NONE
+JESSPOOLMIKE1.*                                     ADMIN   UPDATE
+JESSPOOLMIKE1.*                                     MIKE2   UPDATE
+JESSPOOLMIKE2.*                                             NONE
+JESSPOOLMIKE2.*                                     ADMIN   UPDATE
+JESSPOOLMIKE2.*                                     MIKE1   UPDATE
+```
+
+`ID()` takes a user id here, although the `HELP` text speaks of a group (not
+verified beyond the test images); the commands accepted it there and wrote the
+lines shown. The ADMIN line in both blocks is
+required (rule 8); `MIKE1.*` does not cover the jobs of `MIKE10` (rule 10).
+
+### The order of the lines and the placement in `profiles.txt`
+
+The loader sorts the lines itself, so their order does not matter. Keeping them
+in ascending order makes the file easier to read and duplicate lines easier to
+see. In the `profiles.txt` that ships with RAKF the classes are in the order
+`DASDVOL`, `DATASET`, `FACILITY`, `TAPEVOL`, `TERMINAL`; `JESSPOOL` sorts between
+`FACILITY` and `TAPEVOL`.
+
+### Writing `PROFILES` by hand
+
+If you edit the member instead of using the commands, the rules of section 1
+apply, and one more: **a line with an id needs a line without an id for the same
+entity, also for `*` itself.** If it is missing, for example `JESSPOOL*  ADMIN
+UPDATE` without `JESSPOOL*  NONE`, `S RAKFPROF` reports
+
+```
+RAKFPROF4  PERMIT RECORD WITHOUT UNIVERSAL ACCESS RECORD
+RAKFPROF4  **  PROGRAM TERMINATED  **
+IEF450I RAKFPROF RAKFPROF - ABEND S000 U0400
+```
+
+and `RAKFPROF8` before it names the offending record. A duplicate line aborts
+the reload with `U0300` (`RAKFPROF3`), and a line without an access with `U0500`.
+
+An aborted reload leaves the old chain in effect; the broken file stays where it
+is, and **on RAKF 2.0.0 it prevents JES2 from starting at the next IPL.** Fix it
+before the next IPL: write the correct file and run `S RAKFPROF`;
+`RAKFPROF7  RAKF PROFILES UPDATED` confirms it. Always look at the console
+after `S RAKFPROF`.
+
+### What else to know
+
+- **Empty class:** no JESSPOOL line means RACF answers "no profile" (RC 4):
+  everyone sees only their own jobs.
+- **Class not defined:** if the class is missing from the class table of the
+  running RAKF, RAKF writes `RAKF0012` to the console for every check (a client
+  can flood the console with it) and foreign jobs are hidden for everybody; own
+  jobs stay visible.
+- **Missing or invalid RAKF tables.** On RAKF 2.0.0 JES2 does not start without
+  valid tables (measured with a broken `PROFILES` and a broken `USERS` at a cold
+  start); have valid tables **before** the IPL. The older RAKF of the MVS/CE
+  container images allows everything in that case.
+- **Withdrawing by group membership** takes effect only after the person has
+  logged in again. For an immediate withdrawal change the profile (a user
+  permit with `NONE`).
+- The loader holds 2000 records without a range check; every owner profile costs
+  several lines (example F: three per block).
+- Job fields (job name, owner, class, step names) are sanitized before FTPD
+  writes them to the control or data connection or to the log.
+- Submitting: FTPD adds `USER=` and `PASSWORD=` only to the first JOB card of a
+  `STOR` stream. Every further JOB card in the same stream runs as a job of its
+  own, without them, under the default account. Such a job has no owner, so it
+  falls under the `*` profile (section 7), and the `250` reply names its job id.
+
+### Check it
+
+1. Log in as an ordinary user: `LIST` shows only your own jobs; `SITE
+   JESOWNER=*` answers `501`.
+2. Log in as a member of the group that the profile permits: `LIST` shows the
+   foreign jobs; `RETR` reads them; `DELE` answers `550 Access denied - cannot
+   cancel <jobid>` with READ and `250 Cancel successful` with UPDATE.
+3. After every `S RAKFPROF` read the console.
+
+---
+
+## 8. Troubleshooting
 
 | Symptom | Cause |
 |---------|-------|
@@ -392,6 +737,9 @@ gating anything.
 | `530 Not authorized for FTP access` | `FTPAUTH` denies this user — check the group in columns 53–60 |
 | `550 Access denied to <dsn>` | A `DATASET` profile refuses the access under the **client's** identity, not FTPD's |
 | Everyone can reach everything | No `DATASET` profiles. Undefined resources get ALTER — section 4 |
+| `S RAKFPROF` ends with `ABEND S000 U0400` | A profile line with an id has no line without an id for the same entity — section 7. The old tables stay in effect |
+| `550 Jobid … not found` for a job that exists | The job is hidden: it belongs to another owner and no JESSPOOL profile gives you READ — section 7 |
+| `501` for `SITE JESOWNER=…` | A pattern, a value of more than 8 characters, or no READ on the owner's jobs — section 7 |
 
 ---
 

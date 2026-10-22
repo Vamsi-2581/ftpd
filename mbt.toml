@@ -132,6 +132,14 @@ sources = ["test/tstrec.c", "src/ftpd#rec.c"]
 [test.TSTJFL]
 sources = ["test/tstjfl.c", "src/ftpd#jfl.c"]
 
+# ftpd_jwn_check() and friends -- who may see, read and delete which job on
+# the JES spool (#90): entity and component rules, ownership, the RACF return
+# code to level table, the decision table, the SITE JESOWNER classification,
+# output sanitizing and the log counters.  RACF is a stub.  ftpd#jwn.c is free
+# of project and MVS headers: DUAL.
+[test.TSTJWN]
+sources = ["test/tstjwn.c", "src/ftpd#jwn.c"]
+
 # ftpdcfg_load() -- a read error on DD:FTPDPRM must abandon the start (#119).
 # MVS-only: the vector is a real BSAM wrong-length record, built here by
 # allocating the same data set through two DDs that disagree about BLKSIZE,

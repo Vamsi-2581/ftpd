@@ -96,9 +96,9 @@ want it: <https://github.com/mvslovers/ufsd/releases>, with its own guide at
 Note that UFSD has to be **running**, not just installed — it is a started task
 FTPD talks to across address spaces.
 
-FTPD 1.2.0 carries `libufs` from UFSD 1.4.0 and was tested against a running
-UFSD 1.4.0. UFSD 1.4.0 changed only the C library it is built with; its server
-and the `libufs` interface are unchanged from 1.3.0.
+FTPD 1.3.0 carries `libufs` from UFSD 1.4.0, as 1.2.0 did. UFSD 1.4.0 changed
+only the C library it is built with; its server and the `libufs` interface are
+unchanged from 1.3.0.
 
 ### RAKF is required for logins
 
@@ -214,43 +214,81 @@ that is not finished.
 
 ---
 
-## 2a. Upgrading from 1.1.0
+## 2a. Upgrading from 1.2.0
 
-A fresh install can skip this section. From 1.1.0, the upgrade is a
-**drop-in**: 1.2.0 installs into the same data sets, under the same started
-task procedure and APF entry, and reads the same `FTPDPRM0`.
+A fresh install can skip this section. From 1.2.0, the upgrade is a
+**drop-in** as far as SMP and the data sets go: 1.3.0 installs into the same
+data sets, under the same started task procedure and APF entry, and reads the
+same `FTPDPRM0`. What changes is behaviour, and two of the changes need a
+decision from you **before** you install; they are listed first.
 
-| | 1.1.0 | 1.2.0 |
+| | 1.2.0 | 1.3.0 |
 |---|---|---|
-| FMID | `TFTP110` | `TFTP120`, deletes `TFTP110` |
+| FMID | `TFTP120` | `TFTP130`, deletes `TFTP120` |
 | Libraries | `FTPD.LINKLIB`, … | unchanged |
-| C library | LIBC/370 1.0.6 | LIBC/370 2.10.3 |
+| C library | LIBC/370 2.10.3 | LIBC/370 2.25.1 (built with CC/370 1.6.1) |
+| `libufs` | UFSD 1.4.0 | UFSD 1.4.0, unchanged |
+| RAKF | 1.2.x or 2.0.0 | 1.2.x or 2.0.0; the JES view needs 2.0.0 or later |
+
+### Before you install
+
+1. **Create the `JESSPOOL` profiles you need.** In 1.2.0 every user could
+   list, read and cancel the jobs of everybody through the JES view
+   (`SITE FILETYPE=JES`). In 1.3.0 a user sees, reads and cancels only the own
+   jobs; the jobs of other users need a profile in the RAKF class `JESSPOOL`,
+   which exists from RAKF 2.0.0. Without any profile that is the state after
+   the upgrade. If an administrator or an operator relies on seeing all jobs,
+   create the profiles first. Section 7 of the
+   [RAKF setup guide](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md)
+   has the profiles and examples.
+2. **Check the identity of the started task** (step 8). 1.2.0 logged on as
+   `FTPD`/`USER` at startup. 1.3.0 keeps the identity RAKF gives the task and
+   names it in `FTPD004I`. On RAKF 2.0.0, which maps by STC name, the userid
+   `FTPD` in `USERS` is that mapping, and its group needs READ on the
+   `FACILITY` profile `SVC244`. On a RAKF without such a mapping the task now
+   runs as `STC`/`STCGROUP`, with Operations authority.
+3. **The `HASPCKPT` and `HASPACE1` statements of your procedure are optional
+   now.** FTPD finds the JES2 checkpoint and the spool itself (step 7). Your
+   copy of the procedure stays as it is; keep a statement only when it is
+   needed.
+4. **Read what else changed.** The table *What Is New in FTPD 1.3* in the
+   User's Guide (the book that comes with the release) lists every change of
+   behaviour with the place that describes it. Two are worth a look when you
+   have scripts: a text line longer than the record of the data set now fails
+   `STOR` and `APPE` with `451`, and a `PASS` on a server that is not APF
+   authorized is now answered `530`.
+
+### The steps
 
 1. **Stop FTPD** (`/P FTPD`, step 5).
 2. **Skip the allocation job** (step 4). The data sets exist already, and the
    job allocates them `NEW`, so it would fail.
 3. **Run the install job** (step 6). The `APPLY` ends `COND CODE 0004` on
-   `HMA2461 SYSMOD TFTP110 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
+   `HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
    result of a replacement; see *One return code that looks wrong and is not*
-   in section 2b.
+   in section 2b. On MVS/CE, where SMP never saw the FTPD 1.2.0 of the image,
+   it ends `COND CODE 0000` (step 5).
 4. **Start FTPD** (`/S FTPD`) and read the banner. It must name the new
    release and the new C library:
 
    ```
-   FTPD000I FTPD 1.2.0 (xxxxxxx) STARTING
-   FTPD005I LIBC370 2.10.3 (A790DC4)
+   FTPD000I FTPD 1.3.0 (xxxxxxx) STARTING
+   FTPD005I LIBC370 2.25.1 (xxxxxxx)
    ```
 
-   `LIBC370 1.0.6` on the second line means the started task still runs 1.1.0.
-   Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380 COPY
-   SUCCESSFUL` — not the condition codes.
+   `LIBC370 2.10.3` on the second line means the started task still runs
+   1.2.0. Check the member list of `FTPD.LINKLIB` and the job log for `HMA2380
+   COPY SUCCESSFUL` — not the condition codes.
 
-**Coming from 1.0.x?** 1.2.0 deletes `TFTP110` only. On a system where
-`TFTP100` still owns the load module, the 1.2.0 install copies **nothing** and
-still ends `RC 00`. Upgrade to 1.1.0 first, following section 2b with the
-1.1.0 package from the
-[releases page](https://github.com/mvslovers/ftpd/releases/tag/v1.1.0), then
-come back here.
+**Coming from 1.1.0 or 1.0.x?** 1.3.0 deletes `TFTP120` only. On a system
+where `TFTP110` or `TFTP100` still owns the load module, the 1.3.0 install
+copies **nothing** and still ends `RC 00`. Upgrade release by release: a 1.1.0
+system installs the
+[1.2.0 package](https://github.com/mvslovers/ftpd/releases/tag/v1.2.0) the way
+this section describes (`TFTP120` deletes `TFTP110`, banner `LIBC370 2.10.3`),
+then comes back here. A 1.0.x system goes to 1.1.0 first, following section 2b
+with the 1.1.0 package from the
+[releases page](https://github.com/mvslovers/ftpd/releases/tag/v1.1.0).
 
 ---
 

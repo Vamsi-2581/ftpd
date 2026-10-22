@@ -19,6 +19,7 @@
 #include "ftpd#mvs.h"
 #include "ftpd#sit.h"
 #include "ftpd#jfl.h"
+#include "ftpd#jes.h"
 #ifdef FTPD_DEBUG_ABEND
 #include "ftpd#aut.h"            /* ftpd_acee_enter() — ABEND=LOCK  */
 #endif
@@ -566,8 +567,17 @@ site_apply_one(ftpd_session_t *sess,
         return 0;
     }
 
+    /* A listing filter that narrows to somebody else's jobs needs the right
+    ** to see them (#90).  The value is checked whole, before anything cuts
+    ** it to the size of the field; the reply does not say why. */
     if (strcmp(key, "JESOWNER") == 0) {
-        site_copy_upper(sess->jes_owner, sizeof(sess->jes_owner), val);
+        char canon[FTPD_JWN_PRTSZ];
+
+        if (ftpd_jes_owner_ok(sess, val, canon, sizeof(canon))) {
+            strcpy(sess->jes_owner, canon);
+        } else if (deny[0] == '\0') {
+            snprintf(deny, denysz, "JESOWNER is not permitted");
+        }
         return 0;
     }
 

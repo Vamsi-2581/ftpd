@@ -390,18 +390,175 @@ job_retcode(JESJOB *job, char *buf, int bufsz)
 }
 
 /* --------------------------------------------------------------------
-** Helper: check if job matches owner filter.
-** Follows mvsmf jobsapi.c should_skip_job().
+** The one question FTPD asks RACF about the spool: may this session's ACEE
+** have READ (or UPDATE) on a JESSPOOL entity?  The answer is racf_auth()'s
+** return code, unmodified; ftpd_jwn_level() reads it.  This is the only
+** call to racf_auth() in this file (tools/check-jes-access.py).
 ** ----------------------------------------------------------------- */
 static int
-job_matches_owner(JESJOB *job, const char *owner)
+jes_racf_auth(void *arg, const char *entity, int want_update)
 {
-    if (!owner || owner[0] == '\0' || owner[0] == '*')
-        return 1;   /* no filter or wildcard = match all */
-    if (job->owner[0] == '\0')
-        return 0;
-    return (strncmp((const char *)job->owner, owner,
-                    strlen(owner)) == 0);
+    return racf_auth((ACEE *)arg, "JESSPOOL", entity,
+                     want_update ? RACF_ATTR_UPDATE : RACF_ATTR_READ);
+}
+
+static const char *
+jes_op_name(int op)
+{
+    switch (op) {
+    case FTPD_JWN_OP_LIST:      return "LIST";
+    case FTPD_JWN_OP_LISTJOB:   return "LISTJOB";
+    case FTPD_JWN_OP_RETR:      return "RETR";
+    default:                    return "DELE";
+    }
+}
+
+/* --------------------------------------------------------------------
+** May the session see, read or delete this job?
+**
+** The only place FTPD asks the spool policy.  The decision itself is
+** ftpd_jwn_check(); this fills its context from the session, counts the
+** outcome into the command's tally and writes the log line the tally asks
+** for.  Returns FTPD_JWN_ALLOW, FTPD_JWN_HIDE or FTPD_JWN_NOCANCEL.
+** ----------------------------------------------------------------- */
+static int
+job_access(ftpd_session_t *sess, const JESJOB *job, int op,
+           ftpd_jwn_tally_t *tally)
+{
+    ftpd_jwn_ctx_t ctx;
+    ftpd_jwn_res_t res;
+    char who[FTPD_JWN_PRTSZ];
+    char jid[FTPD_JWN_PRTSZ];
+    char rcs[16];
+    int decision;
+    int line;
+
+    ctx.acee_present = sess->acee != NULL;
+    ctx.user = sess->user;
+    ctx.auth_fn = jes_racf_auth;
+    ctx.auth_arg = sess->acee;
+
+    decision = ftpd_jwn_check(&ctx, op, (const char *)job->owner,
+                              (const char *)job->jobname,
+                              (const char *)job->jobid, &res);
+
+    line = ftpd_jwn_tally(tally, &sess->jwn, op, &res);
+    if (line == FTPD_JWN_LINE_NONE)
+        return decision;
+
+    ftpd_jwn_printable(who, sizeof(who), sess->user);
+    ftpd_jwn_printable(jid, sizeof(jid), (const char *)job->jobid);
+    if (res.rc < 0)
+        strcpy(rcs, "-");
+    else
+        snprintf(rcs, sizeof(rcs), "%d", res.rc);
+
+    switch (line) {
+    case FTPD_JWN_LINE_ERROR:
+        ftpd_log(LOG_ERROR,
+                 "JES %s error: user=%s job=%s reason=ERR rc=%s elen=%d",
+                 jes_op_name(op), who, jid, rcs, res.elen);
+        break;
+    case FTPD_JWN_LINE_NOACEE:
+        ftpd_log(LOG_WARN,
+                 "JES %s denied: user=%s job=%s reason=NOACEE rc=-",
+                 jes_op_name(op), who, jid);
+        break;
+    default:
+        ftpd_log(LOG_WARN,
+                 "JES %s denied: user=%s job=%s reason=%s rc=%s",
+                 jes_op_name(op), who, jid,
+                 decision == FTPD_JWN_NOCANCEL ? "NOCANCEL" :
+                 res.reason == FTPD_JWN_R_NONE ? "NONE" : "NOPROFILE",
+                 rcs);
+        break;
+    }
+    return decision;
+}
+
+/* --------------------------------------------------------------------
+** The one answer for a job that is hidden, does not pass the JESSTATUS
+** filter or does not exist.  LIST JOBnnnnn, RETR and DELE all end here, so
+** the three cases cannot be told apart by their reply.
+** ----------------------------------------------------------------- */
+static void
+reply_job_not_found(ftpd_session_t *sess, const char *jobid)
+{
+    ftpd_session_reply(sess, FTP_550,
+        "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
+        jobid,
+        sess->jes_jobname[0] ? sess->jes_jobname : "*",
+        status_filter(sess),
+        sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
+}
+
+/* --------------------------------------------------------------------
+** SITE JESOWNER=<value>: may the session narrow its listing to this owner?
+**
+** canon receives the value to store (upper case, "" to reset).  The own
+** userid and the empty value need nothing; "*" needs READ on the probe
+** "..", another userid X on "X.." (ftpd#jwn.h).  A refusal is one fixed
+** answer for the caller and one log line here, counted in the session's
+** refusals like a refused RETR.
+** ----------------------------------------------------------------- */
+int
+ftpd_jes_owner_ok(ftpd_session_t *sess, const char *value,
+                  char *canon, int canonsz)
+{
+    ftpd_jwn_ctx_t ctx;
+    ftpd_jwn_res_t res;
+    ftpd_jwn_tally_t tally;
+    char probe[FTPD_JWN_ENTSZ];
+    char who[FTPD_JWN_PRTSZ];
+    char what[FTPD_JWN_PRTSZ];
+    char up[FTPD_JWN_PRTSZ];
+    char rcs[16];
+    int kind;
+    int i;
+
+    kind = ftpd_jwn_narrows(sess->user, value, canon, canonsz);
+    if (kind == FTPD_JWN_NR_RESET || kind == FTPD_JWN_NR_OWN)
+        return 1;
+
+    memset(&res, 0, sizeof(res));
+    res.rc = -1;
+    ctx.acee_present = sess->acee != NULL;
+    ctx.user = sess->user;
+    ctx.auth_fn = jes_racf_auth;
+    ctx.auth_arg = sess->acee;
+
+    if ((kind == FTPD_JWN_NR_ALL || kind == FTPD_JWN_NR_OTHER) &&
+        ctx.acee_present && sess->user[0] &&
+        ftpd_jwn_probe(probe, sizeof(probe),
+                       kind == FTPD_JWN_NR_ALL ? "" : canon) >= 0) {
+        res.level = ftpd_jwn_level(&ctx, probe, 0, &res);
+        if (res.level >= FTPD_JWN_LV_READ)
+            return 1;
+    }
+
+    if (canon && canonsz > 0)
+        canon[0] = '\0';
+
+    for (i = 0; i < FTPD_JWN_COMPMAX && value[i]; i++)
+        up[i] = (char)toupper((unsigned char)value[i]);
+    up[i] = '\0';
+    ftpd_jwn_printable(what, sizeof(what), up);
+    ftpd_jwn_printable(who, sizeof(who), sess->user);
+    if (res.rc < 0)
+        strcpy(rcs, "-");
+    else
+        snprintf(rcs, sizeof(rcs), "%d", res.rc);
+
+    /* Counted like any other refusal: the same 16 lines per session. */
+    ftpd_jwn_tally_init(&tally);
+    res.decision = FTPD_JWN_HIDE;
+    res.reason = FTPD_JWN_R_NONE;
+    if (ftpd_jwn_tally(&tally, &sess->jwn, FTPD_JWN_OP_RETR, &res) ==
+        FTPD_JWN_LINE_WARN)
+        ftpd_log(LOG_WARN,
+                 "SITE JESOWNER refused: user=%s value=%s rc=%s",
+                 who, what, rcs);
+    return 0;
 }
 
 /* --------------------------------------------------------------------
@@ -434,7 +591,12 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     JES *jes = NULL;
     JESJOB **joblist = NULL;
     JESJOB *job;
+    ftpd_jwn_tally_t tally;
     char jobid[16];
+    char jname[FTPD_JWN_PRTSZ];
+    char jid[FTPD_JWN_PRTSZ];
+    int visible;
+    int aborted = 0;
     int i;
 
     for (i = 0; jobid_arg[i] && i < (int)sizeof(jobid) - 1; i++)
@@ -452,12 +614,16 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     joblist = jesjob(jes, jobid, FILTER_JOBID, 1);
 
     job = job_by_id(joblist, jobid);
-    if (!job || !job_matches_status(sess, job)) {
+    visible = 0;
+    if (job && job_matches_status(sess, job)) {
+        ftpd_jwn_tally_init(&tally);
+        visible = job_access(sess, job, FTPD_JWN_OP_LISTJOB, &tally)
+                  == FTPD_JWN_ALLOW;
+    }
+    if (!visible) {
         if (joblist) jesjobfr(&joblist);
         jesclose(&jes);
-        ftpd_session_reply(sess, FTP_550,
-                           "No job found with ID %s for JESSTATUS=%s",
-                           jobid_arg, status_filter(sess));
+        reply_job_not_found(sess, jobid);
         return 0;
     }
 
@@ -472,29 +638,54 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
         return 0;
     }
 
+    ftpd_jwn_printable(jname, sizeof(jname), (const char *)job->jobname);
+    ftpd_jwn_printable(jid, sizeof(jid), (const char *)job->jobid);
+
     /* Header */
-    ftpd_data_printf(sess,
-        "JOBNAME  JOBID    STEPNAME PROCSTEP C DDNAME   BYTE-COUNT\r\n");
+    if (ftpd_data_printf(sess,
+        "JOBNAME  JOBID    STEPNAME PROCSTEP C DDNAME   BYTE-COUNT\r\n") < 0)
+        aborted = 1;
 
     /* Iterate spool files */
-    if (job->jesdd) {
+    if (!aborted && job->jesdd) {
         for (i = 0; job->jesdd[i]; i++) {
             JESDD *dd = job->jesdd[i];
             long bytecount = (long)dd->records * (dd->lrecl > 0 ? dd->lrecl : 80);
+            char step[FTPD_JWN_PRTSZ];
+            char proc[FTPD_JWN_PRTSZ];
+            char ddn[FTPD_JWN_PRTSZ];
+            char cls[2];
+            char clsout[FTPD_JWN_PRTSZ];
+            char clsc;
 
-            ftpd_data_printf(sess,
-                "%-8.8s %-8.8s %-8.8s %-8.8s %c %-8.8s %10ld\r\n",
-                job->jobname, job->jobid,
-                dd->stepname, dd->procstep,
-                dd->oclass ? dd->oclass : ' ',
-                dd->ddname,
-                bytecount);
+            ftpd_jwn_printable(step, sizeof(step), (const char *)dd->stepname);
+            ftpd_jwn_printable(proc, sizeof(proc), (const char *)dd->procstep);
+            ftpd_jwn_printable(ddn, sizeof(ddn), (const char *)dd->ddname);
+            cls[0] = (char)dd->oclass;
+            cls[1] = '\0';
+            ftpd_jwn_printable(clsout, sizeof(clsout),
+                               dd->oclass && dd->oclass != ' ' ? cls : "");
+            clsc = clsout[0] ? clsout[0] : ' ';
+
+            if (ftpd_data_printf(sess,
+                    "%-8.8s %-8.8s %-8.8s %-8.8s %c %-8.8s %10ld\r\n",
+                    jname, jid, step, proc,
+                    clsc, ddn, bytecount) < 0) {
+                aborted = 1;
+                break;
+            }
         }
     }
 
     ftpd_data_close(sess);
     jesjobfr(&joblist);
     jesclose(&jes);
+
+    if (aborted) {
+        ftpd_session_reply(sess, FTP_426,
+                           "Data connection closed, transfer aborted.");
+        return 0;
+    }
 
     ftpd_session_reply(sess, FTP_250, "List completed successfully.");
     return 0;
@@ -506,6 +697,10 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
 ** If arg starts with "JOB" → spool file listing for that job.
 ** Otherwise → job listing with JESOWNER/JESJOBNAME/JESSTATUS filters.
 **
+** A job is listed if it passes the filters and the spool policy allows it
+** (job_access).  A hidden job is not printed and not announced; only the
+** log counts it.
+**
 ** z/OS format:
 **   JOBNAME  JOBID    OWNER    STATUS CLASS
 **   TESTJOB  JOB00042 IBMUSER  OUTPUT A     RC=0000
@@ -516,10 +711,12 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
     JES *jes = NULL;
     JESJOB **joblist = NULL;
     JESFILT filt_type;
+    ftpd_jwn_tally_t tally;
     const char *filter;
     const char *owner;
     int i;
     int count;
+    int aborted = 0;
     char rcbuf[16];
 
     /* If arg looks like a job ID (JOBnnnnn), list spool files */
@@ -566,24 +763,35 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
         return 0;
     }
 
-    /* Header — z/OS format */
-    ftpd_data_printf(sess,
-        "JOBNAME  JOBID    OWNER    STATUS CLASS\r\n");
+    ftpd_jwn_tally_init(&tally);
 
-    /* Iterate jobs — respect JESENTRYLIMIT (default 200) */
+    /* Header — z/OS format */
+    if (ftpd_data_printf(sess,
+        "JOBNAME  JOBID    OWNER    STATUS CLASS\r\n") < 0)
+        aborted = 1;
+
+    /* Iterate jobs — respect JESENTRYLIMIT (default 200).  The cheap
+    ** filters come first, the spool policy last: it may ask RACF. */
     count = 0;
-    if (joblist) {
+    if (joblist && !aborted) {
         for (i = 0; joblist[i]; i++) {
             JESJOB *job = joblist[i];
             const char *status;
             const char *rc_str;
             const char *class_str;
-            char class_buf[4];
+            char class_buf[FTPD_JWN_PRTSZ];
+            char jname[FTPD_JWN_PRTSZ];
+            char jid[FTPD_JWN_PRTSZ];
+            char jown[FTPD_JWN_PRTSZ];
 
-            if (!job_matches_owner(job, owner))
+            if (!ftpd_jwn_match(owner, (const char *)job->owner))
                 continue;
 
             if (!job_matches_status(sess, job))
+                continue;
+
+            if (job_access(sess, job, FTPD_JWN_OP_LIST, &tally) !=
+                FTPD_JWN_ALLOW)
                 continue;
 
             if (count >= 200) {
@@ -594,34 +802,61 @@ ftpd_jes_list(ftpd_session_t *sess, const char *arg)
             status = job_status(job->q_type);
             rc_str = job_retcode(job, rcbuf, sizeof(rcbuf));
 
+            ftpd_jwn_printable(jname, sizeof(jname),
+                               (const char *)job->jobname);
+            ftpd_jwn_printable(jid, sizeof(jid), (const char *)job->jobid);
+            ftpd_jwn_printable(jown, sizeof(jown), (const char *)job->owner);
+
             /* z/OS CLASS column: for STCs/TSO use first 3 chars of jobid,
             ** for normal jobs use the execution class character */
-            if (strncmp((const char *)job->jobid, "STC", 3) == 0) {
+            if (strncmp(jid, "STC", 3) == 0) {
                 class_str = "STC";
-            } else if (strncmp((const char *)job->jobid, "TSU", 3) == 0) {
+            } else if (strncmp(jid, "TSU", 3) == 0) {
                 class_str = "TSU";
             } else if (job->eclass && job->eclass != ' ') {
-                snprintf(class_buf, sizeof(class_buf), "%c",
-                         job->eclass);
+                char ec[2];
+
+                ec[0] = (char)job->eclass;
+                ec[1] = '\0';
+                ftpd_jwn_printable(class_buf, sizeof(class_buf), ec);
                 class_str = class_buf;
             } else {
                 class_str = "";
             }
 
-            ftpd_data_printf(sess,
-                "%-8.8s %-8.8s %-8.8s %-6s  %-3s %s\r\n",
-                job->jobname, job->jobid, job->owner,
-                status, class_str, rc_str);
+            if (ftpd_data_printf(sess,
+                    "%-8.8s %-8.8s %-8.8s %-6s  %-3s %s\r\n",
+                    jname, jid, jown, status, class_str, rc_str) < 0) {
+                aborted = 1;
+                break;
+            }
             count++;
         }
     }
+
+    /* One exit for every way out of the loop: the lines the log owes the
+    ** operator are written before anything is released. */
+    if (ftpd_jwn_tally_more(&tally) > 0) {
+        char who[FTPD_JWN_PRTSZ];
+
+        ftpd_jwn_printable(who, sizeof(who), sess->user);
+        ftpd_log(LOG_ERROR, "JES LIST error: user=%s and %d more ERR jobs",
+                 who, ftpd_jwn_tally_more(&tally));
+    }
+    ftpd_log(LOG_INFO,
+             "JES LIST: %d jobs, %d own, %d hidden, %d ERR, %d RACF calls",
+             count, tally.own, tally.hidden, tally.err, tally.racf_calls);
 
     ftpd_data_close(sess);
 
     if (joblist) jesjobfr(&joblist);
     jesclose(&jes);
 
-    ftpd_log(LOG_INFO, "JES LIST: %d jobs", count);
+    if (aborted) {
+        ftpd_session_reply(sess, FTP_426,
+                           "Data connection closed, transfer aborted.");
+        return 0;
+    }
 
     if (count >= 200) {
         ftpd_session_reply_multi(sess, FTP_250,
@@ -678,16 +913,22 @@ spool_line_callback(const char *line, unsigned linelen, void *arg)
 /* --------------------------------------------------------------------
 ** Helper: find a job by job ID, return job + joblist for cleanup.
 ** Follows mvsMF find_job_by_name_and_id() pattern.
+**
+** The job is returned only if it passes the JESSTATUS filter and the spool
+** policy for op.  *decision tells ALLOW from NOCANCEL (a delete the
+** session may not do); a hidden job is NULL, the same as a missing one.
 ** ----------------------------------------------------------------- */
 static JESJOB *
-find_job(const ftpd_session_t *sess, const char *jobid_arg,
-         JESJOB ***out_joblist)
+find_job(ftpd_session_t *sess, const char *jobid_arg, int op,
+         JESJOB ***out_joblist, int *decision)
 {
     JES *jes;
     JESJOB **joblist;
     JESJOB *job;
+    ftpd_jwn_tally_t tally;
 
     *out_joblist = NULL;
+    *decision = FTPD_JWN_HIDE;
 
     jes = jesopen();
     if (!jes) return NULL;
@@ -698,6 +939,13 @@ find_job(const ftpd_session_t *sess, const char *jobid_arg,
     job = job_by_id(joblist, jobid_arg);
     if (!job || !job_matches_status(sess, job)) {
         if (joblist) jesjobfr(&joblist);
+        return NULL;
+    }
+
+    ftpd_jwn_tally_init(&tally);
+    *decision = job_access(sess, job, op, &tally);
+    if (*decision == FTPD_JWN_HIDE) {
+        jesjobfr(&joblist);
         return NULL;
     }
 
@@ -730,6 +978,7 @@ ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
     int aborted = 0;    /* our callback stopped: data connection is gone */
     int i;
     int dd_index;
+    int decision;
     int rc;
 
     if (!arg || !arg[0]) {
@@ -761,15 +1010,10 @@ ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
     }
 
     /* Find the job */
-    job = find_job(sess, jobid_arg, &joblist);
+    job = find_job(sess, jobid_arg, FTPD_JWN_OP_RETR, &joblist, &decision);
     if (!job) {
         /* z/OS: "550 Jobid J0099999 not found for JESJOBNAME=..., JESSTATUS=..., JESOWNER=..." */
-        ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
-            jobid_arg,
-            sess->jes_jobname[0] ? sess->jes_jobname : "*",
-            status_filter(sess),
-            sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
+        reply_job_not_found(sess, jobid_arg);
         return 0;
     }
 
@@ -804,10 +1048,18 @@ ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
             return 0;
         }
 
+        char own[FTPD_JWN_PRTSZ];
+        char jnm[FTPD_JWN_PRTSZ];
+        char jid[FTPD_JWN_PRTSZ];
+        char ddn[FTPD_JWN_PRTSZ];
+
+        ftpd_jwn_printable(own, sizeof(own), (const char *)job->owner);
+        ftpd_jwn_printable(jnm, sizeof(jnm), (const char *)job->jobname);
+        ftpd_jwn_printable(jid, sizeof(jid), (const char *)job->jobid);
+        ftpd_jwn_printable(ddn, sizeof(ddn), (const char *)target_dd->ddname);
         ftpd_session_reply(sess, FTP_125,
             "Sending data set %s.%s.%s.D%07d.%s",
-            job->owner, job->jobname, job->jobid,
-            target_dd->dsid, target_dd->ddname);
+            own, jnm, jid, target_dd->dsid, ddn);
     }
 
     if (ftpd_data_open(sess) != 0) {
@@ -953,6 +1205,9 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
     char jobid_arg[16];
     JESJOB **joblist = NULL;
     JESJOB *job;
+    char jnm[FTPD_JWN_PRTSZ];
+    char jid[FTPD_JWN_PRTSZ];
+    int decision;
     int rc;
 
     if (!arg || !arg[0]) {
@@ -969,21 +1224,25 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
             jobid_arg[k] = (char)toupper((unsigned char)jobid_arg[k]);
     }
 
-    /* Find the job to get the jobname (jescanj needs both) */
-    job = find_job(sess, jobid_arg, &joblist);
+    /* Find the job to get the jobname (jescanj needs both).  Nothing is
+    ** cancelled before find_job() has seen the spool policy allow it. */
+    job = find_job(sess, jobid_arg, FTPD_JWN_OP_DELE, &joblist, &decision);
     if (!job) {
         /* z/OS: "550 Jobid J0099999 not found for JESJOBNAME=..., ..." */
-        ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
-            jobid_arg,
-            sess->jes_jobname[0] ? sess->jes_jobname : "*",
-            status_filter(sess),
-            sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
+        reply_job_not_found(sess, jobid_arg);
         return 0;
     }
 
-    ftpd_log(LOG_INFO, "JES DELE: purging %s (%s)",
-             job->jobname, job->jobid);
+    if (decision == FTPD_JWN_NOCANCEL) {
+        jesjobfr(&joblist);
+        ftpd_session_reply(sess, FTP_550,
+                           "Access denied - cannot cancel %s", jobid_arg);
+        return 0;
+    }
+
+    ftpd_jwn_printable(jnm, sizeof(jnm), (const char *)job->jobname);
+    ftpd_jwn_printable(jid, sizeof(jid), (const char *)job->jobid);
+    ftpd_log(LOG_INFO, "JES DELE: purging %s (%s)", jnm, jid);
 
     rc = jescanj((const char *)job->jobname,
                  (const char *)job->jobid, 1);
@@ -997,12 +1256,7 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
         break;
     case CANJ_NOJB:
     case CANJ_BADI:
-        ftpd_session_reply(sess, FTP_550,
-            "Jobid %s not found for JESJOBNAME=%s, JESSTATUS=%s, JESOWNER=%s",
-            jobid_arg,
-            sess->jes_jobname[0] ? sess->jes_jobname : "*",
-            status_filter(sess),
-            sess->jes_owner[0]   ? sess->jes_owner   : sess->user);
+        reply_job_not_found(sess, jobid_arg);
         break;
     case CANJ_ICAN:
         ftpd_session_reply(sess, FTP_550,

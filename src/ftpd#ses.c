@@ -749,6 +749,14 @@ ftpd_session_run(void *udata, CTHDWORK *work)
                  sess->user[0] ? sess->user : "(none)",
                  sess->bytes_sent, sess->bytes_recv, sess->xfer_count);
 
+        if (ftpd_jwn_tally_session_more(&sess->jwn) > 0) {
+            char who[FTPD_JWN_PRTSZ];
+
+            ftpd_jwn_printable(who, sizeof(who), sess->user);
+            ftpd_log(LOG_WARN, "JES denied: user=%s and %d more denied",
+                     who, ftpd_jwn_tally_session_more(&sess->jwn));
+        }
+
         server->total_bytes_in += sess->bytes_recv;
         server->total_bytes_out += sess->bytes_sent;
         server->num_sessions--;

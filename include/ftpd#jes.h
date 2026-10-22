@@ -36,4 +36,13 @@ int ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
 int ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
                                                           asm("FTPJEDEL");
 
+/*
+** May the session narrow its JES listing to this SITE JESOWNER value?
+** The value is checked whole, in any case.  canon (at least 9 bytes)
+** receives what to store: the upper-case value, or "" to reset.  Returns 1
+** to accept; 0 refuses (nothing to store), the refusal is logged.
+*/
+int ftpd_jes_owner_ok(ftpd_session_t *sess, const char *value,
+                      char *canon, int canonsz)           asm("FTPJEOWN");
+
 #endif /* FTPD_JES_H */

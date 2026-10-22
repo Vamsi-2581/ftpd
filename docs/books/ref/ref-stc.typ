@@ -49,7 +49,12 @@ the authorization through the SVC. The message says which way it was:
     [#cmd("FTPD008I AUTHORIZED BY SVC (MODULE KEY 8)")], [The library is not
       APF authorized, and the SVC of the C runtime authorized the task.],
     [#cmd("FTPD003W APF SETUP FAILED RC=n")], [The authorization failed. FTPD
-      goes on. The commands that need it fail one at a time.],
+      goes on, but nobody can log in: every #cmd("PASS") gets #cmd("530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message."), and
+      a command that needs a login gets #cmd("530 Not logged in."). The
+      session stays open, and the refused #cmd("PASS") does not count as a
+      failed login (@ref-reply-530). The log in the DD name #cmd("STDOUT") has
+      one line with the level #cmd("[ERROR]") for it per run of the server.
+      Before FTPD 1.3.0 FTPD did not answer #cmd("PASS") in this state.],
   )
 ]
 

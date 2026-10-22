@@ -28,7 +28,8 @@ sees are the reply codes in @ref-reply.
       return code 8. Stop the other FTPD, or use another port in the
       configuration (@ref-stc-enq).],
     [#cmd("FTPD003W APF SETUP FAILED RC=n")], [FTPD could not authorize itself.
-      Commands that need the authorization fail one at a time
+      FTPD goes on, but nobody can log in: every #cmd("PASS") gets
+      #cmd("530") (@ref-reply-530). Fix the cause and start FTPD again
       (@ref-stc-apf).],
     [#cmd("FTPD004I STC RUNS AS user/group")], [The identity of the started task
       (@ref-stc-id).],
@@ -141,9 +142,9 @@ sees are the reply codes in @ref-reply.
   )
 ]
 
-== Recovery (070 to 076) <apx-messages-rec>
+== Recovery (070 to 077) <apx-messages-rec>
 
-#tab(caption: [Messages 070 to 076])[
+#tab(caption: [Messages 070 to 077])[
   #table(columns: (2.5in, 1fr),
     [Message], [Meaning and action],
     [#cmd("FTPD070E ABEND Sxxx RECOVERED CMD=verb SOCKET=n TOTAL=n")], [A command
@@ -182,6 +183,16 @@ sees are the reply codes in @ref-reply.
       is. Since FTPD 1.3.0.],
     [#cmd("FTPD076W ABANDON AFTER verb RETURNED n -- SEE __fabandon() IN CLIBIO.H")], [The cleanup of the file returned an error code that the
       header #cmd("clibio.h") of the C library describes (n is less than 0).],
+    [#cmd("FTPD077E IDENTITY RESET ABENDED Sxxx -- ASXBSENV MAY STILL HOLD A USER ACEE")], [While FTPD recovered from the ABEND of a command, the reset of the
+      identity of the started task ended in an ABEND itself (Sxxx is its code\; S000 means that the recovery for the reset could not be set up).
+      The field #cmd("ASXBSENV") of the address space may still point to the
+      security environment of the user of that session, and the other
+      sessions may act under it. The recovery goes on: the lock that protects
+      the identity is released, #cmd("FTPD070E") is written, and the client is
+      answered. FTPD writes #cmd("FTPD077E") before #cmd("FTPD070E"), only on
+      a task that is authorized, and never when #cmd("FTPD003W") was written
+      at the start. Stop FTPD and start it again, and report the ABEND code.
+      Since FTPD 1.3.0.],
   )
 ]
 

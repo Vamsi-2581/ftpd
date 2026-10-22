@@ -152,6 +152,10 @@ causes are:
   #table(columns: (2.5in, 1fr),
     [Text], [Cause],
     [#cmd("530 Not logged in.")], [A command that needs a login came first.],
+    [#cmd("530 Login not possible: FTPD is not APF authorized. Ask the administrator to check the FTPD003W console message.")], [The reply to every
+      #cmd("PASS") when FTPD has no authorization (#cmd("FTPD003W") at the
+      start, @ref-stc-apf). It does not count as a failed attempt, and the
+      session stays open. Since FTPD 1.3.0.],
     [#cmd("530 Login incorrect.")], [RAKF refused the user ID or the
       password. The client may try again.],
     [#cmd("530 Login incorrect. Too many attempts, disconnecting.")],

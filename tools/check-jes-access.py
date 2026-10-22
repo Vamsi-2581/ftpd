@@ -36,8 +36,8 @@ import os
 import re
 import sys
 
-ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
-DEFAULT = "src/ftpd#jes.c"
+SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+DEFAULT = "ftpd#jes.c"
 
 AUTH_HULL = "jes_racf_auth"
 POLICY_CALLS = ("job_access", "find_job")
@@ -139,11 +139,10 @@ def line_of(src, pos):
 
 
 def source_path(arg):
-    """Resolve arg to a .c file inside the repository, or None."""
-    full = os.path.realpath(os.path.join(ROOT, arg))
-    if os.path.commonpath([ROOT, full]) != ROOT:
-        return None
-    if not full.endswith(".c") or not os.path.isfile(full):
+    """A .c file directly in src/, named by the base name of arg, or None."""
+    name = os.path.basename(arg)
+    full = os.path.join(SRC_DIR, name)
+    if not name.endswith(".c") or not os.path.isfile(full):
         return None
     return full
 
@@ -195,7 +194,7 @@ def main(argv):
     arg = argv[1] if len(argv) > 1 else DEFAULT
     path = source_path(arg)
     if path is None:
-        print("check-jes-access: %s is not a .c file inside the repository"
+        print("check-jes-access: %s is not a .c file in src/"
               % arg, file=sys.stderr)
         return 2
     bad, nfuncs = check(path)

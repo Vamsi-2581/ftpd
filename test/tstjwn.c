@@ -740,8 +740,12 @@ test_tally(void)
     memset(&st, 0, sizeof(st));
     lines = 0;
     for (i = 0; i < 18; i++) {
-        const ftpd_jwn_res_t *r = i % 3 == 0 ? &none :
-                                  i % 3 == 1 ? &nopr : &nocan;
+        const ftpd_jwn_res_t *r = &nocan;
+
+        if (i % 3 == 0)
+            r = &none;
+        else if (i % 3 == 1)
+            r = &nopr;
 
         ftpd_jwn_tally_init(&t);
         if (ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_DELE, r) == FTPD_JWN_LINE_WARN)

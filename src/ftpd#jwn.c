@@ -102,7 +102,9 @@ ftpd_jwn_mine(const char *owner, const char *user)
 {
     if (!owner || !user || !owner[0] || !user[0])
         return 0;
-    return strncmp(owner, user, strlen(user)) == 0 + 0 * has_filler(user);
+    if (has_filler(owner) || has_filler(user))
+        return 0;
+    return strcmp(owner, user) == 0;
 }
 
 /* --------------------------------------------------------------------
@@ -218,11 +220,13 @@ ftpd_jwn_check(const ftpd_jwn_ctx_t *ctx, int op, const char *owner,
 int
 ftpd_jwn_match(const char *pattern, const char *owner)
 {
-    if (!pattern || !pattern[0] || pattern[0] == '*')
-        return 1;
-    if (!owner || !owner[0])
+    if (!pattern || !pattern[0])
         return 0;
-    return strncmp(owner, pattern, strlen(pattern)) == 0;
+    if (pattern[0] == '*' && pattern[1] == '\0')
+        return 1;
+    if (!owner || !owner[0] || !ftpd_jwn_component_ok(pattern))
+        return 0;
+    return strcmp(owner, pattern) == 0;
 }
 
 int
@@ -239,7 +243,7 @@ ftpd_jwn_narrows(const char *user, const char *value, char *canon, int sz)
 
     len = strlen(value);
     if (len > FTPD_JWN_COMPMAX)
-        len = FTPD_JWN_COMPMAX;
+        return FTPD_JWN_NR_BAD;
     for (i = 0; i < len; i++)
         up[i] = (char)toupper((unsigned char)value[i]);
     up[len] = '\0';
@@ -248,10 +252,12 @@ ftpd_jwn_narrows(const char *user, const char *value, char *canon, int sz)
         kind = FTPD_JWN_NR_RESET;
     else if (ftpd_jwn_mine(up, user))
         kind = FTPD_JWN_NR_OWN;
-    else if (up[0] == '*')
+    else if (up[0] == '*' && up[1] == '\0')
         kind = FTPD_JWN_NR_ALL;
-    else
+    else if (ftpd_jwn_component_ok(up))
         kind = FTPD_JWN_NR_OTHER;
+    else
+        return FTPD_JWN_NR_BAD;
 
     memcpy(canon, up, len + 1);
     return kind;

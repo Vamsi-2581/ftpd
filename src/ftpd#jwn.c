@@ -393,3 +393,9 @@ ftpd_jwn_tally_session_more(const ftpd_jwn_sess_t *st)
 {
     return st ? st->denied_more : 0;
 }
+
+int
+ftpd_jwn_tally_session_err_more(const ftpd_jwn_sess_t *st)
+{
+    return st ? st->err_more : 0;
+}

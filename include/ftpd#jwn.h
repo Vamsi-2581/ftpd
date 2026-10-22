@@ -32,6 +32,8 @@
 #define FTPD_JWN_KEYLEN     8       /* RAKF compares 8 characters       */
 #define FTPD_JWN_ERRLINES   8       /* ERR lines written per command    */
 #define FTPD_JWN_WARNMAX    16      /* denied lines written per session */
+#define FTPD_JWN_ERRSESSMAX 16      /* ERR lines of RETR, DELE and
+                                       LIST JOBnnnnn per session        */
 #define FTPD_JWN_PRTSZ      (FTPD_JWN_COMPMAX + 1)
 #define FTPD_JWN_CACHEMAX   16      /* cache keys per command           */
 
@@ -127,6 +129,8 @@ typedef struct ftpd_jwn_tally {
 typedef struct ftpd_jwn_sess {
     int denied;         /* RETR, DELE, LIST JOBnnnnn refusals           */
     int denied_more;    /* refusals after the first FTPD_JWN_WARNMAX    */
+    int err;            /* ERR hits of RETR, DELE, LIST JOBnnnnn        */
+    int err_more;       /* ERR hits after the first FTPD_JWN_ERRSESSMAX */
 } ftpd_jwn_sess_t;
 
 void ftpd_jwn_cache_init(ftpd_jwn_cache_t *c)               asm("FTPJWNCI");
@@ -193,5 +197,9 @@ int ftpd_jwn_tally_more(const ftpd_jwn_tally_t *t)          asm("FTPJWNTM");
 
 /* Refusals not written in this session (0 = no summary line). */
 int ftpd_jwn_tally_session_more(const ftpd_jwn_sess_t *st)  asm("FTPJWNTS");
+
+/* ERR lines not written in this session (0 = no summary line). */
+int ftpd_jwn_tally_session_err_more(const ftpd_jwn_sess_t *st)
+                                                            asm("FTPJWNTE");
 
 #endif /* FTPD_JWN_H */

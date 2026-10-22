@@ -98,13 +98,22 @@ Before the tag:
 After the tag, with the release page created by the workflow:
 
 ```sh
-make -C docs/books
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct vX.Y.Z) make -C docs/books
 sha256sum docs/books/ml06-0001-*.pdf docs/books/ml06-0002-*.pdf > SHA256SUMS
 gh release upload vX.Y.Z docs/books/ml06-000[12]-*.pdf SHA256SUMS -R mvslovers/ftpd
 ```
 
 Build from the tagged commit, in a clean checkout with the submodule
-initialised at the pinned commit, so the PDFs can be rebuilt byte-for-byte
-from the tag. Uploading to a release is a publication: it needs the
+initialised at the pinned commit. `SOURCE_DATE_EPOCH` is not optional: without
+it typst stamps the PDF with the build time (`CreationDate`, `ModDate`, the
+XMP dates) and gives it a fresh instance id, so two builds of the same tag
+differ in a few dozen bytes. With it set to the commit time of the tag, typst
+0.15.1 built `v1.3.0` twice in two clean checkouts, 65 seconds apart, and both
+PDFs were byte-identical (`cmp`). That holds for the same typst version and the
+pinned bookmaster; it was not measured on another version or platform.
+`SHA256SUMS` always describes the uploaded files. A PDF uploaded before 1.4.0
+was built without the variable and cannot be reproduced bit for bit; a rebuild
+of it has the same size and the same text, only the date stamps and the
+instance id differ. Uploading to a release is a publication: it needs the
 maintainer's go-ahead naming the release and the files, like the release
 itself.

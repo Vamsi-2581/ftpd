@@ -532,38 +532,13 @@ PERMIT  'resource' CLASS(class) ID(group) ACCESS(NONE|READ|UPDATE|CONTROL|ALTER)
 - The class must be known to the running RAKF; an unknown class is refused with
   RC 8 (`Class … unknown to RAKF`).
 
-> **`RDEFINE * CLASS(JESSPOOL)` is refused where `*` already exists in another
-> class.** Measured on the MVS/CE images with RAKF 2.0.0: `RDEF * CL(JESSPOOL)
-> UACC(NONE)` answers `RDEFINE: Profile already defined` (RC 8) and the next
-> `PERMIT` for `*` answers `PERMIT: No universal access record found`. The
-> duplicate check of `RDEFINE` compares only the profile name, not the class,
-> and the shipped `PROFILES` already has a profile `*` in `DATASET`, `DASDVOL`
-> and `TAPEVOL`. On such a system write the universal line of `*` into
-> `PROFILES` once by hand, in the position the sort order gives (between
-> `FACILITY` and `TAPEVOL` for the class `JESSPOOL`):
->
-> ```
->          1         2         3         4         5         6
-> 123456789012345678901234567890123456789012345678901234567890123456
-> JESSPOOL*                                                   NONE
-> ```
->
-> (or `READ`, as the example needs), and use the commands for everything else.
-> The exact column layout of the line is not verified on a system other than the
-> test images.
-> With that line in place the remaining commands of the examples write the lines
-> shown. The other `RDEFINE` commands of the examples (`SYSTEM.*`, `MIKE1.*`)
-> are accepted without quotes.
-
 Keep a copy of `PROFILES` before the first change.
 
 ### Examples
 
 Each example is a sequence of commands; the lines below it show what `PROFILES`
-contains afterwards. In every example the `RDEF * …` line is the one that needs
-the hand-written line above on a system where `*` already exists in another
-class. Test 18 of FTPD runs each of these sequences on RAKF 2.0.0 and compares
-the lines.
+contains afterwards. Test 18 of FTPD runs each of these sequences on RAKF 2.0.0
+and compares the lines.
 
 **A. Auditors read all jobs except the started tasks; everyone else only their
 own.**
@@ -759,7 +734,6 @@ after `S RAKFPROF`.
 | `530 Not authorized for FTP access` | `FTPAUTH` denies this user — check the group in columns 53–60 |
 | `550 Access denied to <dsn>` | A `DATASET` profile refuses the access under the **client's** identity, not FTPD's |
 | Everyone can reach everything | No `DATASET` profiles. Undefined resources get ALTER — section 4 |
-| `RDEFINE: Profile already defined` for `RDEF * CL(JESSPOOL)` | `*` exists in another class and `RDEFINE` compares only the name — section 7 |
 | `S RAKFPROF` ends with `ABEND S000 U0400` | A profile line with an id has no line without an id for the same entity — section 7. The old tables stay in effect |
 | `550 Jobid … not found` for a job that exists | The job is hidden: it belongs to another owner and no JESSPOOL profile gives you READ — section 7 |
 | `501` for `SITE JESOWNER=…` | A pattern, a value of more than 8 characters, or no READ on the owner's jobs — section 7 |

@@ -63,7 +63,9 @@ they are here:
 - MVS 3.8j running on Hercules, with SMP 4 in working order: the
   procedures #cmd("SMPREC") and #cmd("SMPAPP") and the #cmd("SYS1.SMP*") data
   sets. They are there on TK4-, TK5 and MVS/CE as delivered.
-- RAKF, for the logins (@ug-install-rakf). This one is not optional.
+- RAKF, for the logins (@ug-install-rakf). This one is not optional. Which
+  release matters for one thing only: letting users see the jobs of others
+  takes RAKF 2.0.0 or later.
 - UFSD, only if you want the UFS view (@ug-install-ufsd).
 - A user ID that may submit jobs, change a procedure library of the started
   tasks and change a PARMLIB.
@@ -99,6 +101,12 @@ verified by RAKF, and every data set access is checked against the RAKF class
 (@ug-security). On a system without RAKF nobody can log in, and no
 configuration option turns that off. @ug-install-rakfsetup says what to set
 up.
+
+FTPD 1.3.0 does not need RAKF 2.0.0 to run. On a RAKF without the class
+#cmd("JESSPOOL") (RAKF 1.2.x has none) it installs and starts, and in the JES
+view every user sees, reads and cancels only the own jobs. To let users see the
+jobs of others you need RAKF 2.0.0 or later, because the profiles of the class
+#cmd("JESSPOOL") are the way to allow it (@ug-security-jesspool).
 
 === Authority <ug-install-auth>
 
@@ -218,8 +226,11 @@ here, on purpose: TSO RECEIVE creates its own target and refuses to merge
 into an existing data set. The expected result is #cmd("COND CODE 0000").
 
 #note[Run this job once for the life of the system, not once for each
-release. The names carry no version, so a later upgrade finds both data sets
-and skips this step. A second run fails on #cmd("DISP=(NEW,CATLG,DELETE)")
+release. The names carry no version, so a later upgrade of a 1.2.0 that SMP
+installed finds both data sets and skips this step. Skip it only if
+#cmd("FTPD.LINKLIB") and #cmd("FTPD.AFTPDLOD") exist. On MVS/CE they do not:
+the FTPD 1.2.0 of the image is not an SMP install (@ug-install-stop), so run
+the job there. A second run fails on #cmd("DISP=(NEW,CATLG,DELETE)")
 and changes nothing. The job has no DELETE step on purpose:
 #cmd("FTPD.AFTPDLOD") holds the accepted copy of the module, and a re-run that
 scratched it would leave the SMP records describing an installation that is no
@@ -238,7 +249,8 @@ P FTPD
 ```)
 
 *MVS/CE ships with an FTPD 1.2.0 that is already running.* The image put it
-there; it was not installed through SMP. Stop it too: a new FTPD started
+there; it was not installed through SMP, and the started task runs from
+#cmd("MVSLOVER.FTPD.LOADLIB"). Stop it too: a new FTPD started
 beside it ends with
 
 #screen(```
@@ -246,10 +258,15 @@ FTPD002E FTPD IS ALREADY ACTIVE ON PORT 2121, THIS INSTANCE ENDS
 FTPD091E INITIALIZATION FAILED RC=8
 ```)
 
-and starts only after #cmd("P FTPD"). Because SMP never saw that 1.2.0,
-#cmd("TFTP120") is not in its inventory. On MVS/CE the #cmd("APPLY") therefore
-ends with #cmd("COND CODE 0000"), not with the 0004 that an upgrade gives
-(@ug-install-good).
+and starts only after #cmd("P FTPD").
+
+On MVS/CE this is a first installation, as far as SMP and the data sets go.
+The data sets #cmd("FTPD.*") do not exist (#cmd("LISTCAT LEVEL(FTPD)") finds
+none), so the allocation job (@ug-install-alloc) is not optional there. Because
+SMP never saw that 1.2.0, #cmd("TFTP120") is not in its inventory, and the
+#cmd("APPLY") ends with #cmd("COND CODE 0000"), not with the 0004 that an
+upgrade gives (@ug-install-good). The old #cmd("MVSLOVER.FTPD.LOADLIB") stays
+where it is; the procedure of @ug-install-proc replaces the one that names it.
 
 == Running the Install Job <ug-install-job>
 
@@ -379,6 +396,28 @@ goes away with the installation only if you come from that release. The usual
 cause is a skipped release (@ug-install-upgrade). The command
 #cmd("LIST CDS MOD(FTPD) .") names the owner.
 
+=== MVS/CE: When the Allocation Job Was Skipped <ug-install-ce-skip>
+
+#idx("MVS/CE", "allocation job")
+On MVS/CE no data set #cmd("FTPD.*") exists before the first installation. If
+you skip the allocation job (@ug-install-alloc), the job gets as far as
+#cmd("APPLYCHK") and then ends in a JCL error, because
+#cmd("FTPD.LINKLIB") is not there. By then the step #cmd("RECV") has run, so
+the SYSMOD is in the SMP inventory:
+
+#screen(raw(read("../ex/ug-install/ce-jclerr.txt")))
+
+Run the allocation job and submit the install job again. This time #cmd("RECV")
+ends with #cmd("COND CODE 0008"), because the SYSMOD is already received. The
+job skips the dry run, and #cmd("APPLY") and #cmd("ACCEPT") end with 0000:
+
+#screen(raw(read("../ex/ug-install/ce-rerun.txt")))
+
+The installation is complete. #cmd("HMA2380") and #cmd("HMA2270") in the output
+of the #cmd("APPLY") say so (@ug-install-verify). The only thing missing is the
+dry run of that attempt. If you run the allocation job first, none of this
+happens.
+
 == Procedures and Configuration <ug-install-proc>
 
 #idx("procedure")
@@ -404,6 +443,11 @@ Copy these members from #cmd("FTPD.SAMPLIB"):
 Look at the master JCL of your system if you are not sure which libraries the
 started tasks search.
 
+On MVS/CE the library #cmd("SYS2.PROCLIB") already has a member #cmd("FTPD"):
+the procedure of the image's FTPD 1.2.0, whose #cmd("STEPLIB") is
+#cmd("MVSLOVER.FTPD.LOADLIB"). Replace it with the member from
+#cmd("FTPD.SAMPLIB"). Otherwise the started task keeps running the old module.
+
 === Which PARMLIB <ug-install-parmlib>
 
 The procedure #cmd("FTPD") has two symbolic parameters. #cmd("D") names the
@@ -411,13 +455,48 @@ PARMLIB and defaults to #cmd("SYS2.PARMLIB"). #cmd("M") names the member and
 defaults to #cmd("FTPDPRM0"). A second configuration can live next to the
 first as another member, chosen with #cmd("M=").
 
-On TK5 the data set #cmd("SYS2.PARMLIB") does not exist. Put the member in
-#cmd("SYS1.PARMLIB") and either change the #cmd("D=") in your copy of the
-procedure or override it when you start:
+On TK5 the data set #cmd("SYS2.PARMLIB") does not exist, and the
+#cmd("SYS1.PARMLIB") of TK5 has no room for another member. A plain copy of
+#cmd("FTPDPRM0") into it ends with the abend SD37, the out-of-space abend of
+the system:
+
+#screen(raw(read("../ex/ug-install/parmlib-d37.txt")))
+
+There are two ways out. Use one of them.
+
+*Compress #cmd("SYS1.PARMLIB"), then copy.* The compress gives back the space
+that replaced members left behind. It needs the data set exclusively
+(#cmd("DISP=OLD")), so nobody may be using it at the time:
+
+#screen(raw(read("../ex/ug-install/parmlib-compress.txt")))
+
+The job ends with #cmd("COND CODE 0000") and prints #cmd("IEB161I COMPRESS TO
+BE DONE USING INDD NAMED PARMLIB"). Then run the copy of #cmd("FTPDPRM0") again,
+from #cmd("FTPD.SAMPLIB(FTPDPRM0)") to #cmd("SYS1.PARMLIB(FTPDPRM0)"). On a TK5
+that had ended with #cmd("D37-04"), it then ended with 0000. Either change the
+#cmd("D=") in your copy of the procedure to #cmd("SYS1.PARMLIB") or override it
+when you start:
 
 #screen(```
 /S FTPD,D='SYS1.PARMLIB'
 ```)
+
+*Use a PARMLIB of your own and leave #cmd("SYS1.PARMLIB") alone.* Allocate a
+partitioned data set, copy the member into it with #cmd("IEBGENER"), and name
+the data set with #cmd("D="). Use your own high-level qualifier instead of
+#cmd("HERC01"):
+
+#screen(raw(read("../ex/ug-install/parmlib-private.txt")))
+
+#screen(```
+/S FTPD,D='HERC01.PARMLIB'
+```)
+
+Put the same #cmd("D=") into your copy of the procedure if the plain
+#cmd("/S FTPD") should find it. An #cmd("IEBCOPY") from #cmd("SYS1.PARMLIB") into
+a library with a larger block size failed on the test system (#cmd("IEB139I"),
+#cmd("IEB100I"), return code 8), which is why the job copies with
+#cmd("IEBGENER").
 
 On MVS/CE the default is right, because #cmd("SYS2.PARMLIB") exists there.
 
@@ -553,7 +632,7 @@ Start FTPD from the console:
 #screen(```
 /S FTPD                      default member (FTPDPRM0)
 /S FTPD,M=FTPDPRM1           another member
-/S FTPD,D='SYS1.PARMLIB'     another PARMLIB, needed on TK5
+/S FTPD,D='MY.PARMLIB'       another PARMLIB, needed on TK5
 ```)
 
 On MVS/CE, stop the FTPD 1.2.0 that comes with the image first
@@ -603,8 +682,9 @@ FMID owns the module. Run this under the SMP procedure:
   #table(columns: (1in, 1fr),
     [Owner], [What to do],
     [#cmd("TFTP120")], [An upgrade from 1.2.0. Stop FTPD, skip the allocation
-      job, run the install job and start FTPD. The data sets, the procedure,
-      the APF entry and the member of the configuration stay.],
+      job (the data sets exist), run the install job and start FTPD. The data
+      sets, the procedure, the APF entry and the member of the configuration
+      stay.],
     [#cmd("TFTP110")], [1.1.0. Upgrade to 1.2.0 first, with the 1.2.0 package
       from the releases page, then come back here. FTPD 1.3.0 deletes only
       #cmd("TFTP120"), so on a system where #cmd("TFTP110") owns the module the
@@ -612,7 +692,8 @@ FMID owns the module. Run this under the SMP procedure:
     [#cmd("TFTP100")], [1.0.x. Upgrade to 1.1.0 first (@ug-install-from10),
       then to 1.2.0, then come back here.],
     [none], [FTPD is not installed through SMP on this system. This chapter is
-      a new installation.],
+      a new installation, allocation job included. This is the case on MVS/CE,
+      whose FTPD 1.2.0 comes with the image.],
   )
 ]
 
@@ -679,8 +760,22 @@ libraries are the way back until the banner says that the new release runs:
 #tab(caption: [Installation problems])[
   #table(columns: (1.9in, 1fr),
     [Symptom], [Likely cause],
-    [The allocation job fails, the data set exists], [It was run before. Do
-      not force it (@ug-install-alloc).],
+    [The allocation job fails, the data set exists], [It was run before, or
+      #cmd("FTPD.*") exists from an SMP install of 1.2.0. Do not force it
+      (@ug-install-alloc).],
+    [The install job ends in a JCL error at #cmd("APPLYCHK"): #cmd("IEF212I")
+      #cmd("LINKLIB - DATA SET NOT FOUND")], [#cmd("FTPD.LINKLIB") does not
+      exist: the allocation job was skipped. This is the MVS/CE case, where the
+      image's FTPD is not an SMP install. Run the allocation job and submit the
+      install job again (@ug-install-ce-skip).],
+    [After the allocation job, #cmd("RECV") ends with #cmd("COND CODE 0008"):
+      #cmd("HMA3862 SYSMOD TFTP130 ALREADY RECEIVED")], [The earlier run
+      received the SYSMOD before it stopped. #cmd("APPLYCHK") is skipped,
+      #cmd("APPLY") and #cmd("ACCEPT") end with 0000. The installation is
+      complete; check #cmd("HMA2380") (@ug-install-ce-skip).],
+    [#cmd("IEC031I D37-04 ... SYS1.PARMLIB"), abend SD37, while copying
+      #cmd("FTPDPRM0") (TK5)], [#cmd("SYS1.PARMLIB") is full. Compress it, or
+      use a PARMLIB of your own (@ug-install-parmlib).],
     [#cmd("RECV1") or #cmd("RECV2") fails, the target exists], [Something else
       allocated it. RECEIVE refuses to merge; scratch it and run the job again.],
     [#cmd("APPLYCHK") ends non-zero, #cmd("APPLY") is skipped], [Read the SMP

@@ -67,7 +67,9 @@ FTPD.AFTPDLOD    SMP's distribution library, the base a RESTORE returns to
 - **MVS 3.8j** on Hercules, up and IPLed, with SMP 4 usable (the `SMPREC` and
   `SMPAPP` procedures and the `SYS1.SMP*` datasets — present on TK4-/TK5 and
   MVS/CE as shipped).
-- **RAKF**, for authentication — see below. This one is not optional.
+- **RAKF**, for authentication — see below. This one is not optional. The
+  release matters for one thing only: letting users see the jobs of other
+  users takes RAKF 2.0.0 or later.
 - **UFSD**, only if you want the UFS namespace — see below.
 - A userid authorised to submit jobs, to update a PROCLIB in the started-task
   concatenation, and to update a PARMLIB.
@@ -111,13 +113,17 @@ The setup — the identity of the started task and the `FTPAUTH` FACILITY
 profile — is step 8, and the full reference is
 [FTPD_RAKF_SETUP.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md).
 
-**FTPD 1.3.0 needs RAKF 2.0.0 or later.** Its JES spool authorization asks the
-RAKF class `JESSPOOL`, which RAKF 2.0.0 introduced. The identity that the
-started task `FTPD` runs under must be in a group that has READ on `FACILITY
-SVC244`, such as `STARTED` in the shipped `users.txt`. Otherwise FTPD cannot
-obtain APF authorization (`RAKF000A` for `FACILITY SVC244`, `FTPD003W APF SETUP
-FAILED RC=4`). Without JESSPOOL profiles every user sees and deletes only their
-own jobs; section 7 of the RAKF setup guide explains how to give others access.
+**FTPD 1.3.0 does not need RAKF 2.0.0 to run.** On a RAKF without the class
+`JESSPOOL` (RAKF 1.2.x has none) it installs and starts, and in the JES view
+every user sees, reads and cancels only the own jobs. **RAKF 2.0.0 or later is needed to let users see the
+jobs of other users:** that is done with profiles of the RAKF class
+`JESSPOOL`, which RAKF 2.0.0 introduced. Section 7 of the RAKF setup guide
+explains the profiles, and what RAKF does on a system without the class.
+
+The identity that the started task `FTPD` runs under must be in a group that
+has READ on `FACILITY SVC244`, such as `STARTED` in the shipped `users.txt`.
+Otherwise FTPD cannot obtain APF authorization (`RAKF000A` for `FACILITY
+SVC244`, `FTPD003W APF SETUP FAILED RC=4`).
 
 ### Authorisation
 
@@ -216,11 +222,19 @@ that is not finished.
 
 ## 2a. Upgrading from 1.2.0
 
-A fresh install can skip this section. From 1.2.0, the upgrade is a
-**drop-in** as far as SMP and the data sets go: 1.3.0 installs into the same
+A fresh install can skip this section. From a 1.2.0 that was installed with
+SMP (TK5, or any system where you installed it yourself), the upgrade is
+a **drop-in** as far as SMP and the data sets go: 1.3.0 installs into the same
 data sets, under the same started task procedure and APF entry, and reads the
 same `FTPDPRM0`. What changes is behaviour, and two of the changes need a
 decision from you **before** you install; they are listed first.
+
+> **MVS/CE is a first install, not an upgrade, as far as SMP and the data sets
+> go.** The FTPD 1.2.0 that comes with the image is not an SMP install: no data
+> set `FTPD.*` exists, SMP has never seen `TFTP120`, and the started task runs
+> from `MVSLOVER.FTPD.LOADLIB`. On MVS/CE do not skip the allocation job. Read
+> *Before you install* below (the changes of behaviour apply to you too), then
+> follow sections 3 to 9 in order. Section 5 and step 7 say what is different.
 
 | | 1.2.0 | 1.3.0 |
 |---|---|---|
@@ -228,7 +242,7 @@ decision from you **before** you install; they are listed first.
 | Libraries | `FTPD.LINKLIB`, … | unchanged |
 | C library | LIBC/370 2.10.3 | LIBC/370 2.25.1 (built with CC/370 1.6.1) |
 | `libufs` | UFSD 1.4.0 | UFSD 1.4.0, unchanged |
-| RAKF | 1.2.x or 2.0.0 | 1.2.x or 2.0.0; the JES view needs 2.0.0 or later |
+| RAKF | 1.2.x or 2.0.0 | 1.2.x or 2.0.0; 2.0.0 or later to let users see the jobs of others |
 
 ### Before you install
 
@@ -238,7 +252,9 @@ decision from you **before** you install; they are listed first.
    jobs; the jobs of other users need a profile in the RAKF class `JESSPOOL`,
    which exists from RAKF 2.0.0. Without any profile that is the state after
    the upgrade. If an administrator or an operator relies on seeing all jobs,
-   create the profiles first. Section 7 of the
+   create the profiles first, and update RAKF to 2.0.0 or later if it is
+   older: a RAKF 1.2.x has no such class, the upgrade itself works, and every
+   user sees only the own jobs. Section 7 of the
    [RAKF setup guide](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/FTPD_RAKF_SETUP.md)
    has the profiles and examples.
 2. **Check the identity of the started task** (step 8). 1.2.0 logged on as
@@ -261,13 +277,16 @@ decision from you **before** you install; they are listed first.
 ### The steps
 
 1. **Stop FTPD** (`/P FTPD`, step 5).
-2. **Skip the allocation job** (step 4). The data sets exist already, and the
-   job allocates them `NEW`, so it would fail.
+2. **Skip the allocation job** (step 4) — if `FTPD.LINKLIB` and
+   `FTPD.AFTPDLOD` exist, which they do after an SMP install of 1.2.0. The job
+   allocates them `NEW`, so on an existing pair it would fail. Where they do
+   not exist, as on MVS/CE, run it. `LISTCAT LEVEL(FTPD)` (or ISPF 3.4 on
+   `FTPD.*`) tells which case you are in.
 3. **Run the install job** (step 6). The `APPLY` ends `COND CODE 0004` on
    `HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY`. That is the expected
    result of a replacement; see *One return code that looks wrong and is not*
-   in section 2b. On MVS/CE, where SMP never saw the FTPD 1.2.0 of the image,
-   it ends `COND CODE 0000` (step 5).
+   in section 2b. On MVS/CE, where SMP never saw the FTPD 1.2.0 of the image
+   and the install is a first one, it ends `COND CODE 0000` (step 5).
 4. **Start FTPD** (`/S FTPD`) and read the banner. It must name the new
    release and the new C library:
 
@@ -520,8 +539,10 @@ dataset.
 
 Expect `COND CODE 0000`.
 
-> **Run this once**, on the first install. An upgrade skips it: the data
-> sets are already there. There is no DELETE step in it, on purpose. After the
+> **Run this once**, on the first install. An upgrade skips it when the data
+> sets are already there; on MVS/CE they are not (step 5), so MVS/CE runs it.
+> If you skip it where `FTPD.LINKLIB` does not exist, the install job ends in a
+> JCL error (see *Troubleshooting*). There is no DELETE step in it, on purpose. After the
 > install, `FTPD.AFTPDLOD` holds SMP's accepted copy of the module; a
 > re-run that scratched it would leave the SMP inventory reporting an install
 > that is no longer on the system, and nothing would say so. To start over,
@@ -552,9 +573,20 @@ FTPD002E FTPD IS ALREADY ACTIVE ON PORT 2121, THIS INSTANCE ENDS
 FTPD091E INITIALIZATION FAILED RC=8
 ```
 
-and only starts after `/P FTPD`. Because SMP never saw that 1.2.0, `TFTP120` is
-not in its inventory, so on MVS/CE the `APPLY` ends `COND CODE 0000`, not the
-`0004` described for upgrades in step 6.
+and only starts after `/P FTPD`.
+
+**On MVS/CE this is a first install**, as far as SMP and the data sets go:
+
+- The data sets `FTPD.*` do not exist (`LISTCAT LEVEL(FTPD)` finds nothing).
+  The image's started task runs from `MVSLOVER.FTPD.LOADLIB`: its procedure
+  has `//STEPLIB DD DISP=SHR,DSN=MVSLOVER.FTPD.LOADLIB`.
+- So run the allocation job (step 4) first, then the install job (step 6).
+  Skipping step 4 ends in a JCL error (see *Troubleshooting*).
+- Because SMP never saw that 1.2.0, `TFTP120` is not in its inventory, so on
+  MVS/CE the `APPLY` ends `COND CODE 0000`, not the `0004` described for
+  upgrades in step 6.
+- Replace the image's procedure with the one from `FTPD.SAMPLIB` (step 7). The
+  old `MVSLOVER.FTPD.LOADLIB` stays where it is and is no longer used.
 
 ---
 
@@ -615,7 +647,8 @@ HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
 
 **On an upgrade the `APPLY` ends `COND CODE 0004` instead, and that is
 correct** — `HMA2461` reporting that the deleted level has no backup entry.
-(Not on MVS/CE, where the `APPLY` ends `0000` — see step 5.) See *One return
+(Not on MVS/CE, a first install, where the `APPLY` ends `0000` — see step 5.)
+See *One return
 code that looks wrong and is not* in section 2b. `HMA2270 APPLY PROCESSING
 SUCCESSFULLY COMPLETED` is the line that says the `APPLY` worked; the return
 code is not.
@@ -649,17 +682,71 @@ Copy from `FTPD.SAMPLIB`:
 | `FTPD` | a PROCLIB in the started-task concatenation | no — `STEPLIB` already names this release's LINKLIB, and JES mode needs no DDs (see below) |
 | `FTPDPRM0` | a PARMLIB | **yes — see below** |
 
-`SYS2.PROCLIB` is the usual home for the procedure.
+`SYS2.PROCLIB` is the usual home for the procedure. **On MVS/CE it already
+holds a member `FTPD`**, the procedure of the image's FTPD 1.2.0, whose
+`STEPLIB` is `MVSLOVER.FTPD.LOADLIB`. Replace it with the member from
+`FTPD.SAMPLIB`, whose `STEPLIB` names `FTPD.LINKLIB`; otherwise the started
+task keeps running the old module.
 
 ### Which PARMLIB
 
 The shipped procedure defaults to `D='SYS2.PARMLIB'`. **On TK5 that dataset
-does not exist** — put the member in `SYS1.PARMLIB` and either edit `D=` in
-your copy of the procedure, or override it when starting:
+does not exist**, and the `SYS1.PARMLIB` of TK5 has no room for another
+member. A plain copy into it ends like this:
 
 ```
-/S FTPD,D='SYS1.PARMLIB'
+IEC031I D37-04,IFG0554T,PARMCPY,COPY,SYSUT2,390,TK5RES,SYS1.PARMLIB
+IEF450I PARMCPY COPY - ABEND SD37 U0000
 ```
+
+`SD37` is the system's out-of-space abend: the member did not fit. There are
+two ways out. Use one of them, not both.
+
+**a) Compress `SYS1.PARMLIB`, then copy.** The compress gives back the space
+that replaced members left behind. It needs the data set exclusively
+(`DISP=OLD`), so nobody may be using it at the time:
+
+```
+//PARMCMP  JOB (ACCT),'COMPRESS PARMLIB',CLASS=A,MSGCLASS=H
+//COMPRESS EXEC PGM=IEBCOPY
+//SYSPRINT DD SYSOUT=*
+//SYSUT3   DD UNIT=SYSDA,SPACE=(TRK,(10,10))
+//SYSUT4   DD UNIT=SYSDA,SPACE=(TRK,(10,10))
+//PARMLIB  DD DSN=SYS1.PARMLIB,DISP=OLD
+//SYSIN    DD *
+  COPY INDD=PARMLIB,OUTDD=PARMLIB
+/*
+```
+
+It ends `COND CODE 0000`, with `IEB161I COMPRESS TO BE DONE USING INDD NAMED
+PARMLIB` in `SYSPRINT`. Then run the copy of `FTPDPRM0` again, from
+`FTPD.SAMPLIB(FTPDPRM0)` to `SYS1.PARMLIB(FTPDPRM0)`; on a TK5 that had run
+into `D37-04` it then ended `0000`. Start FTPD with
+`/S FTPD,D='SYS1.PARMLIB'`, or edit `D=` in your copy of the procedure.
+
+**b) Use a PARMLIB of your own and leave `SYS1.PARMLIB` alone.** Allocate a
+partitioned data set, copy the member into it, and name it with `D=`:
+
+```
+//PRIVPL   JOB (ACCT),'PRIVATE PARMLIB',CLASS=A,MSGCLASS=H
+//ALLOC    EXEC PGM=IEFBR14
+//PARMLIB  DD DSN=HERC01.PARMLIB,DISP=(NEW,CATLG),UNIT=SYSDA,
+//            SPACE=(TRK,(5,5,10)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+//COPY     EXEC PGM=IEBGENER
+//SYSPRINT DD SYSOUT=*
+//SYSIN    DD DUMMY
+//SYSUT1   DD DSN=FTPD.SAMPLIB(FTPDPRM0),DISP=SHR
+//SYSUT2   DD DSN=HERC01.PARMLIB(FTPDPRM0),DISP=SHR
+```
+
+```
+/S FTPD,D='HERC01.PARMLIB'
+```
+
+Use your own high-level qualifier for the data set, and put the same `D=` into
+your copy of the procedure if you want the plain `/S FTPD` to find it. An `IEBCOPY` from `SYS1.PARMLIB` into a library with
+a larger block size failed on the test system (`IEB139I`, `IEB100I`, return
+code 8), which is why the job copies with `IEBGENER`.
 
 On MVS/CE, `SYS2.PARMLIB` exists and the default is fine. `M=` selects the
 member (default `FTPDPRM0`), so a second configuration can live alongside the
@@ -856,7 +943,7 @@ patterns, RAKFCL equivalents and the reasoning behind the invariant — is
 ```
 /S FTPD                      default member (FTPDPRM0)
 /S FTPD,M=FTPDPRM1           alternate config member
-/S FTPD,D='SYS1.PARMLIB'     alternate PARMLIB -- TK5, see step 7
+/S FTPD,D='MY.PARMLIB'        alternate PARMLIB -- TK5, see step 7
 ```
 
 On MVS/CE, stop the FTPD 1.2.0 that comes with the image first (`/P FTPD`,
@@ -945,7 +1032,7 @@ with it. A short `UCLIN` job then frees the ids, and a `LIST` proves it. A way
 that uses `UCLIN` alone stays as the fallback.
 
 The full procedure, with the jobs to submit and the messages to check, is in
-[uninstall.md](https://github.com/mvslovers/ftpd/blob/main/docs/uninstall.md).
+[uninstall.md](https://github.com/mvslovers/ftpd/blob/v1.3.0/docs/uninstall.md).
 
 **This is for removing FTPD, not for upgrading it.** An upgrade installs over
 the release before it — see sections 2a and 2b — and needs none of this.
@@ -959,7 +1046,10 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 
 | Symptom | Likely cause |
 |---------|--------------|
-| Allocation job fails, dataset already exists | It was already run. Do not force it — see the warning in step 4 |
+| Allocation job fails, dataset already exists | It was already run, or `FTPD.*` exists from an SMP install of 1.2.0. Do not force it — see the warning in step 4 |
+| The install job ends in a JCL error at `APPLYCHK`: `IEF212I ... APPLYCHK LINKLIB - DATA SET NOT FOUND` | `FTPD.LINKLIB` does not exist: the allocation job (step 4) was skipped. This is the MVS/CE case: there the image's FTPD is not an SMP install and `FTPD.*` is not there. Run the allocation job, then resubmit the install job — and read the next row |
+| After the allocation job, the resubmitted install job ends `COND CODE 0008` in `RECV`: `HMA3862 ** SYSMOD TFTP130 ALREADY RECEIVED` | The first run had already received the SYSMOD before it stopped at `APPLYCHK`. The rerun skips `APPLYCHK` (`IEF202I ... NOT RUN BECAUSE OF CONDITION CODES`), then `APPLY` and `ACCEPT` end `COND CODE 0000` and `CLEANUP` runs. The install is complete: look for `HMA2380` and `HMA2270` in the `APPLY` output and check `FTPD.LINKLIB` as in step 6. The dry run did not take place on that run |
+| `IEC031I D37-04 ... SYS1.PARMLIB` (`ABEND SD37`) while copying `FTPDPRM0` — TK5 | `SYS1.PARMLIB` is full. Compress it or use a PARMLIB of your own — step 7 |
 | `RECV1`/`RECV2` fails, target exists | Something else allocated it. RECEIVE refuses to merge; scratch it and re-run |
 | `APPLYCHK` ends non-zero, `APPLY` skipped | Read the SMP output — the check exists to stop before anything is written. A missing DD is the usual cause |
 | SMP reports success, but the module is not where you expected | A ddname says nothing about the dataset behind it. Check the JCL, then look at the library itself |

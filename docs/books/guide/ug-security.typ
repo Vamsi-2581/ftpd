@@ -163,6 +163,11 @@ Jobs of other users are a separate matter: FTPD asks RAKF for each one
 == Letting Users See the Jobs of Others: JESSPOOL <ug-security-jesspool>
 
 #idx("JESSPOOL")#idx("JES", "security")#idx("RAKF", "JESSPOOL")
+This section needs RAKF 2.0.0 or later, the release whose class table contains
+#cmd("JESSPOOL"). FTPD 1.3.0 does not need that release to run: on a RAKF 1.2.x
+it installs and starts, and every user sees, reads and cancels only the own
+jobs.
+
 In the JES view (@ug-jes) FTPD decides for every job whether the user may list
 it, read its output and cancel it. A user always works on the own jobs. For a
 job of another user FTPD asks RAKF, in the class #cmd("JESSPOOL"), for READ

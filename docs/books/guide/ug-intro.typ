@@ -117,7 +117,9 @@ the book explains the subject:
     [A user sees, reads and cancels only the own jobs in the JES view. The jobs
       of other users need a profile in the RAKF class #cmd("JESSPOOL"). Before,
       every user could list, read and cancel the jobs of everybody. Define the
-      profiles before you upgrade.],
+      profiles before you upgrade. The class exists from RAKF 2.0.0; FTPD 1.3.0
+      itself runs on an older RAKF too, and there nobody sees the jobs of
+      others.],
       [@ug-jes-others, @ug-security-jesspool],
     [#cmd("SITE JESOWNER") with another user ID or #cmd("*") needs the same
       right, and answers #cmd("501 JESOWNER is not permitted") without it.

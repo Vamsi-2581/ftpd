@@ -13,8 +13,9 @@ another.
 
 A user works on the own jobs. The jobs of other users stay hidden, unless the
 administrator allows them with a profile in the RAKF class #cmd("JESSPOOL")
-(@ug-jes-others). Before FTPD 1.3.0 every user could list, read and cancel
-the jobs of everybody.
+(@ug-jes-others). That takes RAKF 2.0.0 or later, the release that has the
+class; FTPD 1.3.0 does not need it to run. Before FTPD 1.3.0 every user could
+list, read and cancel the jobs of everybody.
 
 The view reads the JES2 checkpoint and the spool, which FTPD finds itself; the
 procedure of the started task needs no statements for them
@@ -106,8 +107,7 @@ that line shorter.
 the word JOB between blanks for the JOB statement, also a comment card. A
 comment such as #cmd("//* RUN THE JOB NOW") before the real JOB statement gets
 the three operands, and the real JOB statement gets none. The job then does not
-run under the identity of the user, and the #cmd("PASSWORD=") card stands
-outside a JOB statement, where JES may print it in the listing of the job. Until
+run under the identity of the user. Until
 a later release fixes this, put no card before the JOB statement that has the
 word JOB between blanks, and write no comment with it.]
 
@@ -324,7 +324,8 @@ user FTPD asks RAKF, in the class #cmd("JESSPOOL"), whether the user may read
 it, and for a #cmd("delete") whether the user may update it. The administrator
 answers with profiles (@ug-security-jesspool). Without a profile a user sees
 nothing of the jobs of others. That is the state of FTPD 1.3.0 until the
-administrator acts. FTPD 1.2.0 let every user list, read and cancel the jobs of
+administrator acts. A RAKF older than 2.0.0 has no class #cmd("JESSPOOL"), so
+there the jobs of others stay hidden for everybody (@ug-security-jesspool). FTPD 1.2.0 let every user list, read and cancel the jobs of
 everybody, so an administrator who relied on that defines the profiles before
 the upgrade.
 

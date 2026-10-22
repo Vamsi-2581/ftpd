@@ -50,6 +50,7 @@ setup(ftpd_jwn_ctx_t *ctx, stub_t *s, const char *user, int rc_read,
     ctx->user = user;
     ctx->auth_fn = stub_auth;
     ctx->auth_arg = s;
+    ctx->cache = NULL;
 }
 
 static int
@@ -790,6 +791,177 @@ test_tally(void)
           FTPD_JWN_LINE_NONE, "no session counter: no WARN line");
 }
 
+/* --------------------------------------------------------------------
+** The per-command cache.  RAKF compares the first 8 characters of the
+** entity, so jobs with the same 8-character key get one answer; the cache
+** asks RACF once per key.
+** ----------------------------------------------------------------- */
+static int
+check_job(const ftpd_jwn_ctx_t *ctx, int op, const char *owner,
+          const char *jobname, const char *jobid, ftpd_jwn_res_t *res)
+{
+    return ftpd_jwn_check(ctx, op, owner, jobname, jobid, res);
+}
+
+/* A RACF that compares 12 characters of the entity against the profile
+** ABCDEFGH.PROD: READ for what starts with it, no profile otherwise. */
+static int
+auth_w12(void *arg, const char *entity, int want_update)
+{
+    (void)arg;
+    (void)want_update;
+    return strncmp(entity, "ABCDEFGH.PROD", 13) == 0 ? 0 : 4;
+}
+
+static void
+test_cache(void)
+{
+    ftpd_jwn_ctx_t ctx;
+    ftpd_jwn_cache_t cache;
+    ftpd_jwn_res_t res;
+    stub_t st;
+    char owner[16];
+    char jobid[16];
+    int i, d1, d2, calls;
+
+    /* one key, many jobs: one question */
+    setup(&ctx, &st, "MIKE1", 0, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    for (i = 0; i < 10; i++) {
+        sprintf(jobid, "JOB%05d", i);
+        d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", jobid,
+                       &res);
+        CHECK(d1 == FTPD_JWN_ALLOW && res.level == FTPD_JWN_LV_READ,
+              "cache: every job of one key gets READ");
+    }
+    CHECK(st.calls == 1, "cache: 10 jobs with one key ask RACF once");
+    CHECK(res.racf_calls == 0, "cache: a hit reports no RACF call");
+
+    /* the same jobs without a cache ask each time */
+    setup(&ctx, &st, "MIKE1", 0, 8);
+    for (i = 0; i < 10; i++) {
+        sprintf(jobid, "JOB%05d", i);
+        check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", jobid, &res);
+    }
+    CHECK(st.calls == 10, "no cache: 10 jobs ask 10 times");
+
+    /* k keys, N jobs: k questions */
+    setup(&ctx, &st, "MIKE1", 0, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    for (i = 0; i < 30; i++) {
+        sprintf(owner, "OWNER%03d", i % 3);
+        sprintf(jobid, "JOB%05d", i);
+        check_job(&ctx, FTPD_JWN_OP_LIST, owner, "JOBA", jobid, &res);
+    }
+    CHECK(st.calls == 3, "cache: 30 jobs, 3 keys, 3 questions");
+
+    /* no profile and no access are remembered as well */
+    setup(&ctx, &st, "MIKE1", 4, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", "JOB00001",
+                   &res);
+    d2 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBB", "JOB00002",
+                   &res);
+    CHECK(d1 == FTPD_JWN_HIDE && d2 == FTPD_JWN_HIDE && st.calls == 1 &&
+          res.reason == FTPD_JWN_R_NOPROFILE,
+          "cache: RC 4 is remembered, reason kept");
+    setup(&ctx, &st, "MIKE1", 8, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", "JOB00001", &res);
+    d2 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBB", "JOB00002",
+                   &res);
+    CHECK(d2 == FTPD_JWN_HIDE && st.calls == 1 &&
+          res.reason == FTPD_JWN_R_NONE,
+          "cache: RC 8 is remembered, reason kept");
+
+    /* an unusable answer is never remembered */
+    setup(&ctx, &st, "MIKE1", 12, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    for (i = 0; i < 3; i++)
+        check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", "JOB00001",
+                  &res);
+    CHECK(st.calls == 3 && res.decision == FTPD_JWN_HIDE &&
+          res.reason == FTPD_JWN_R_ERR_RC,
+          "cache: an RC of 12 is asked again each time");
+
+    /* own jobs never reach the cache */
+    setup(&ctx, &st, "MIKE1", 0, 0);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "MIKE1", "JOBA", "JOB00001",
+                   &res);
+    CHECK(d1 == FTPD_JWN_ALLOW && st.calls == 0 && cache.n == 0,
+          "cache: an own job asks nothing and stores nothing");
+
+    /* a component error never reaches it either */
+    d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "AB.CD", "JOBA", "JOB00001",
+                   &res);
+    CHECK(d1 == FTPD_JWN_HIDE && st.calls == 0 && cache.n == 0,
+          "cache: a bad component asks nothing and stores nothing");
+
+    /* a level found for listing is not the level for deleting */
+    setup(&ctx, &st, "MIKE1", 0, 8);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", "JOB00001", &res);
+    calls = st.calls;
+    d1 = check_job(&ctx, FTPD_JWN_OP_DELE, "ABCDEFGH", "JOBA", "JOB00001",
+                   &res);
+    CHECK(calls == 1 && st.update_calls == 1 && d1 == FTPD_JWN_NOCANCEL,
+          "cache: READ found by LIST does not answer a DELE");
+    d2 = check_job(&ctx, FTPD_JWN_OP_DELE, "ABCDEFGH", "JOBA", "JOB00002",
+                   &res);
+    CHECK(d2 == FTPD_JWN_NOCANCEL && st.update_calls == 1,
+          "cache: the DELE answer is remembered for DELE");
+
+    /* the 17th key: asked every time, same answer, nothing evicted */
+    setup(&ctx, &st, "MIKE1", 0, 0);
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    for (i = 0; i < 17; i++) {
+        sprintf(owner, "OWNER%03d", i);
+        check_job(&ctx, FTPD_JWN_OP_LIST, owner, "JOBA", "JOB00001", &res);
+    }
+    CHECK(st.calls == 17 && cache.n == FTPD_JWN_CACHEMAX,
+          "cache: 17 keys, 16 stored");
+    calls = st.calls;
+    for (i = 0; i < 2; i++) {
+        d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "OWNER016", "JOBA",
+                       "JOB00001", &res);
+        CHECK(d1 == FTPD_JWN_ALLOW && res.level == FTPD_JWN_LV_READ,
+              "cache: the 17th key gets the same level without the cache");
+    }
+    CHECK(st.calls == calls + 2, "cache: the 17th key asks each time");
+    check_job(&ctx, FTPD_JWN_OP_LIST, "OWNER000", "JOBA", "JOB00001", &res);
+    CHECK(st.calls == calls + 2, "cache: the 16 stored keys are not evicted");
+
+    /* The limit of the key: a RAKF that compares 12 characters tells
+    ** ABCDEFGH.PRODX from ABCDEFGH.TESTX, an 8-character key does not.  RAKF
+    ** 2.0.0 compares 8 (Test 18, Fall 14); this is why the guide says not to
+    ** raise the entity maximum above 8 without changing the key. */
+    setup(&ctx, &st, "MIKE1", 0, 8);
+    ctx.auth_fn = auth_w12;
+    d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "PRODX", "JOB00001",
+                   &res);
+    d2 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "TESTX", "JOB00002",
+                   &res);
+    CHECK(d1 == FTPD_JWN_ALLOW && d2 == FTPD_JWN_HIDE,
+          "without the cache a width-12 RACF tells the two jobs apart");
+    ftpd_jwn_cache_init(&cache);
+    ctx.cache = &cache;
+    d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "PRODX", "JOB00001",
+                   &res);
+    d2 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "TESTX", "JOB00002",
+                   &res);
+    CHECK(d1 == d2 && FTPD_JWN_KEYLEN == 8,
+          "the 8-character key gives both jobs one level");
+}
+
 int
 main(void)
 {
@@ -801,6 +973,7 @@ main(void)
     test_narrows();
     test_printable();
     test_tally();
+    test_cache();
 
     return mbt_test_summary("TSTJWN");
 }

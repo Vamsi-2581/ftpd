@@ -91,7 +91,7 @@ typedef struct ftpd_jwn_cache {
     struct {
         char        key[FTPD_JWN_KEYLEN + 1];
         char        update;     /* asked for UPDATE as well             */
-        char        level;      /* FTPD_JWN_LV_*                        */
+        char        level;      /* one of the FTPD_JWN_LV values        */
         char        rc;         /* RACF return code the level came from */
     } e[FTPD_JWN_CACHEMAX];
 } ftpd_jwn_cache_t;
@@ -105,9 +105,9 @@ typedef struct ftpd_jwn_ctx {
 } ftpd_jwn_ctx_t;
 
 typedef struct ftpd_jwn_res {
-    int decision;       /* FTPD_JWN_HIDE | ALLOW | NOCANCEL             */
-    int reason;         /* FTPD_JWN_R_*                                 */
-    int level;          /* FTPD_JWN_LV_*; only meaningful for foreign   */
+    int decision;       /* HIDE, ALLOW or NOCANCEL, see above           */
+    int reason;         /* one of the FTPD_JWN_R reasons                */
+    int level;          /* an FTPD_JWN_LV value, foreign jobs only      */
     int rc;             /* last RACF return code, -1 = none called      */
     int elen;           /* length of the entity, 0 = none built         */
     int racf_calls;     /* 0, 1 or 2                                    */

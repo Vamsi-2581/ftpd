@@ -377,7 +377,7 @@ test_check(void)
         for (i = 0; i < sizeof(t) / sizeof(t[0]); i++) {
             setup(&ctx, &s, "MIKE1", t[i].rc_read, t[i].rc_update);
             ftpd_jwn_check(&ctx, t[i].op, "ABC", "JOBA", "JOB00001", &res);
-            sprintf(msg, "foreign row %d", (int)i);
+            snprintf(msg, sizeof(msg), "foreign row %d", (int)i);
             CHECK(res.decision == t[i].decision && res.reason == t[i].reason
                   && res.level == t[i].level
                   && res.racf_calls == t[i].calls && s.calls == t[i].calls
@@ -829,7 +829,7 @@ test_cache(void)
     ftpd_jwn_cache_init(&cache);
     ctx.cache = &cache;
     for (i = 0; i < 10; i++) {
-        sprintf(jobid, "JOB%05d", i);
+        snprintf(jobid, sizeof(jobid), "JOB%05d", i);
         d1 = check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", jobid,
                        &res);
         CHECK(d1 == FTPD_JWN_ALLOW && res.level == FTPD_JWN_LV_READ,
@@ -841,7 +841,7 @@ test_cache(void)
     /* the same jobs without a cache ask each time */
     setup(&ctx, &st, "MIKE1", 0, 8);
     for (i = 0; i < 10; i++) {
-        sprintf(jobid, "JOB%05d", i);
+        snprintf(jobid, sizeof(jobid), "JOB%05d", i);
         check_job(&ctx, FTPD_JWN_OP_LIST, "ABCDEFGH", "JOBA", jobid, &res);
     }
     CHECK(st.calls == 10, "no cache: 10 jobs ask 10 times");
@@ -851,8 +851,8 @@ test_cache(void)
     ftpd_jwn_cache_init(&cache);
     ctx.cache = &cache;
     for (i = 0; i < 30; i++) {
-        sprintf(owner, "OWNER%03d", i % 3);
-        sprintf(jobid, "JOB%05d", i);
+        snprintf(owner, sizeof(owner), "OWNER%03d", i % 3);
+        snprintf(jobid, sizeof(jobid), "JOB%05d", i);
         check_job(&ctx, FTPD_JWN_OP_LIST, owner, "JOBA", jobid, &res);
     }
     CHECK(st.calls == 3, "cache: 30 jobs, 3 keys, 3 questions");
@@ -924,7 +924,7 @@ test_cache(void)
     ftpd_jwn_cache_init(&cache);
     ctx.cache = &cache;
     for (i = 0; i < 17; i++) {
-        sprintf(owner, "OWNER%03d", i);
+        snprintf(owner, sizeof(owner), "OWNER%03d", i);
         check_job(&ctx, FTPD_JWN_OP_LIST, owner, "JOBA", "JOB00001", &res);
     }
     CHECK(st.calls == 17 && cache.n == FTPD_JWN_CACHEMAX,

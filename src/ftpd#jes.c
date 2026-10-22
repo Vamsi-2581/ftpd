@@ -430,6 +430,7 @@ job_access(ftpd_session_t *sess, const JESJOB *job, int op,
     char who[FTPD_JWN_PRTSZ];
     char jid[FTPD_JWN_PRTSZ];
     char rcs[16];
+    const char *why;
     int decision;
     int line;
 
@@ -466,12 +467,15 @@ job_access(ftpd_session_t *sess, const JESJOB *job, int op,
                  jes_op_name(op), who, jid);
         break;
     default:
+        if (decision == FTPD_JWN_NOCANCEL)
+            why = "NOCANCEL";
+        else if (res.reason == FTPD_JWN_R_NONE)
+            why = "NONE";
+        else
+            why = "NOPROFILE";
         ftpd_log(LOG_WARN,
                  "JES %s denied: user=%s job=%s reason=%s rc=%s",
-                 jes_op_name(op), who, jid,
-                 decision == FTPD_JWN_NOCANCEL ? "NOCANCEL" :
-                 res.reason == FTPD_JWN_R_NONE ? "NONE" : "NOPROFILE",
-                 rcs);
+                 jes_op_name(op), who, jid, why, rcs);
         break;
     }
     return decision;

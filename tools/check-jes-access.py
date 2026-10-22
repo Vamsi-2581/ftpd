@@ -32,9 +32,11 @@ proof; this stops the obvious regression.
 
 Usage: tools/check-jes-access.py [src/ftpd#jes.c]
 """
+import os
 import re
 import sys
 
+ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
 DEFAULT = "src/ftpd#jes.c"
 
 AUTH_HULL = "jes_racf_auth"
@@ -100,8 +102,13 @@ def functions(text):
                             if level == 0:
                                 break
                         k -= 1
-                    ident = re.search(r"(\w+)\s*$", p[:k])
-                    name = ident.group(1) if ident else None
+                    e = k
+                    while e > 0 and p[e - 1].isspace():
+                        e -= 1
+                    b = e
+                    while b > 0 and (p[b - 1].isalnum() or p[b - 1] == "_"):
+                        b -= 1
+                    name = p[b:e] or None
                 else:
                     name = None
                 start = m.start()
@@ -129,6 +136,16 @@ def balanced(text, open_at):
 
 def line_of(src, pos):
     return src.count("\n", 0, pos) + 1
+
+
+def source_path(arg):
+    """Resolve arg to a .c file inside the repository, or None."""
+    full = os.path.realpath(os.path.join(ROOT, arg))
+    if os.path.commonpath([ROOT, full]) != ROOT:
+        return None
+    if not full.endswith(".c") or not os.path.isfile(full):
+        return None
+    return full
 
 
 def check(path):
@@ -175,7 +192,12 @@ def check(path):
 
 
 def main(argv):
-    path = argv[1] if len(argv) > 1 else DEFAULT
+    arg = argv[1] if len(argv) > 1 else DEFAULT
+    path = source_path(arg)
+    if path is None:
+        print("check-jes-access: %s is not a .c file inside the repository"
+              % arg, file=sys.stderr)
+        return 2
     bad, nfuncs = check(path)
     if bad:
         print("check-jes-access: %d problem(s)" % len(bad), file=sys.stderr)

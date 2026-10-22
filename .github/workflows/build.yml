@@ -30,9 +30,10 @@ jobs:
         run: python3 tools/check-module-data.py
 
   # Who may see, read and delete which job on the spool is decided in one
-  # place.  This fails when ftpd#jes.c gets a way around it: an owner compared
-  # by hand, a RACF call outside the policy, or a job deleted or its data
-  # connection opened before the policy ran (#90).
+  # place.  This fails when a source of the load module (every file mbt.toml
+  # lists, not only ftpd#jes.c) gets a way around it: an owner compared by
+  # hand, a RACF call outside the policy, or a job deleted, read or its data
+  # connection opened before the policy ran (#90, #268).
   jes-access:
     name: Every JES spool path goes through the policy
     runs-on: ubuntu-latest

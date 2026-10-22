@@ -187,7 +187,7 @@ sources = ["test/tstpas.c", "src/ftpd#*.c"]
 [test.TSTSIT]
 host = false
 sources = ["test/tstsit.c", "src/ftpd#sit.c", "src/ftpd#jfl.c",
-           "src/ftpd#dsn.c"]
+           "src/ftpd#dsn.c", "src/ftpd#jwn.c"]
 
 # ftpd_mvs_dcbmodel() -- SITE DCBDSN reads RECFM, LRECL and BLKSIZE of a
 # model data set from its Format-1 DSCB (#180).  MVS-only: catalog and VTOC.

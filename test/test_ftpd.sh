@@ -30,13 +30,18 @@
 #   15. Settings that took effect nowhere: SITE TRUNCATE on STOR, SITE RDW and
 #       SBSENDEOL refused, SITE JESSTATUS filters the JES listing
 #   17. SITE DCBDSN: RECFM, LRECL and BLKSIZE taken from a model data set
-#   18. JES spool authorization (#90): a job ID is matched exactly (case 8)
+#   18. JES spool authorization (#90): who sees, reads and deletes which
+#       job (22 cases, RACF class JESSPOOL; needs RAKF 2.0.0 and a RAKF
+#       administrator as test user, see the comment of Test 18)
 #
 # Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
 # reach.  Set FTPD_CONSOLE to a command that sends one operator command and
 # prints the system's answer, for example
 #     FTPD_CONSOLE='mbt target console env --' ./test_ftpd.sh ...
 # Without it Test 13 is reported as SKIPPED, not as passed.
+#
+# Test 18 changes SYS1.SECURE.CNTL(PROFILES) and (USERS) of the system under
+# test and puts them back.  Run it against a throwaway container only.
 # ============================================================
 
 HOST="${1:-localhost}"
@@ -2290,14 +2295,735 @@ delete '$DCB_NEW'" /dev/null
 # ============================================================
 # Test 18: JES spool authorization (#90)
 #
-# Case 8 is the first part (M1): a job ID is matched exactly.  JES2 answers a
-# query such as JOB* with every job it matches; FTPD must never act on the
-# first of them.  The jobs used here are the user's own, so the case needs no
-# RAKF profile: a request that is not an exact job ID is "not found", whoever
-# owns what it would have matched.
+# Who may list, read and delete which job in the JES mode of FTP.  The model
+# (plan MVS-240, variant 3): a job of the session's own userid is always
+# allowed; a job of another owner needs the RACF class JESSPOOL, entity
+# <owner>.<jobname>.<jobid>: READ lists and reads, UPDATE or better also
+# deletes, no profile or no READ hides the job behind the same 550 that a
+# missing job gets.
+#
+# Needs RAKF 2.0.0 (the test refuses to run a gate on anything else) and a
+# test user that is a RAKF administrator (group RAKFADM, SPECIAL), such as
+# the IBMUSER of an mvsce container: the test creates its own users and
+# JESSPOOL profiles and puts SYS1.SECURE.CNTL(PROFILES) and (USERS) back the
+# way it found them.  Use a throwaway container, never a real system.
+#
+# Fixtures are written as files (the lines of the examples A, B, D, E and F
+# of the plan, section 3.3) and loaded with the batch procedures RAKFUSER and
+# RAKFPROF.  Every example is proven once first: its command sequence
+# (RDEF, PE) is run in batch and the JESSPOOL lines it produces are compared
+# with the lines the fixture file uses.  A proof that fails is a FINDING
+# about the examples, not a failure of the server; it makes a gate run fail.
+#
+# Environment (all optional):
+#   FTPD_GATE=1       release gate: RAKF other than 2.0.0, an unknown image or
+#                     libc370 version and every FINDING make the run fail
+#   FTPD_IMAGE        image with digest of the container, for the report
+#   FTPD_LIBC370      libc370 version, when FTPD_CONSOLE cannot tell
+#   FTPD_RDR          host:port of the card reader, for the job without owner
+#   FTPD_CONSOLE      as for Test 13; also checks the console reload (22)
+#
+# Case 1 (empty JESSPOOL class) runs on every RAKF level and before every
+# libc370 raise: if racf_auth() answers 0 for a class without profiles, the
+# foreign jobs are open, and that is a blocker the table must not paper over.
+# Case 8 is the first part (M1): a job ID is matched exactly.
 # ============================================================
 section "Test 18: JES spool authorization"
 
+JW_PW=JW90PASS
+JW_GATE="${FTPD_GATE:-0}"
+JW_OUT="$TMPDIR/jw_out.log"
+JW_PROF="SYS1.SECURE.CNTL(PROFILES)"
+JW_USRS="SYS1.SECURE.CNTL(USERS)"
+JW_PROF_ORIG="$TMPDIR/jw_profiles.orig"
+JW_USERS_ORIG="$TMPDIR/jw_users.orig"
+JW_PROF_BASE="$TMPDIR/jw_profiles.base"
+JW_ME=$(echo "$USER" | tr '[:lower:]' '[:upper:]')
+JW_CUR=""           # fixture in effect
+JW_RELOAD=batch     # batch (RAKFPROF procedure) or console (S RAKFPROF)
+JW_DIRTY=0          # PROFILES or USERS differ from the original
+JW_USERS_MADE=0
+JW_SKIPPED=""
+JW_FINDINGS=""
+JW_NFIND=0
+# user:default group:connected group:option
+JW_TABLE="JWN0:USER:: AUDU:USER:AUDIT: OPSX:USER:OPS: ALTU:USER:ALT: RDOU:USER:RDOW:
+OWNX:USER:: OWNX2:USER:: ABC:USER:: ABCD:USER:: ABCDEFG:USER::
+MIKE1:USER:: MIKE2:USER:: MIKE10:USER:: ADMA:ADMIN:: ADMB:USER:ADMIN:
+OPSU:USER::OPERATIONS NOBU:USER:NOBG:"
+declare -A JID JOWN
+
+jw_skip() {
+    echo -e "  ${YELLOW}SKIPPED${NC}: $1"
+    JW_SKIPPED="${JW_SKIPPED}\n  - $1"
+}
+
+# A proof or a precondition of the examples that does not hold: the server is
+# not at fault, the plan is.  Counted apart from FAIL; a gate run fails on it.
+jw_finding() {
+    echo -e "  ${YELLOW}FINDING${NC}: $1"
+    JW_NFIND=$((JW_NFIND + 1))
+    JW_FINDINGS="${JW_FINDINGS}\n  - $1"
+}
+
+# --------------------------------------------------------------------
+# One FTP session as USER.  CMDS is the command text; a line "--" splits
+# the answers into segments jw_seg.N (segment 1 is the login).
+# --------------------------------------------------------------------
+JW_LOGFAIL=" "
+jw_ftp() {
+    local u="$1" cmds="$2" pw="$JW_PW" uu
+    uu=$(echo "$u" | tr '[:lower:]' '[:upper:]')
+    [ "$uu" = "$JW_ME" ] && pw="$PASS"
+    cmds=$(printf '%s\n' "$cmds" | sed '/^$/d; s/^--$/quote NOOP/')
+    printf 'user %s %s\nquote NOOP\n%s\nquit\n' "$u" "$pw" "$cmds" \
+        | timeout 180 ftp -n -v -p -P "$PORT" "$HOST" > "$JW_OUT" 2>&1
+    rm -f "$TMPDIR"/jw_seg.*
+    awk -v p="$TMPDIR/jw_seg." 'BEGIN { n = 1 }
+        /^200 OK/ { n++; next }
+        { print > (p n) }' "$JW_OUT"
+    JW_LOGIN=1
+    if ! grep -q '^230' "$JW_OUT"; then
+        JW_LOGIN=0
+        case "$JW_LOGFAIL" in
+        *" $uu "*) ;;
+        *) JW_LOGFAIL="$JW_LOGFAIL$uu "
+           fail "login as $u failed: $(grep '^[45][0-9][0-9]' "$JW_OUT" | head -1)" ;;
+        esac
+    fi
+}
+jw_seg() { grep -v '^221' "$TMPDIR/jw_seg.$1" 2>/dev/null; }
+
+# --------------------------------------------------------------------
+# Batch jobs as the test user.
+# --------------------------------------------------------------------
+# JCL file name, job id (JOBnnnnn) out: submit.
+jw_submit_file() {
+    ftp_run "site filetype=jes
+type ascii
+put $1 jw_batch.jcl
+site filetype=seq" "$TMPDIR/jw_b.log"
+    grep -o 'JOB[0-9][0-9][0-9][0-9][0-9]' "$TMPDIR/jw_b.log" | head -1
+}
+
+# Waits for job $1 to reach OUTPUT as the test user's own job; the spool goes
+# to $2.  Returns 1 after about 3 minutes.
+jw_batch_wait() {
+    local id="$1" out="$2" n=0
+    while [ $n -lt 90 ]; do
+        ftp_run "site filetype=jes
+ls
+site filetype=seq" "$TMPDIR/jw_b.ls"
+        if grep -q " $id .*OUTPUT" "$TMPDIR/jw_b.ls"; then
+            ftp_run "site filetype=jes
+get $id $out
+site filetype=seq" "$TMPDIR/jw_b.log"
+            [ -s "$out" ]
+            return
+        fi
+        sleep 2
+        n=$((n + 1))
+    done
+    return 1
+}
+
+# TSO commands on stdin (column 1!), run under IKJEFT01 as a RAKF administrator,
+# then the RAKF batch procedures named in $2 (RAKFUSER, RAKFPROF).  The spool is
+# left in $TMPDIR/jw_tso.out.
+jw_tso() {
+    local step="$1" id
+    {
+        echo "//JW90TSO  JOB (ACCT),'FTPD 90 SETUP',CLASS=A,MSGCLASS=X,GROUP=RAKFADM"
+        echo "//TSO      EXEC PGM=IKJEFT01,REGION=4096K"
+        echo "//SYSPRINT DD  SYSOUT=*"
+        echo "//SYSTSPRT DD  SYSOUT=*"
+        echo "//SYSTSIN  DD  *"
+        cat
+        echo "/*"
+        for s in $step; do echo "//$s  EXEC $s"; done
+    } > "$TMPDIR/jw_tso.jcl"
+    id=$(jw_submit_file "$TMPDIR/jw_tso.jcl")
+    [ -n "$id" ] && jw_batch_wait "$id" "$TMPDIR/jw_tso.out"
+}
+
+# Only the RAKF procedures, nothing on stdin.
+jw_proc() {
+    local id
+    {
+        echo "//JW90PRC  JOB (ACCT),'FTPD 90 SETUP',CLASS=A,MSGCLASS=X,GROUP=RAKFADM"
+        for s in $1; do echo "//$s  EXEC $s"; done
+    } > "$TMPDIR/jw_tso.jcl"
+    id=$(jw_submit_file "$TMPDIR/jw_tso.jcl")
+    [ -n "$id" ] && jw_batch_wait "$id" "$TMPDIR/jw_tso.out"
+}
+
+# --------------------------------------------------------------------
+# Environment report: RAKF level, FTPD and libc370 version, image
+# --------------------------------------------------------------------
+# The level is read from the banner RAKF puts into ICHSEC00 ("RAKF V2R0M0"),
+# not derived from a tag: dump the load module and look for the text in hex.
+jw_rakf_level() {
+    local jcl="$TMPDIR/jw_ver.jcl" id hex m
+    cat > "$jcl" << 'JCLEOF'
+//JW90VER  JOB (ACCT),'FTPD 90 RAKF',CLASS=A,MSGCLASS=X
+//S1       EXEC PGM=AMASPZAP
+//SYSPRINT DD SYSOUT=*
+//SYSLIB   DD DSN=SYS1.LINKLIB,DISP=SHR
+//SYSIN    DD *
+ DUMPT ICHSEC00
+/*
+JCLEOF
+    id=$(jw_submit_file "$jcl")
+    [ -n "$id" ] || { echo "unknown"; return; }
+    jw_batch_wait "$id" "$TMPDIR/jw_ver.out" || { echo "unknown"; return; }
+    hex=$(grep -E '^ [0-9A-F]{6}  ' "$TMPDIR/jw_ver.out" \
+          | sed 's/^ [0-9A-F]\{6\}  //; s/\*.*//' | tr -d ' \n')
+    m=$(echo "$hex" | grep -o 'D9C1D2C640E5F.D9F.D4F.' | head -1)
+    if [ -z "$m" ]; then echo "unknown"; return; fi
+    echo "V${m:13:1}R${m:17:1}M${m:21:1}"
+}
+
+JW_RAKF=$(jw_rakf_level)
+JW_FTPDV=""
+JW_LIBC=""
+if [ -n "$FTPD_CONSOLE" ]; then
+    JW_VER=$($FTPD_CONSOLE "F FTPD,VERSION" 2>&1)
+    JW_FTPDV=$(echo "$JW_VER" | sed -n 's/.*FTPD016I FTPD \([^ ]* ([^)]*)\).*/\1/p' | head -1)
+    JW_LIBC=$(echo "$JW_VER" | sed -n 's/.*FTPD016I LIBC370 \([^ ]* ([^)]*)\).*/\1/p' | head -1)
+fi
+[ -n "$JW_LIBC" ] || JW_LIBC="${FTPD_LIBC370:-}"
+info "RAKF:    ${JW_RAKF}"
+info "FTPD:    ${JW_FTPDV:-not known (no FTPD_CONSOLE)}"
+info "libc370: ${JW_LIBC:-not known (no FTPD_CONSOLE, no FTPD_LIBC370)}"
+info "image:   ${FTPD_IMAGE:-not given (FTPD_IMAGE)}"
+info "mode:    $([ "$JW_GATE" = 1 ] && echo gate || echo development)"
+
+JW_READY=1
+if [ "$JW_RAKF" = "V2R0M0" ]; then
+    pass "RAKF level is V2R0M0 (ICHSEC00 banner)"
+elif [ "$JW_GATE" = 1 ]; then
+    fail "RAKF level is $JW_RAKF, the gate needs V2R0M0"
+    JW_READY=0
+else
+    info "RAKF level $JW_RAKF is not V2R0M0: development run, not a gate"
+fi
+if [ "$JW_GATE" = 1 ]; then
+    [ -n "$JW_LIBC" ]      || fail "gate: the libc370 version is not known"
+    [ -n "$FTPD_IMAGE" ]   || fail "gate: FTPD_IMAGE (image and digest) is not given"
+fi
+
+# --------------------------------------------------------------------
+# PROFILES fixtures: the lines of the examples A, B, D, E, F (plan 3.3)
+# Each line is ENTITY|GROUP|ACCESS; an empty group is the universal line.
+# --------------------------------------------------------------------
+jw_fx_lines() {
+    case "$1" in
+    0)  ;;
+    N)  printf '%s\n' '*||NONE' ;;
+    3)  printf '%s\n' '*||NONE' 'OWNX.*||NONE' 'OWNX.*|RDOW|READ' ;;
+    4)  printf '%s\n' '*||NONE' '*|AUDIT|READ' ;;
+    A)  printf '%s\n' '*||NONE' '*|AUDIT|READ' 'SYSTEM.*||NONE' ;;
+    B)  printf '%s\n' '*||READ' '*|OPS|UPDATE' 'SYSTEM.*||NONE' ;;
+    5)  printf '%s\n' '*||NONE' '*|ALT|ALTER' '*|OPS|UPDATE' 'OPSX.*||NONE' \
+                      'OPSX.*|OPS|READ' ;;
+    6)  printf '%s\n' '*||NONE' 'ABC.*||NONE' 'ABC.*|AUDIT|READ' ;;
+    12) printf '%s\n' '*||READ' '*|NOBG|NONE' ;;
+    14) printf '%s\n' '*||NONE' 'ABCDEFG.PROD*||NONE' 'ABCDEFG.PROD*|AUDIT|READ' ;;
+    D)  printf '%s\n' '*||NONE' '*|ADMIN|UPDATE' ;;
+    E)  printf '%s\n' '*||READ' '*|ADMIN|UPDATE' 'SYSTEM.*||NONE' ;;
+    E2) printf '%s\n' '*||READ' '*|ADMIN|UPDATE' 'SYSTEM.*||NONE' \
+                      'SYSTEM.*|ADMIN|UPDATE' ;;
+    F)  printf '%s\n' '*||NONE' '*|ADMIN|UPDATE' \
+            'MIKE1.*||NONE' 'MIKE1.*|ADMIN|UPDATE' 'MIKE1.*|MIKE2|UPDATE' \
+            'MIKE2.*||NONE' 'MIKE2.*|ADMIN|UPDATE' 'MIKE2.*|MIKE1|UPDATE' ;;
+    Fv) printf '%s\n' '*||NONE' '*|ADMIN|UPDATE' \
+            'MIKE1.*||NONE' 'MIKE1.*|MIKE2|UPDATE' \
+            'MIKE2.*||NONE' 'MIKE2.*|MIKE1|UPDATE' ;;
+    Bn) printf '%s\n' '*||READ' '*|OPS|UPDATE' ;;
+    U-*) jw_fx_lines "${1#U-}" | head -1 ;;
+    BROKEN) printf '%s\n' '*|ADMIN|UPDATE' ;;
+    *)  return 1 ;;
+    esac
+}
+
+# The PROFILES lines of a fixture (class cols 1-8, entity 9-52, group 53-60,
+# access from 61).
+jw_fx_render() {
+    jw_fx_lines "$1" | awk -F'|' '{ printf "%-8s%-44s%-8s%s\n", "JESSPOOL", $1, $2, $3 }'
+}
+
+# The command sequence of a fixture, as in plan 3.3.
+jw_fx_cmds() {
+    jw_fx_lines "$1" | awk -F'|' '
+        $2 == "" { printf "RDEF %s CL(JESSPOOL) UACC(%s)\n", $1, $3; next }
+                 { printf "PE %s CL(JESSPOOL) ID(%s) ACCESS(%s)\n", $1, $2, $3 }'
+}
+
+jw_get() {   # dataset(member) local-file
+    rm -f "$2"
+    ftp_run "type ascii
+get '$1' $2" "$TMPDIR/jw_get.log"
+    [ -s "$2" ]
+}
+
+# The base: the saved PROFILES plus the FTPAUTH line the test users need.
+jw_make_base() {
+    awk '
+        { print }
+        substr($0, 9, 7) == "FTPAUTH" && substr($0, 53, 5) == "ADMIN" &&
+        substr($0, 61, 4) == "READ" {
+            printf "%-8s%-44s%-8s%s\n", "FACILITY", "FTPAUTH", "USER", "READ"
+        }' "$JW_PROF_ORIG" > "$JW_PROF_BASE"
+    grep -q '^FACILITYFTPAUTH  *USER  *READ' "$JW_PROF_BASE"
+}
+
+# PROFILES = base + the JESSPOOL block of fixture $1, inserted at its sorted
+# place (JESSPOOL sorts between FACILITY and TAPEVOL).
+jw_build_profiles() {
+    jw_fx_render "$1" > "$TMPDIR/jw_block.txt"
+    awk -v blk="$TMPDIR/jw_block.txt" '
+        BEGIN { while ((getline l < blk) > 0) b[++n] = l }
+        !done && $0 !~ /^[*#]/ && substr($0, 1, 8) > "JESSPOOL" {
+            for (i = 1; i <= n; i++) print b[i]
+            done = 1
+        }
+        { print }
+        END { if (!done) for (i = 1; i <= n; i++) print b[i] }' "$JW_PROF_BASE"
+}
+
+# Every PUT of a member appends to the PDS and leaves the old copy behind;
+# compress SYS1.SECURE.CNTL before it runs full (SE37).
+JW_PUTS=0
+jw_compress() {
+    local id
+    {
+        echo "//JW90CMP  JOB (ACCT),'FTPD 90 COMPRESS',CLASS=A,MSGCLASS=X"
+        echo "//C        EXEC PGM=IEBCOPY"
+        echo "//SYSPRINT DD SYSOUT=*"
+        echo "//SYSUT3   DD UNIT=SYSDA,SPACE=(TRK,(5,5))"
+        echo "//SYSUT4   DD UNIT=SYSDA,SPACE=(TRK,(5,5))"
+        echo "//IN       DD DSN=SYS1.SECURE.CNTL,DISP=OLD"
+        echo "//SYSIN    DD *"
+        echo " COPY INDD=IN,OUTDD=IN"
+        echo "/*"
+    } > "$TMPDIR/jw_cmp.jcl"
+    id=$(jw_submit_file "$TMPDIR/jw_cmp.jcl")
+    [ -n "$id" ] && jw_batch_wait "$id" "$TMPDIR/jw_cmp.out" \
+        && grep -q 'IEB147I' "$TMPDIR/jw_cmp.out"
+}
+
+jw_put() {   # local-file dataset(member)
+    if [ $((JW_PUTS % 12)) = 0 ]; then
+        jw_compress || info "SYS1.SECURE.CNTL could not be compressed"
+    fi
+    JW_PUTS=$((JW_PUTS + 1))
+    ftp_run "type ascii
+put $1 '$2'" "$TMPDIR/jw_put.log"
+    if grep -q '^552 .*SE37' "$TMPDIR/jw_put.log"; then
+        info "SYS1.SECURE.CNTL is full (SE37): compress it and run again"
+    fi
+    grep -q '^250 ' "$TMPDIR/jw_put.log"
+}
+
+# Install fixture $1 and reload.  "bad" as $2: the reload is expected to abend.
+# Returns 0 if the reload ended as expected.
+jw_fx() {
+    local fx="$1" mode="${2:-good}"
+    [ "$fx" = "$JW_CUR" ] && [ "$mode" = good ] && return 0
+    jw_build_profiles "$fx" > "$TMPDIR/jw_new.txt"
+    JW_DIRTY=1
+    if ! jw_put "$TMPDIR/jw_new.txt" "$JW_PROF"; then
+        fail "fixture $fx: PROFILES could not be written"
+        return 1
+    fi
+    if [ "$JW_RELOAD" = console ]; then
+        $FTPD_CONSOLE "S RAKFPROF" > "$TMPDIR/jw_tso.out" 2>&1
+    else
+        jw_proc RAKFPROF
+    fi
+    if [ "$mode" = bad ]; then
+        grep -q 'RAKFPROF4  PERMIT RECORD WITHOUT UNIVERSAL ACCESS RECORD' "$TMPDIR/jw_tso.out"
+        return
+    fi
+    if grep -q 'RAKFPROF7  RAKF PROFILES UPDATED' "$TMPDIR/jw_tso.out"; then
+        JW_CUR="$fx"
+        return 0
+    fi
+    fail "fixture $fx: the reload (RAKFPROF) did not report RAKFPROF7"
+    grep 'RAKFPROF' "$TMPDIR/jw_tso.out" | head -5 | sed 's/^/    /'
+    return 1
+}
+
+# Put the files back and delete the test users.  Safe to call twice.
+jw_restore() {
+    [ "$JW_DIRTY" = 1 ] || return 0
+    JW_DIRTY=0
+    local u cmds="" ok=1
+    jw_put "$JW_PROF_ORIG" "$JW_PROF" || ok=0
+    if [ "$JW_USERS_MADE" = 1 ]; then
+        for u in $(jw_users); do cmds="${cmds}DELUSER $u\n"; done
+        printf '%b' "$cmds" | jw_tso "RAKFUSER RAKFPROF" || ok=0
+    else
+        jw_proc RAKFPROF || ok=0
+    fi
+    jw_get "$JW_PROF" "$TMPDIR/jw_profiles.now" || ok=0
+    jw_get "$JW_USRS" "$TMPDIR/jw_users.now" || ok=0
+    if [ $ok = 1 ] && cmp -s "$JW_PROF_ORIG" "$TMPDIR/jw_profiles.now" \
+       && cmp -s "$JW_USERS_ORIG" "$TMPDIR/jw_users.now"; then
+        pass "the fixtures are removed: PROFILES and USERS are as they were"
+    else
+        fail "the fixtures could not be removed: restore SYS1.SECURE.CNTL(PROFILES) and (USERS) by hand"
+        diff "$JW_PROF_ORIG" "$TMPDIR/jw_profiles.now" | head -5 | sed 's/^/    /'
+        diff "$JW_USERS_ORIG" "$TMPDIR/jw_users.now" | head -5 | sed 's/^/    /'
+    fi
+    JW_CUR=""
+}
+cleanup() { jw_restore; rm -rf "$TMPDIR"; }
+
+jw_users() { echo $JW_TABLE | tr ' ' '\n' | cut -d: -f1; }
+
+# --------------------------------------------------------------------
+# Jobs and what a session sees
+# --------------------------------------------------------------------
+# $1 owner, $2 jobname: submit a job of that owner and wait for OUTPUT.
+# The job ID is left in JW_NEWID (empty on failure).
+jw_newjob() {
+    local owner="$1" name="$2" n=0
+    JW_NEWID=""
+    {
+        echo "//$name JOB (ACCT),'FTPD 90',CLASS=A,MSGCLASS=X"
+        echo "//S1 EXEC PGM=IEFBR14"
+    } > "$TMPDIR/jw_new.jcl"
+    jw_ftp "$owner" "site filetype=jes
+type ascii
+put $TMPDIR/jw_new.jcl jw_new.jcl"
+    JW_NEWID=$(grep -o 'JOB[0-9][0-9][0-9][0-9][0-9]' "$JW_OUT" | head -1)
+    [ -n "$JW_NEWID" ] || return 1
+    while [ $n -lt 45 ]; do
+        jw_ftp "$owner" "site filetype=jes
+--
+ls"
+        jw_seg 3 | grep -q "$JW_NEWID .*OUTPUT" && return 0
+        sleep 2
+        n=$((n + 1))
+    done
+    return 1
+}
+
+# Is job $2 in the default listing of $1?
+jw_present() {
+    jw_ftp "$1" "site filetype=jes
+--
+ls"
+    jw_seg 3 | grep -qw "$2"
+}
+
+# One probe of job $2 by user $1, with the owner filter $3 (may be empty).
+# Sets JT_OWN (reply code of SITE JESOWNER), JT_L (listed), JT_R (RETR gave
+# data), JT_J (LIST of the job gave data) and JT_CLASS: ALLOW, HIDE or MIXED.
+jw_try() {
+    local u="$1" id="$2" f="$3" own=""
+    [ -n "$f" ] && own="site jesowner=$f"
+    rm -f "$TMPDIR/jw_got"
+    jw_ftp "$u" "site filetype=jes
+type ascii
+--
+$own
+--
+ls
+--
+get $id $TMPDIR/jw_got
+--
+ls $id -"
+    JT_OWN=""
+    if [ "$JW_LOGIN" = 0 ]; then JT_CLASS=NOLOGIN; JT_L=0; JT_R=0; JT_J=0; return; fi
+    [ -n "$f" ] && JT_OWN=$(jw_seg 3 | grep -o '^[0-9][0-9][0-9]' | tail -1)
+    JT_L=0; JT_R=0; JT_J=0
+    jw_seg 4 | grep -qw "$id" && JT_L=1
+    if [ -s "$TMPDIR/jw_got" ] && ! jw_seg 5 | grep -q '^550'; then JT_R=1; fi
+    if jw_seg 6 | grep -q '^250' && ! jw_seg 6 | grep -q '^550'; then JT_J=1; fi
+    if [ $JT_L$JT_R$JT_J = 111 ]; then JT_CLASS=ALLOW
+    elif [ $JT_L$JT_R$JT_J = 000 ]; then JT_CLASS=HIDE
+    else JT_CLASS=MIXED; fi
+}
+
+# jw_expect USER ID FILTER EXPECT LABEL
+jw_expect() {
+    jw_try "$1" "$2" "$3"
+    if [ "$JT_CLASS" = "$4" ]; then
+        pass "$5"
+    else
+        fail "$5: expected $4, got $JT_CLASS (listed=$JT_L retr=$JT_R list-job=$JT_J jesowner=${JT_OWN:--})"
+    fi
+}
+
+# jw_m USER FILTER LABEL KEY:EXPECT ... : one probe per job KEY of JID.
+jw_m() {
+    local u="$1" f="$2" label="$3" pair key exp
+    shift 3
+    for pair in "$@"; do
+        key="${pair%%:*}"; exp="${pair##*:}"
+        jw_expect "$u" "${JID[$key]}" "$f" "$exp" "$label: $key -> $exp"
+    done
+}
+
+# SITE JESOWNER=$2 as user $1: reply code in JW_OC, text in JW_OT.
+jw_owner() {
+    jw_ftp "$1" "site filetype=jes
+--
+site jesowner=$2"
+    JW_OT=$(jw_seg 3 | grep '^[0-9][0-9][0-9]' | tail -1 | tr -d '\r')
+    JW_OC="${JW_OT%% *}"
+    [ "$JW_LOGIN" = 0 ] && JW_OC=NOLOGIN
+}
+
+# jw_owner_is USER VALUE CODE LABEL
+jw_owner_is() {
+    jw_owner "$1" "$2"
+    if [ "$JW_OC" = "$3" ]; then pass "$4"; else fail "$4: expected $3, got '$JW_OT'"; fi
+}
+
+# DELE of job $2 by $1: OK, NOCANCEL, HIDE or OTHER in JW_DEL.
+jw_del() {
+    jw_ftp "$1" "site filetype=jes
+--
+delete $2"
+    local r
+    r=$(jw_seg 3 | grep '^[0-9][0-9][0-9]' | tail -1)
+    [ "$JW_LOGIN" = 0 ] && r="NOLOGIN"
+    case "$r" in
+    250\ Cancel\ successful*)        JW_DEL=OK ;;
+    550\ Access\ denied*cannot\ cancel*) JW_DEL=NOCANCEL ;;
+    550\ Jobid*not\ found*)          JW_DEL=HIDE ;;
+    *)                               JW_DEL=OTHER ;;
+    esac
+}
+
+# jw_dele_case ACTOR OWNER EXPECT LABEL: a fresh job of OWNER, deleted by ACTOR.
+JW_DCNT=0
+jw_dele_case() {
+    local actor="$1" owner="$2" exp="$3" label="$4" id gone=1 want
+    JW_DCNT=$((JW_DCNT + 1))
+    if ! jw_newjob "$owner" "JWD$JW_DCNT"; then
+        fail "$label: could not make a job for $owner"
+        return
+    fi
+    id="$JW_NEWID"
+    jw_del "$actor" "$id"
+    jw_present "$owner" "$id" && gone=0
+    want=0; [ "$exp" = OK ] && want=1
+    if [ "$JW_DEL" = "$exp" ] && [ $gone = $want ]; then
+        pass "$label: DELE $exp, job $([ $gone = 1 ] && echo gone || echo kept)"
+    else
+        fail "$label: expected $exp, got $JW_DEL (job $([ $gone = 1 ] && echo gone || echo kept))"
+    fi
+    [ $gone = 0 ] && jw_del "$owner" "$id"
+    return 0
+}
+
+# Job IDs the default listing (or the owner filter $2) of $1 shows.
+jw_ids() {
+    local own=""
+    [ -n "$2" ] && own="site jesowner=$2"
+    jw_ftp "$1" "site filetype=jes
+--
+$own
+--
+ls"
+    jw_seg 4 | awk '$2 ~ /^(JOB|STC|TSU)[0-9][0-9][0-9][0-9][0-9]$/ { print $2 }'
+}
+
+# Does the default listing of $1 show only jobs of $1 (and at least one)?
+jw_only_own() {
+    jw_ftp "$1" "site filetype=jes
+--
+ls"
+    jw_seg 3 | awk -v u="$1" '
+        $2 ~ /^(JOB|STC|TSU)[0-9][0-9][0-9][0-9][0-9]$/ { n++; if ($3 != u) bad++ }
+        END { exit !(n > 0 && bad == 0) }'
+}
+
+# Byte-exact reply lines of one command in a session, job IDs normalised.
+jw_reply() {   # user "setup" "command"
+    jw_ftp "$1" "site filetype=jes
+type ascii
+$2
+--
+$3"
+    jw_seg 3 | grep '^[0-9][0-9][0-9]' | sed 's/\(JOB\|STC\|TSU\)[0-9][0-9][0-9][0-9][0-9]/XXXnnnnn/g'
+}
+
+# One job per user in JID; with "missing" only those that are gone (a
+# server without the policy lets the wildcard DELE of Fall 8 remove them all).
+jw_mkjobs() {
+    local u
+    jw_mk IBMUSER "$JW_ME" JWIBM90 "$1"
+    for u in $(jw_users); do
+        if [ "$u" = ABCDEFG ]; then
+            jw_mk PRODX "$u" PRODX "$1"
+            jw_mk TESTX "$u" TESTX "$1"
+        else
+            jw_mk "$u" "$u" "J$u" "$1"
+        fi
+    done
+}
+jw_mk() {   # key owner jobname [missing]
+    if [ "$4" = missing ] && [ -n "${JID[$1]}" ] && jw_present "$2" "${JID[$1]}"; then
+        return 0
+    fi
+    jw_newjob "$2" "$3" && JID[$1]="$JW_NEWID"
+}
+
+# --------------------------------------------------------------------
+# Setup: the saved originals, the test users, one job each
+# --------------------------------------------------------------------
+JW_SETUP=0
+if [ "$JW_READY" = 1 ]; then
+    if jw_get "$JW_PROF" "$JW_PROF_ORIG" && jw_get "$JW_USRS" "$JW_USERS_ORIG"; then
+        JW_SETUP=1
+    else
+        fail "setup: PROFILES and USERS of the RAKF administrator cannot be read ($JW_PROF)"
+    fi
+fi
+if [ "$JW_SETUP" = 1 ] && grep -q '^JESSPOOL' "$JW_PROF_ORIG"; then
+    fail "setup: PROFILES already has JESSPOOL lines; the test needs a clean container"
+    JW_SETUP=0
+fi
+if [ "$JW_SETUP" = 1 ]; then
+    for u in $(jw_users); do
+        if grep -q "^$u " "$JW_USERS_ORIG"; then
+            fail "setup: user $u exists already; the test needs a clean container"
+            JW_SETUP=0
+        fi
+    done
+fi
+if [ "$JW_SETUP" = 1 ] && ! jw_make_base; then
+    fail "setup: PROFILES has no FACILITY FTPAUTH line for ADMIN to extend"
+    JW_SETUP=0
+fi
+
+if [ "$JW_SETUP" = 1 ]; then
+    JW_DIRTY=1
+    JW_USERS_MADE=1
+    jw_fx 0 || JW_SETUP=0
+fi
+if [ "$JW_SETUP" = 1 ]; then
+    for e in $JW_TABLE; do
+        IFS=: read -r u d c o <<< "$e"
+        echo "ADDUSER $u PASSWORD($JW_PW) DFLTGRP($d)${c:+ GROUP($c)}${o:+ $o}"
+    done | jw_tso RAKFUSER
+    if ! grep -q 'RAKFUIDS4  USER TABLE UPDATED' "$TMPDIR/jw_tso.out"; then
+        fail "setup: the users could not be added (RAKFUIDS4 not reported)"
+        grep -i 'ADDUSER\|RAKFUIDS' "$TMPDIR/jw_tso.out" | head -8 | sed 's/^/    /'
+        JW_SETUP=0
+    fi
+fi
+if [ "$JW_SETUP" = 1 ]; then
+    for u in $(jw_users); do
+        jw_ftp "$u" "pwd"
+        [ "$JW_LOGIN" = 1 ] || JW_SETUP=0
+    done
+    [ "$JW_SETUP" = 1 ] && pass "setup: the $(jw_users | wc -l | tr -d ' ') test users exist and log in"
+fi
+
+JW_STC_OUT=0
+if [ "$JW_SETUP" = 1 ]; then
+    JW_NOOWN_NAME="JWO$(( (RANDOM % 90000) + 10000 ))"
+    if [ -n "$FTPD_RDR" ]; then
+        (   exec 7<>"/dev/tcp/${FTPD_RDR%:*}/${FTPD_RDR#*:}" &&
+            printf '//%s JOB (ACCT),NOOWNER,CLASS=A,MSGCLASS=X\n//S1 EXEC PGM=IEFBR14\n' \
+                "$JW_NOOWN_NAME" >&7 ) 2>/dev/null
+    fi
+    jw_mkjobs
+    for u in IBMUSER $(jw_users | grep -vx ABCDEFG) PRODX TESTX; do
+        [ -n "${JID[$u]}" ] || { fail "setup: no job for $u"; JW_SETUP=0; }
+    done
+
+    # The job IDs of the STC and of the job without owner: found by an
+    # administrator under fixture D, which shows everything.
+    jw_fx D || JW_SETUP=0
+    jw_ids ADMA '*' > "$TMPDIR/jw_all.ids"
+    jw_seg 4 > "$TMPDIR/jw_all.rows"
+    JID[STC]=$(awk '$2 ~ /^STC[0-9]+$/ && $3 == "SYSTEM" && /OUTPUT/ { print $2; exit }' "$TMPDIR/jw_all.rows")
+    if [ -n "${JID[STC]}" ]; then
+        JW_STC_OUT=1
+    else
+        JID[STC]=$(awk '$2 ~ /^STC[0-9]+$/ && $3 == "SYSTEM" { print $2; exit }' "$TMPDIR/jw_all.rows")
+    fi
+    JID[NOOWN]=$(awk -v n="$JW_NOOWN_NAME" '$1 == n { print $2; exit }' "$TMPDIR/jw_all.rows")
+    info "jobs: STC ${JID[STC]:-none} (finished: $JW_STC_OUT), no owner ${JID[NOOWN]:-none}"
+    [ -n "${JID[STC]}" ] || jw_skip "an STC owned by SYSTEM was not found: the STC checks"
+    [ -n "${JID[NOOWN]}" ] || jw_skip "FTPD_RDR is not set or the reader job did not appear: the checks of the job without owner"
+fi
+[ "$JW_SETUP" = 1 ] || { [ "$JW_READY" = 1 ] && fail "Test 18: the setup failed, the cases did not run"; }
+
+# jw_m with keys that exist.
+jw_have() {   # key...: true if all have an id
+    local k
+    for k in "$@"; do [ -n "${JID[$k]}" ] || return 1; done
+}
+
+# --------------------------------------------------------------------
+# Proof of the examples: the command sequence of 3.3 writes the 3.3 lines
+# --------------------------------------------------------------------
+jw_proof() {
+    local ex="$1" got exp
+    exp=$(jw_fx_render "$ex")
+    jw_fx 0 || return
+    jw_fx_cmds "$ex" | jw_tso RAKFPROF
+    JW_CUR=""
+    cp "$TMPDIR/jw_tso.out" "$TMPDIR/jw_proof.out"
+    jw_get "$JW_PROF" "$TMPDIR/jw_proof.prof"
+    got=$(grep '^JESSPOOL' "$TMPDIR/jw_proof.prof")
+    if [ "$got" = "$exp" ]; then
+        pass "Proof $ex: the command sequence writes the lines of the example"
+        return
+    fi
+    jw_finding "Proof $ex: the command sequence of plan 3.3 does not write the lines of the example"
+    grep 'RDEFINE:\|PERMIT:\|RAKFPROF[0-9]' "$TMPDIR/jw_proof.out" | sort | uniq -c | head -6 | sed 's/^/    /'
+    echo "    expected:"; echo "$exp" | sed 's/^/      /'
+    echo "    written:";  echo "$got" | sed 's/^/      /'
+    # With the universal line written by hand and the remaining commands:
+    jw_fx "U-$ex" || return
+    jw_fx_cmds "$ex" | tail -n +2 | jw_tso RAKFPROF
+    JW_CUR=""
+    jw_get "$JW_PROF" "$TMPDIR/jw_proof.prof"
+    got=$(grep '^JESSPOOL' "$TMPDIR/jw_proof.prof")
+    if [ "$got" = "$exp" ]; then
+        info "Proof $ex: with the universal line written by hand, the other commands write the lines of the example"
+    else
+        info "Proof $ex: even with the universal line written by hand, the commands do not write the lines"
+        echo "$got" | sed 's/^/      /'
+    fi
+}
+
+if [ "$JW_SETUP" = 1 ]; then
+    for ex in A B D E F; do jw_proof "$ex"; done
+fi
+
+# Runs a block only if the setup worked.
+if [ "$JW_SETUP" = 1 ]; then
+
+# ============================================================
+# Fall 1: empty JESSPOOL class (regression M3, release blocker)
+# ============================================================
+jw_fx 0
+jw_expect "$JW_ME" "${JID[IBMUSER]}" "" ALLOW "Fall 1: the own job is read and listed"
+for k in JWN0 STC NOOWN; do
+    jw_have "$k" && jw_expect "$JW_ME" "${JID[$k]}" "" HIDE "Fall 1: the job $k of someone else is hidden"
+done
+jw_only_own "$JW_ME" && pass "Fall 1: LIST shows only the own jobs" \
+                     || fail "Fall 1: LIST shows jobs of others"
+jw_owner_is "$JW_ME" '*' 501 "Fall 1: SITE JESOWNER=* is refused"
+JW1_TEXT="$JW_OT"
+jw_owner_is "$JW_ME" "$JW_ME" 200 "Fall 1: SITE JESOWNER=<own> is accepted"
+jw_dele_case "$JW_ME" JWN0 HIDE "Fall 1: DELE of a foreign job"
+jw_dele_case "$JW_ME" "$JW_ME" OK "Fall 1: DELE of an own job"
+info "Fall 1 report: RAKF $JW_RAKF, libc370 ${JW_LIBC:-unknown}, image ${FTPD_IMAGE:-unknown}"
+
+# ============================================================
+# Fall 8 (M1): a job ID is matched exactly
+# ============================================================
 JW_JCL="$TMPDIR/jw_job.jcl"
 cat > "$JW_JCL" << 'JCLEOF'
 //FTPD90A  JOB (ACCT),'FTPD 90',CLASS=A,MSGCLASS=X
@@ -2344,13 +3070,13 @@ JW_ID2=$(jw_submit)
 if [ -n "$JW_ID1" ] && [ -n "$JW_ID2" ] && [ "$JW_ID1" != "$JW_ID2" ] \
    && jw_wait_output "$JW_ID1" && jw_wait_output "$JW_ID2"; then
     pass "Fall 8: two jobs of the user are in OUTPUT ($JW_ID1, $JW_ID2)"
-    JW_READY=1
+    JW8_OK=1
 else
     fail "Fall 8: could not set up two finished jobs (got '$JW_ID1' '$JW_ID2')"
-    JW_READY=0
+    JW8_OK=0
 fi
 
-if [ "$JW_READY" = 1 ]; then
+if [ "$JW8_OK" = 1 ]; then
     JW_PREFIX="${JW_ID1%???}"          # JOBnn of JOBnnnnn
     JW_SHORT="JOB$((10#${JW_ID1#JOB}))"                      # without the zeros
     JW_LOWER=$(echo "${JW_PREFIX}*" | tr '[:upper:]' '[:lower:]')
@@ -2421,6 +3147,379 @@ site filetype=seq" "$TMPDIR/jw_case.log"
         fail "Fall 8: DELE with the exact ID left a job"
         tail -4 "$TMPDIR/jw_case.log" | sed 's/^/    /'
     fi
+fi
+
+
+jw_mkjobs missing
+
+# ============================================================
+# Fall 2: "*" NONE, a user without a permit (variant 3)
+# ============================================================
+jw_fx N
+jw_expect JWN0 "${JID[JWN0]}" "" ALLOW "Fall 2: the own job is read and listed"
+for k in OWNX IBMUSER STC NOOWN; do
+    jw_have "$k" || continue
+    jw_expect JWN0 "${JID[$k]}" "" HIDE "Fall 2: the job $k of someone else is hidden"
+done
+jw_have NOOWN && jw_expect JWN0 "${JID[NOOWN]}" "" HIDE "Fall 7: the job without owner is hidden without READ on *"
+jw_only_own JWN0 && pass "Fall 2: LIST shows only the own jobs" || fail "Fall 2: LIST shows jobs of others"
+jw_dele_case JWN0 OWNX HIDE "Fall 2: DELE of a foreign job"
+jw_dele_case JWN0 JWN0 OK "Fall 2: DELE of an own job"
+
+# ============================================================
+# Fall 9: NLST, abbreviations, invalid owners, the same 501
+# ============================================================
+jw_ftp AUDU "site filetype=jes
+--
+nlist"
+if jw_seg 3 | grep -qw "${JID[JWN0]}"; then fail "Fall 9: NLST lists a job of someone else"
+else pass "Fall 9: NLST shows no job of someone else"; fi
+jw_owner_is JWN0 '*' 501 "Fall 9: SITE JESOWNER=* without READ is refused"
+JW9_TEXT="$JW_OT"
+if [ "$JW9_TEXT" = "$JW1_TEXT" ]; then
+    pass "Fall 9: the 501 text is the same for 'no READ' and 'no profile'"
+else
+    fail "Fall 9: the 501 text differs ('$JW9_TEXT' / '$JW1_TEXT')"
+fi
+jw_owner_is JWN0 '*' 501 "Fall 9: JESOWNER=* repeated"
+jw_ftp JWN0 "site filetype=jes
+--
+site jeso=*"
+JW_OT=$(jw_seg 3 | grep '^[0-9][0-9][0-9]' | tail -1)
+case "$JW_OT" in 501*) pass "Fall 9: SITE JESO=* (abbreviation) is refused" ;;
+                 *)    fail "Fall 9: SITE JESO=* gave '$JW_OT'" ;; esac
+for v in ABCDEFGHI A.B 'AB%' 'ABC*'; do
+    jw_owner_is JWN0 "$v" 501 "Fall 9: JESOWNER=$v is refused, not cut to 8"
+done
+jw_owner_is JWN0 '' 200 "Fall 9: an empty JESOWNER resets"
+
+# ============================================================
+# Fall 10: login in lower case
+# ============================================================
+JW_ME_L=$(echo "$JW_ME" | tr '[:upper:]' '[:lower:]')
+jw_expect "$JW_ME_L" "${JID[IBMUSER]}" "" ALLOW "Fall 10: after a lower-case login the own job is visible"
+
+# ============================================================
+# Fall 15: OWNX against OWNX2, no profile
+# ============================================================
+jw_fx 0
+jw_expect OWNX  "${JID[OWNX]}"  "" ALLOW "Fall 15: OWNX sees its own job"
+jw_expect OWNX2 "${JID[OWNX2]}" "" ALLOW "Fall 15: OWNX2 sees its own job"
+jw_expect OWNX  "${JID[OWNX2]}" "" HIDE  "Fall 15: OWNX does not see the job of OWNX2"
+jw_expect OWNX2 "${JID[OWNX]}"  "" HIDE  "Fall 15: OWNX2 does not see the job of OWNX"
+jw_dele_case OWNX OWNX2 HIDE "Fall 15: DELE of the job of OWNX2 by OWNX"
+
+# ============================================================
+# Fall 16: the 550 is the same, byte for byte
+# ============================================================
+jw_fx N
+SETUP0="type ascii"
+SETUP1="type ascii
+site jesstatus=ACTIVE"
+HID="${JID[OWNX]}"; MINE="${JID[JWN0]}"; NONE=JOB99999
+for c in "get %s $TMPDIR/jw_got16" "delete %s" "ls %s -"; do
+    cmd0=$(printf "$c" "$HID");  cmdN=$(printf "$c" "$NONE"); cmdM=$(printf "$c" "$MINE")
+    word=${c%% *}
+    jw_reply JWN0 "$SETUP0" "$cmd0" > "$TMPDIR/jw_16_h0"
+    jw_reply JWN0 "$SETUP0" "$cmdN" > "$TMPDIR/jw_16_n0"
+    jw_reply JWN0 "$SETUP1" "$cmd0" > "$TMPDIR/jw_16_h1"
+    jw_reply JWN0 "$SETUP1" "$cmdM" > "$TMPDIR/jw_16_m1"
+    jw_reply JWN0 "$SETUP1" "$cmdN" > "$TMPDIR/jw_16_n1"
+    if grep -q '^550 Jobid XXXnnnnn not found' "$TMPDIR/jw_16_h0" \
+       && cmp -s "$TMPDIR/jw_16_h0" "$TMPDIR/jw_16_n0"; then
+        pass "Fall 16: $word hidden job and missing job give the same bytes"
+    else
+        fail "Fall 16: $word hidden job and missing job differ"
+        sed 's/^/    hidden:  /' "$TMPDIR/jw_16_h0"; sed 's/^/    missing: /' "$TMPDIR/jw_16_n0"
+    fi
+    if cmp -s "$TMPDIR/jw_16_h1" "$TMPDIR/jw_16_m1" && cmp -s "$TMPDIR/jw_16_h1" "$TMPDIR/jw_16_n1" \
+       && grep -q '^550 Jobid XXXnnnnn not found' "$TMPDIR/jw_16_h1"; then
+        pass "Fall 16: $word hidden job, other status and missing job give the same bytes"
+    else
+        fail "Fall 16: $word hidden job, other status and missing job differ"
+        sed 's/^/    hidden:  /' "$TMPDIR/jw_16_h1"; sed 's/^/    status:  /' "$TMPDIR/jw_16_m1"
+        sed 's/^/    missing: /' "$TMPDIR/jw_16_n1"
+    fi
+done
+jw_present JWN0 "${JID[JWN0]}" && jw_present OWNX "${JID[OWNX]}" \
+    && pass "Fall 16: no job is gone after the refused requests" \
+    || fail "Fall 16: a job is gone after the refused requests"
+
+# ============================================================
+# Fall 3: a profile OWNX.* with READ
+# ============================================================
+jw_fx 3
+jw_owner_is RDOU OWNX 200 "Fall 3: JESOWNER=OWNX is accepted with READ"
+jw_expect RDOU "${JID[OWNX]}" OWNX ALLOW "Fall 3: LIST and RETR of the job of OWNX"
+jw_owner_is RDOU '*' 501 "Fall 3: JESOWNER=* is refused (no READ on the universal profile)"
+jw_expect RDOU "${JID[JWN0]}" JWN0 HIDE "Fall 3: the job of JWN0 stays hidden"
+jw_dele_case RDOU OWNX NOCANCEL "Fall 3: DELE with READ only"
+jw_expect JWN0 "${JID[OWNX]}" OWNX HIDE "Fall 3: a user outside RDOW does not see the job of OWNX"
+
+# ============================================================
+# Fall 4: "*" READ for the auditor
+# ============================================================
+jw_fx 4
+jw_owner_is AUDU '*' 200 "Fall 4: JESOWNER=* is accepted with READ on the universal profile"
+jw_m AUDU '*' "Fall 4" JWN0:ALLOW OWNX:ALLOW IBMUSER:ALLOW
+jw_have STC && jw_expect AUDU "${JID[STC]}" '*' ALLOW "Fall 4: the STC job of SYSTEM is visible without SYSTEM.*"
+jw_have NOOWN && jw_expect AUDU "${JID[NOOWN]}" '*' ALLOW "Fall 7: the job without owner is visible with READ on *"
+jw_dele_case AUDU OWNX NOCANCEL "Fall 4: DELE with READ only"
+jw_ftp AUDU "site filetype=jes
+--
+site jesowner=*
+--
+nlist"
+jw_seg 4 | grep -qw "${JID[JWN0]}" && pass "Fall 9: NLST shows what LIST shows" \
+                                   || fail "Fall 9: NLST does not show the job of JWN0"
+
+# ============================================================
+# Fall 5: UPDATE and ALTER
+# ============================================================
+jw_fx 5
+jw_dele_case OPSX OWNX OK "Fall 5: UPDATE deletes a foreign job"
+jw_dele_case ALTU OWNX OK "Fall 5: ALTER deletes a foreign job"
+jw_dele_case OPSX OPSX OK "Fall 5: the own job is deleted despite OPSX.* READ"
+jw_dele_case JWN0 OWNX HIDE "Fall 5: a user with no permit does not delete a foreign job"
+
+# ============================================================
+# Fall 6: ABC.* against the owner ABCD
+# ============================================================
+jw_fx 6
+jw_expect AUDU "${JID[ABC]}" ABC ALLOW "Fall 6: ABC.* with READ shows the job of ABC"
+jw_expect AUDU "${JID[ABCD]}" ABCD HIDE "Fall 6: ABC.* does not show the job of ABCD"
+jw_owner_is AUDU ABCD 501 "Fall 6: JESOWNER=ABCD is refused"
+jw_expect ABC "${JID[ABC]}" "" ALLOW "Fall 6: ABC sees its own job"
+jw_dele_case ABC ABC OK "Fall 6: ABC deletes its own job"
+jw_dele_case AUDU ABCD HIDE "Fall 6: DELE of the job of ABCD"
+
+# ============================================================
+# Fall 12: NONE for a group
+# ============================================================
+jw_fx 12
+jw_expect NOBU "${JID[NOBU]}" "" ALLOW "Fall 12: NOBG blocks the member only for foreign jobs: own job visible"
+jw_expect NOBU "${JID[OWNX]}" OWNX HIDE "Fall 12: the NOBG member does not see foreign jobs"
+jw_expect JWN0 "${JID[OWNX]}" OWNX ALLOW "Fall 12: a non-member reads foreign jobs"
+jw_dele_case NOBU NOBU OK "Fall 12: the NOBG member deletes the own job"
+jw_dele_case JWN0 OWNX NOCANCEL "Fall 12: a reader does not delete"
+
+# ============================================================
+# Fall 13: invalid characters in an owner
+# ============================================================
+jw_skip "Fall 13: the container cannot produce an owner with invalid characters (covered by TSTJWN)"
+
+# ============================================================
+# Fall 14: two jobs with the same 8-character prefix (hard condition for the cache)
+# ============================================================
+jw_fx 14
+JW_F0=$FAILED
+jw_m AUDU ABCDEFG "Fall 14" PRODX:ALLOW TESTX:ALLOW
+if [ "$FAILED" = "$JW_F0" ]; then
+    pass "Fall 14: PRODX and TESTX get the same level (W = 8); the cache may follow (N5)"
+else
+    fail "Fall 14: the two jobs are treated differently; there is no cache (N5)"
+fi
+
+# ============================================================
+# Fall 17: STC logs with and without the SYSTEM.* line
+# ============================================================
+if jw_have STC; then
+    jw_fx A
+    jw_expect AUDU "${JID[STC]}" '*' HIDE  "Fall 17: example A hides the STC job from the auditor"
+    jw_expect AUDU "${JID[JWN0]}" '*' ALLOW "Fall 17: example A shows other jobs to the auditor"
+    jw_fx B
+    jw_expect JWN0 "${JID[STC]}" '*' HIDE  "Fall 17: example B hides the STC job from the reader"
+    jw_fx Bn
+    jw_expect JWN0 "${JID[STC]}" '*' ALLOW "Fall 17: without the SYSTEM.* line the STC job is visible"
+else
+    jw_fx B
+fi
+jw_dele_case JWN0 OWNX NOCANCEL "Fall 17: example B, a reader does not delete"
+jw_dele_case OPSX OWNX OK "Fall 17: example B, OPS deletes"
+
+# ============================================================
+# Fall 19: D, the first target configuration
+# ============================================================
+jw_fx D
+for a in ADMA ADMB; do
+    jw_owner_is $a '*' 200 "Fall 19: $a may use JESOWNER=*"
+    jw_m $a '*' "Fall 19 ($a)" IBMUSER:ALLOW JWN0:ALLOW MIKE10:ALLOW
+    jw_have STC && jw_expect $a "${JID[STC]}" '*' ALLOW "Fall 19 ($a): the STC job is visible"
+    jw_have NOOWN && jw_expect $a "${JID[NOOWN]}" '*' ALLOW "Fall 19 ($a): the job without owner is visible"
+done
+jw_dele_case ADMA OWNX OK "Fall 19: ADMA (default group ADMIN) deletes a foreign job"
+jw_dele_case ADMB JWN0 OK "Fall 19: ADMB (ADMIN only connected) deletes a foreign job"
+jw_expect OPSU "${JID[OPSU]}" "" ALLOW "Fall 19: OPERATIONS sees the own job"
+jw_expect OPSU "${JID[JWN0]}" JWN0 HIDE "Fall 19: OPERATIONS is no bypass"
+jw_dele_case OPSU OWNX HIDE "Fall 19: OPERATIONS does not delete a foreign job"
+jw_dele_case OPSU OPSU OK "Fall 19: OPERATIONS deletes the own job"
+# Fall 8, wildcard DELE with the right to delete.
+jw_ids ADMA '*' > "$TMPDIR/jw_ids.before"
+jw_ftp ADMA "site filetype=jes
+--
+delete JOB*
+--
+delete job*
+--
+delete *"
+jw_ids ADMA '*' > "$TMPDIR/jw_ids.after"
+JW_W=1
+for n in 3 4 5; do jw_seg $n | grep -q '^550' || JW_W=0; done
+if [ $JW_W = 1 ] && cmp -s "$TMPDIR/jw_ids.before" "$TMPDIR/jw_ids.after"; then
+    pass "Fall 8: DELE JOB*, job* and * by an administrator are refused and remove no job"
+else
+    fail "Fall 8: DELE JOB* by an administrator was not refused or changed the job list"
+fi
+jw_mkjobs missing
+
+# ============================================================
+# Fall 20: E, the second target configuration
+# ============================================================
+jw_fx E
+jw_owner_is JWN0 '*' 200 "Fall 20: D may use JESOWNER=*"
+jw_expect JWN0 "${JID[OWNX]}" '*' ALLOW "Fall 20: D reads a foreign job"
+jw_dele_case JWN0 OWNX NOCANCEL "Fall 20: D does not delete a foreign job"
+jw_dele_case JWN0 JWN0 OK "Fall 20: D deletes the own job"
+jw_dele_case ADMA OWNX OK "Fall 20: ADMA deletes a foreign job"
+jw_have STC && jw_expect JWN0 "${JID[STC]}" '*' HIDE "Fall 20: the STC job is hidden from D"
+jw_have STC && jw_expect ADMA "${JID[STC]}" '*' HIDE "Fall 20: the STC job is hidden from ADMA"
+if jw_have STC; then
+    jw_fx E2
+    jw_expect ADMA "${JID[STC]}" '*' ALLOW "Fall 20: with the ADMIN line in SYSTEM.* ADMA sees the STC job"
+    jw_expect JWN0 "${JID[STC]}" '*' HIDE "Fall 20: with the ADMIN line D still does not"
+fi
+
+# ============================================================
+# Fall 18 and 21: the pair MIKE1/MIKE2 and the prefix trap
+# ============================================================
+jw_fx F
+jw_expect MIKE1 "${JID[MIKE1]}" "" ALLOW "Fall 18: MIKE1 sees its own job"
+jw_expect MIKE1 "${JID[MIKE10]}" MIKE10 HIDE "Fall 18: MIKE1.* does not reach MIKE10"
+jw_expect MIKE10 "${JID[MIKE10]}" "" ALLOW "Fall 18: MIKE10 sees its own job"
+jw_expect MIKE10 "${JID[MIKE1]}" MIKE1 HIDE "Fall 18: MIKE10 does not see the job of MIKE1"
+jw_dele_case MIKE1 MIKE10 HIDE "Fall 18: DELE of the job of MIKE10 by MIKE1"
+jw_dele_case MIKE10 MIKE1 HIDE "Fall 18: DELE of the job of MIKE1 by MIKE10"
+jw_expect MIKE1 "${JID[MIKE2]}" MIKE2 ALLOW "Fall 21: MIKE1 reads the job of MIKE2"
+jw_expect MIKE2 "${JID[MIKE1]}" MIKE1 ALLOW "Fall 21: MIKE2 reads the job of MIKE1"
+jw_dele_case MIKE1 MIKE2 OK "Fall 21: MIKE1 deletes a job of MIKE2"
+jw_dele_case MIKE2 MIKE1 OK "Fall 21: MIKE2 deletes a job of MIKE1"
+jw_dele_case MIKE1 MIKE1 OK "Fall 21: MIKE1 deletes its own job"
+jw_m ADMA '*' "Fall 21 (F)" MIKE1:ALLOW MIKE2:ALLOW MIKE10:ALLOW IBMUSER:ALLOW
+jw_dele_case ADMA MIKE2 OK "Fall 21: ADMA deletes a job of MIKE2"
+jw_fx Fv
+jw_m ADMA '*' "Fall 21 (without ADMIN lines)" MIKE1:HIDE MIKE2:HIDE MIKE10:ALLOW IBMUSER:ALLOW
+jw_have STC && jw_expect ADMA "${JID[STC]}" '*' ALLOW "Fall 21 (without ADMIN lines): the STC job is visible"
+jw_have NOOWN && jw_expect ADMA "${JID[NOOWN]}" '*' ALLOW "Fall 21 (without ADMIN lines): the job without owner is visible"
+jw_expect MIKE1 "${JID[MIKE2]}" MIKE2 ALLOW "Fall 21 (without ADMIN lines): MIKE1 still reads MIKE2"
+jw_expect MIKE2 "${JID[MIKE1]}" MIKE1 ALLOW "Fall 21 (without ADMIN lines): MIKE2 still reads MIKE1"
+
+# ============================================================
+# Fall 11: a changed profile is in effect for the next command
+# ============================================================
+JW_LIVE_OUT="$TMPDIR/jw_live.out"
+jw_live_start() {   # user
+    JW_FIFO="$TMPDIR/jw_fifo"
+    rm -f "$JW_FIFO" "$JW_LIVE_OUT"; mkfifo "$JW_FIFO"
+    ftp -n -v -p -P "$PORT" "$HOST" < "$JW_FIFO" > "$JW_LIVE_OUT" 2>&1 &
+    JW_LIVE_PID=$!
+    exec 8> "$JW_FIFO"
+    printf 'user %s %s\n' "$1" "$JW_PW" >&8
+    jw_live_send "site filetype=jes" > /dev/null
+    jw_live_send "type ascii" > /dev/null
+}
+# Sends a command and prints its replies (up to the next marker).
+jw_live_send() {
+    local k n=0
+    k=$(grep -c '^200 OK' "$JW_LIVE_OUT")
+    printf '%s\nquote NOOP\n' "$1" >&8
+    while [ $n -lt 60 ]; do
+        [ "$(grep -c '^200 OK' "$JW_LIVE_OUT")" -gt "$k" ] && break
+        sleep 1; n=$((n + 1))
+    done
+    awk -v k="$k" '/^200 OK/ { n++; next } n == k { print }' "$JW_LIVE_OUT"
+}
+jw_live_stop() {
+    printf 'quit\n' >&8
+    exec 8>&-
+    wait "$JW_LIVE_PID" 2>/dev/null
+}
+
+jw_live_case() {   # label
+    local r g
+    jw_fx N
+    jw_live_start AUDU
+    r=$(jw_live_send "site jesowner=*" | grep -o '^[0-9][0-9][0-9]' | tail -1)
+    [ "$r" = 501 ] && pass "$1: before the change JESOWNER=* is refused" \
+                   || fail "$1: before the change JESOWNER=* gave '$r'"
+    rm -f "$TMPDIR/jw_got11"
+    jw_live_send "get ${JID[JWN0]} $TMPDIR/jw_got11" > /dev/null
+    [ -s "$TMPDIR/jw_got11" ] && fail "$1: before the change the foreign job was read" \
+                              || pass "$1: before the change the foreign job is not read"
+    jw_fx 4 || fail "$1: the change could not be loaded"
+    r=$(jw_live_send "site jesowner=*" | grep -o '^[0-9][0-9][0-9]' | tail -1)
+    [ "$r" = 200 ] && pass "$1: after the change JESOWNER=* is accepted in the same session" \
+                   || fail "$1: after the change JESOWNER=* gave '$r' in the same session"
+    jw_live_send "get ${JID[JWN0]} $TMPDIR/jw_got11" > /dev/null
+    [ -s "$TMPDIR/jw_got11" ] && pass "$1: after the change the foreign job is read in the same session" \
+                              || fail "$1: after the change the foreign job is still not read"
+    jw_live_stop
+}
+jw_live_case "Fall 11 (batch reload)"
+if [ -n "$FTPD_CONSOLE" ]; then
+    JW_RELOAD=console
+    jw_live_case "Fall 11 (console reload)"
+    JW_RELOAD=batch
+else
+    jw_skip "Fall 11 (console reload): FTPD_CONSOLE is not set"
+fi
+
+# ============================================================
+# Fall 22: a reload without the universal line
+# ============================================================
+jw_broken_case() {   # label
+    jw_fx D
+    jw_expect ADMA "${JID[JWN0]}" '*' ALLOW "$1: before the reload ADMA sees the job"
+    if jw_fx BROKEN bad; then
+        pass "$1: the reload reports RAKFPROF4 PERMIT RECORD WITHOUT UNIVERSAL ACCESS RECORD"
+    else
+        fail "$1: the reload did not report RAKFPROF4 PERMIT RECORD WITHOUT UNIVERSAL ACCESS RECORD"
+        grep 'RAKFPROF' "$TMPDIR/jw_tso.out" | head -4 | sed 's/^/    /'
+    fi
+    JW_CUR=""
+    grep -q 'U0400' "$TMPDIR/jw_tso.out" && pass "$1: the reload ends with ABEND S000 U0400" \
+        || fail "$1: no U0400 in the output of the reload"
+    jw_expect ADMA "${JID[JWN0]}" '*' ALLOW "$1: the old chain stays in effect"
+    jw_fx D && pass "$1: the correct file loads again (RAKFPROF7)" \
+            || fail "$1: the correct file does not load again"
+}
+jw_broken_case "Fall 22 (batch reload)"
+if [ -n "$FTPD_CONSOLE" ]; then
+    JW_RELOAD=console
+    jw_broken_case "Fall 22 (console reload)"
+    JW_RELOAD=batch
+else
+    jw_skip "Fall 22 (console reload): FTPD_CONSOLE is not set"
+fi
+
+# --------------------------------------------------------------------
+# Clean up: every owner removes the own jobs, an administrator the rest
+# --------------------------------------------------------------------
+jw_fx D
+for k in "${!JID[@]}"; do
+    case "$k" in STC) continue ;; esac
+    [ -n "${JID[$k]}" ] || continue
+    jw_del ADMA "${JID[$k]}"
+done
+
+fi   # JW_SETUP
+
+jw_restore
+if [ "$JW_NFIND" -gt 0 ]; then
+    echo -e "\n  ${YELLOW}FINDINGS${NC} (plan, not server): $JW_NFIND$(echo -e "$JW_FINDINGS")"
+    [ "$JW_GATE" = 1 ] && fail "gate: $JW_NFIND finding(s) about the examples of the plan are open"
+fi
+if [ -n "$JW_SKIPPED" ]; then
+    echo -e "\n  ${YELLOW}SKIPPED${NC} cases (for the release notes):$(echo -e "$JW_SKIPPED")"
 fi
 
 # ============================================================

@@ -105,10 +105,11 @@ that line shorter.
 #note[*A defect* (ftpd\#277): FTPD takes the first card of the stream that has
 the word JOB between blanks for the JOB statement, also a comment card. A
 comment such as #cmd("//* RUN THE JOB NOW") before the real JOB statement gets
-the three operands, and the real JOB statement gets none. The job then has no
-owner and runs under the default account of batch jobs. Until a later release
-fixes this, put no card before the JOB statement that has the word JOB between
-blanks, and write no comment with it.]
+the three operands, and the real JOB statement gets none. The job then does not
+run under the identity of the user, and the #cmd("PASSWORD=") card stands
+outside a JOB statement, where JES may print it in the listing of the job. Until
+a later release fixes this, put no card before the JOB statement that has the
+word JOB between blanks, and write no comment with it.]
 
 FTPD does not check the JCL. A JCL error shows in the list of the job
 (@ug-jes-list), as the text #cmd("JCL ERROR") for the job.

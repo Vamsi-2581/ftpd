@@ -51,7 +51,7 @@ call of job_access() satisfies (c) and is not flagged, and a renamed pointer
 to racf_auth() is not seen.  Test 18 (test/test_ftpd.sh) and TSTJWN are the
 proof; this stops the obvious regression.
 
-Usage: tools/check-jes-access.py [mbt.toml]
+Usage: tools/check-jes-access.py   (reads mbt.toml next to tools/)
 """
 import glob
 import os
@@ -171,11 +171,37 @@ def line_of(src, pos):
     return src.count("\n", 0, pos) + 1
 
 
-def check_jes(path):
+def calls(text, name):
+    """Matches of a call to name in stripped text."""
+    return re.finditer(r"\b%s\s*\(" % name, text)
+
+
+def owner_compares(path, src, text, rule):
+    """Findings for a strcmp/strncmp/memcmp with `->owner` among its args."""
+    bad = []
+    for m in re.finditer(r"\b(?:strcmp|strncmp|memcmp)\s*\(", text):
+        args = balanced(text, m.end() - 1)
+        if re.search(r"->\s*owner\b", args):
+            bad.append("%s:%d: owner compared outside ftpd_jwn_mine() "
+                       "(rule %s)" % (path, line_of(src, m.start()), rule))
+    return bad
+
+
+def read_source(path):
     path = os.path.relpath(path)
     with open(path, encoding="utf-8") as f:
         src = f.read()
-    text = strip_noise(src)
+    return path, src, strip_noise(src)
+
+
+def policy_before(body, pos):
+    """Is a call to job_access() or find_job() in body before pos?"""
+    hits = [m.start() for c in POLICY_CALLS for m in calls(body, c)]
+    return bool(hits) and min(hits) < pos
+
+
+def check_jes(path):
+    path, src, text = read_source(path)
     funcs = functions(text)
     names = {n for n, _, _ in funcs}
     bad = []
@@ -185,13 +211,9 @@ def check_jes(path):
             bad.append("%s: function %s not found; the check, or the file, "
                        "has changed shape" % (path, req))
 
-    for m in re.finditer(r"\b(?:strcmp|strncmp|memcmp)\s*\(", text):
-        args = balanced(text, m.end() - 1)
-        if re.search(r"->\s*owner\b", args):
-            bad.append("%s:%d: owner compared outside ftpd_jwn_mine() "
-                       "(rule a)" % (path, line_of(src, m.start())))
+    bad += owner_compares(path, src, text, "a")
 
-    for m in re.finditer(r"\bracf_auth\s*\(", text):
+    for m in calls(text, "racf_auth"):
         owner = [n for n, s, e in funcs if s <= m.start() < e]
         if owner != [AUTH_HULL]:
             bad.append("%s:%d: racf_auth() outside %s() (rule b)"
@@ -201,12 +223,9 @@ def check_jes(path):
         if name in EXEMPT:
             continue
         body = text[start:end]
-        policy = [m.start() for c in POLICY_CALLS
-                  for m in re.finditer(r"\b%s\s*\(" % c, body)]
-        first_policy = min(policy) if policy else None
         for c in GUARDED_CALLS:
-            for m in re.finditer(r"\b%s\s*\(" % c, body):
-                if first_policy is None or first_policy > m.start():
+            for m in calls(body, c):
+                if not policy_before(body, m.start()):
                     bad.append("%s:%d: %s() in %s() before job_access() or "
                                "find_job() (rule c)"
                                % (path, line_of(src, start + m.start()),
@@ -222,15 +241,9 @@ def enclosing(funcs, pos):
     return None
 
 
-def check_other(path):
-    """Rules (d) to (f) for a module source that is neither jes.c nor policy."""
-    path = os.path.relpath(path)
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
-    text = strip_noise(src)
-    funcs = functions(text)
+def spool_api(path, src, text, funcs):
+    """Rule (d): the spool API only in a function that asks the policy."""
     bad = []
-
     for c in SPOOL_ACT + SPOOL_SEE:
         for m in re.finditer(r"\b%s\b" % c, text):
             line = line_of(src, m.start())
@@ -242,30 +255,30 @@ def check_other(path):
                 continue
             name, start, end = fn
             body = text[start:end]
-            checks = [x.start() for x in
-                      re.finditer(r"\b%s\s*\(" % POLICY_CALL, body)]
-            if c in SPOOL_ACT:
-                ok = bool(checks) and checks[0] < m.start() - start
-            else:
-                ok = bool(checks)
-            if not ok:
+            checks = [x.start() for x in calls(body, POLICY_CALL)]
+            acts = c in SPOOL_ACT
+            if not checks or (acts and checks[0] > m.start() - start):
                 bad.append("%s:%d: %s in %s() without %s() %s (rule d)"
                            % (path, line, c, name, POLICY_CALL,
-                              "before it" if c in SPOOL_ACT else "in it"))
+                              "before it" if acts else "in it"))
+    return bad
 
-    for m in re.finditer(r"\bracf_auth\s*\(", text):
+
+def check_other(path):
+    """Rules (d) to (f) for a module source that is neither jes.c nor policy."""
+    path, src, text = read_source(path)
+    funcs = functions(text)
+    bad = spool_api(path, src, text, funcs)
+
+    for m in calls(text, "racf_auth"):
         args = balanced(src, m.end() - 1)    # same layout: the literals show
-        if re.search(r"JESSPOOL", args):
+        if "JESSPOOL" in args:
             bad.append("%s:%d: racf_auth() on JESSPOOL outside %s "
                        "(rule e)" % (path, line_of(src, m.start()), JES_FILE))
 
     if re.search(r"\bJESJOB\b", text) or \
             re.search(r"#\s*include\s*<mvs/jes2\.h>", src):
-        for m in re.finditer(r"\b(?:strcmp|strncmp|memcmp)\s*\(", text):
-            args = balanced(text, m.end() - 1)
-            if re.search(r"->\s*owner\b", args):
-                bad.append("%s:%d: owner compared outside ftpd_jwn_mine() "
-                           "(rule f)" % (path, line_of(src, m.start())))
+        bad += owner_compares(path, src, text, "f")
 
     return bad, len(funcs)
 
@@ -281,10 +294,9 @@ def sources_of(module, root):
     return sorted(f for f in set(files) - dropped if f.endswith(".c"))
 
 
-def main(argv):
-    toml = argv[1] if len(argv) > 1 else "mbt.toml"
-    root = os.path.dirname(os.path.abspath(toml)) or "."
-    with open(toml, "rb") as fh:
+def main():
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    with open(os.path.join(root, "mbt.toml"), "rb") as fh:
         project = tomllib.load(fh)
 
     # mbt.toml keys modules by name: [module.FTPD], not [[module]] name = ...
@@ -296,9 +308,10 @@ def main(argv):
     # A scan of nothing ends green; refuse that.
     missing = [n for n in (JES_FILE,) + ALLOW if n not in by_name]
     if not sources or missing:
-        print("check-jes-access: %s lists %d module source(s); expected "
-              "%s among them" % (toml, len(sources), ", ".join(missing)
-                                 or JES_FILE), file=sys.stderr)
+        print("check-jes-access: mbt.toml lists %d module source(s); "
+              "expected %s among them"
+              % (len(sources), ", ".join(missing) or JES_FILE),
+              file=sys.stderr)
         return 2
 
     bad = []
@@ -318,11 +331,11 @@ def main(argv):
         for b in bad:
             print("  " + b, file=sys.stderr)
         return 1
-    print("check-jes-access: %d module sources from %s: %d clean, %d "
+    print("check-jes-access: %d module sources from mbt.toml: %d clean, %d "
           "allow-listed (%d functions)"
-          % (len(sources), toml, scanned, len(sources) - scanned, nfuncs))
+          % (len(sources), scanned, len(sources) - scanned, nfuncs))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())

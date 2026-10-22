@@ -132,6 +132,12 @@ sources = ["test/tstrec.c", "src/ftpd#rec.c"]
 [test.TSTJFL]
 sources = ["test/tstjfl.c", "src/ftpd#jfl.c"]
 
+# ftpd_jid_valid() -- the shape of the job ID RETR and DELE in the JES mode
+# hand to jesjob(): JOB, STC or TSU and five digits, checked before JES is
+# touched (#267).  ftpd#jid.c is free of project and MVS headers: DUAL.
+[test.TSTJID]
+sources = ["test/tstjid.c", "src/ftpd#jid.c"]
+
 # ftpd_jwn_check() and friends -- who may see, read and delete which job on
 # the JES spool (#90): entity and component rules, ownership, the RACF return
 # code to level table, the decision table, the SITE JESOWNER classification,

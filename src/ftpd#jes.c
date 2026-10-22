@@ -15,6 +15,7 @@
 */
 #include "ftpd.h"
 #include "ftpd#jfl.h"
+#include "ftpd#jid.h"
 #include "ftpd#ses.h"
 #include "ftpd#aut.h"
 #include "ftpd#dat.h"
@@ -1017,6 +1018,12 @@ ftpd_jes_retrieve(ftpd_session_t *sess, const char *arg)
             jobid_arg[k] = (char)toupper((unsigned char)jobid_arg[k]);
     }
 
+    /* The shape first: a wildcard must not reach jesjob() (#267) */
+    if (!ftpd_jid_valid(jobid_arg)) {
+        ftpd_session_reply(sess, FTP_501, "Invalid job ID");
+        return 0;
+    }
+
     /* Find the job */
     job = find_job(sess, jobid_arg, FTPD_JWN_OP_RETR, &joblist, &decision);
     if (!job) {
@@ -1230,6 +1237,12 @@ ftpd_jes_delete(ftpd_session_t *sess, const char *arg)
         int k;
         for (k = 0; jobid_arg[k]; k++)
             jobid_arg[k] = (char)toupper((unsigned char)jobid_arg[k]);
+    }
+
+    /* The shape first: a wildcard must not reach jesjob() (#267) */
+    if (!ftpd_jid_valid(jobid_arg)) {
+        ftpd_session_reply(sess, FTP_501, "Invalid job ID");
+        return 0;
     }
 
     /* Find the job to get the jobname (jescanj needs both).  Nothing is

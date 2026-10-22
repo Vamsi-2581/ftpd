@@ -102,6 +102,14 @@ task (@ug-security-jes). FTPD does not look for a #cmd("USER=") or a
 comma only if the last line of the JOB statement ends before column 71. Keep
 that line shorter.
 
+#note[*A defect* (ftpd\#277): FTPD takes the first card of the stream that has
+the word JOB between blanks for the JOB statement, also a comment card. A
+comment such as #cmd("//* RUN THE JOB NOW") before the real JOB statement gets
+the three operands, and the real JOB statement gets none. The job then has no
+owner and runs under the default account of batch jobs. Until a later release
+fixes this, put no card before the JOB statement that has the word JOB between
+blanks, and write no comment with it.]
+
 FTPD does not check the JCL. A JCL error shows in the list of the job
 (@ug-jes-list), as the text #cmd("JCL ERROR") for the job.
 

@@ -710,6 +710,11 @@ after `S RAKFPROF`.
   `STOR` stream. Every further JOB card in the same stream runs as a job of its
   own, without them, under the default account. Such a job has no owner, so it
   falls under the `*` profile (section 7), and the `250` reply names its job id.
+  The default account of a batch job is `PROD` / `PRDGROUP` (section 5), without
+  Operations authority. The job therefore has no higher rights than the user who
+  sent it, as long as `PRDGROUP` gets no more in `SYS1.SECURE.CNTL(PROFILES)`
+  than the universal lines give everybody. If you give `PRDGROUP` broad rights,
+  you give them to every user who can store a job in the JES view.
 
 ### Check it
 

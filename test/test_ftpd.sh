@@ -30,6 +30,7 @@
 #   15. Settings that took effect nowhere: SITE TRUNCATE on STOR, SITE RDW and
 #       SBSENDEOL refused, SITE JESSTATUS filters the JES listing
 #   17. SITE DCBDSN: RECFM, LRECL and BLKSIZE taken from a model data set
+#   18. JES spool authorization (#90): a job ID is matched exactly (case 8)
 #
 # Test 13 reads the operator command F FTPD,STATS, which an FTP client cannot
 # reach.  Set FTPD_CONSOLE to a command that sends one operator command and
@@ -2285,6 +2286,142 @@ done
 
 ftp_run "delete '$DCB_MODEL'
 delete '$DCB_NEW'" /dev/null
+
+# ============================================================
+# Test 18: JES spool authorization (#90)
+#
+# Case 8 is the first part (M1): a job ID is matched exactly.  JES2 answers a
+# query such as JOB* with every job it matches; FTPD must never act on the
+# first of them.  The jobs used here are the user's own, so the case needs no
+# RAKF profile: a request that is not an exact job ID is "not found", whoever
+# owns what it would have matched.
+# ============================================================
+section "Test 18: JES spool authorization"
+
+JW_JCL="$TMPDIR/jw_job.jcl"
+cat > "$JW_JCL" << 'JCLEOF'
+//FTPD90A  JOB (ACCT),'FTPD 90',CLASS=A,MSGCLASS=X
+//STEP1    EXEC PGM=IEFBR14
+//SYSPRINT DD SYSOUT=*
+JCLEOF
+
+# Submit the JCL once; print the job ID JES assigned (empty on failure).
+jw_submit() {
+    ftp_run "site filetype=jes
+type ascii
+put $JW_JCL jw_job.jcl
+site filetype=seq" "$TMPDIR/jw_submit.log"
+    grep -o '[J][O][B][0-9][0-9][0-9][0-9][0-9]' "$TMPDIR/jw_submit.log" | head -1
+}
+
+# Wait until the job shows as OUTPUT in the JES listing (about 60 s).
+jw_wait_output() {
+    local n=0
+    while [ $n -lt 30 ]; do
+        ftp_run "site filetype=jes
+ls
+site filetype=seq" "$TMPDIR/jw_ls.log"
+        if grep -q "^[A-Z0-9#@\$]* *$1 .*OUTPUT" "$TMPDIR/jw_ls.log"; then
+            return 0
+        fi
+        sleep 2
+        n=$((n + 1))
+    done
+    return 1
+}
+
+# The job IDs of the user's jobs, one per line, sorted.
+jw_jobs() {
+    ftp_run "site filetype=jes
+ls
+site filetype=seq" "$TMPDIR/jw_all.log"
+    grep -o '^[A-Z0-9#@$]* *JOB[0-9]\{5\}' "$TMPDIR/jw_all.log" \
+        | awk '{ print $NF }' | sort
+}
+
+JW_ID1=$(jw_submit)
+JW_ID2=$(jw_submit)
+if [ -n "$JW_ID1" ] && [ -n "$JW_ID2" ] && [ "$JW_ID1" != "$JW_ID2" ] \
+   && jw_wait_output "$JW_ID1" && jw_wait_output "$JW_ID2"; then
+    pass "Fall 8: two jobs of the user are in OUTPUT ($JW_ID1, $JW_ID2)"
+    JW_READY=1
+else
+    fail "Fall 8: could not set up two finished jobs (got '$JW_ID1' '$JW_ID2')"
+    JW_READY=0
+fi
+
+if [ "$JW_READY" = 1 ]; then
+    JW_PREFIX="${JW_ID1%???}"          # JOBnn of JOBnnnnn
+    JW_SHORT="JOB$((10#${JW_ID1#JOB}))"                      # without the zeros
+    JW_LOWER=$(echo "${JW_PREFIX}*" | tr '[:upper:]' '[:lower:]')
+    JW_BEFORE=$(jw_jobs)
+
+    # A request that is not the exact job ID of one job: 550, and nothing
+    # is opened, listed or removed.
+    jw_refused() {
+        local verb="$1" arg="$2" cmd out="$TMPDIR/jw_case.log"
+        case "$verb" in
+            delete) cmd="delete $arg" ;;
+            get)    cmd="get $arg $TMPDIR/jw_got.txt" ;;
+            ls)     cmd="ls $arg -" ;;
+        esac
+        rm -f "$TMPDIR/jw_got.txt"
+        ftp_run "site filetype=jes
+type ascii
+$cmd
+site filetype=seq" "$out"
+        if grep -q '^550 ' "$out" \
+           && ! grep -q '^\(125\|150\|250 Cancel\)' "$out" \
+           && { [ ! -s "$TMPDIR/jw_got.txt" ]; }; then
+            pass "Fall 8: $verb $arg -> 550"
+        else
+            fail "Fall 8: $verb $arg was not refused"
+            tail -4 "$out" | sed 's/^/    /'
+        fi
+    }
+
+    for JW_ARG in 'JOB*' 'job*' "$JW_LOWER" "${JW_PREFIX}*" "$JW_SHORT" 'JOB1' '*'; do
+        for JW_VERB in get ls delete; do
+            # "ls *" is the job listing, not a spool file listing.
+            [ "$JW_VERB$JW_ARG" = 'ls*' ] && continue
+            jw_refused "$JW_VERB" "$JW_ARG"
+        done
+    done
+
+    JW_AFTER=$(jw_jobs)
+    if [ -n "$JW_BEFORE" ] && [ "$JW_BEFORE" = "$JW_AFTER" ]; then
+        pass "Fall 8: no job is gone after the refused DELE requests"
+    else
+        fail "Fall 8: the user's jobs changed"
+        echo "before:"; echo "$JW_BEFORE" | sed 's/^/    /'
+        echo "after:";  echo "$JW_AFTER"  | sed 's/^/    /'
+    fi
+
+    # The exact ID still works, in lowercase as well.
+    JW_LOW1=$(echo "$JW_ID1" | tr '[:upper:]' '[:lower:]')
+    rm -f "$TMPDIR/jw_got.txt"
+    ftp_run "site filetype=jes
+type ascii
+get $JW_LOW1 $TMPDIR/jw_got.txt
+site filetype=seq" "$TMPDIR/jw_case.log"
+    if [ -s "$TMPDIR/jw_got.txt" ]; then
+        pass "Fall 8: the exact ID ($JW_LOW1, lowercase) is still retrieved"
+    else
+        fail "Fall 8: the exact ID is not retrieved"
+        tail -4 "$TMPDIR/jw_case.log" | sed 's/^/    /'
+    fi
+
+    ftp_run "site filetype=jes
+delete $JW_ID1
+delete $JW_ID2
+site filetype=seq" "$TMPDIR/jw_case.log"
+    if [ "$(jw_jobs | grep -c "^\($JW_ID1\|$JW_ID2\)$")" = 0 ]; then
+        pass "Fall 8: DELE with the exact ID removes the job"
+    else
+        fail "Fall 8: DELE with the exact ID left a job"
+        tail -4 "$TMPDIR/jw_case.log" | sed 's/^/    /'
+    fi
+fi
 
 # ============================================================
 # Summary

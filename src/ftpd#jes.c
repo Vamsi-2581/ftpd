@@ -405,6 +405,25 @@ job_matches_owner(JESJOB *job, const char *owner)
 }
 
 /* --------------------------------------------------------------------
+** The job a request names.  jesjob() answers a query such as JOB* with
+** every job it matches, in no order that means anything to the caller: the
+** request names a job only if its ID equals one in the list, exactly.
+** ----------------------------------------------------------------- */
+static JESJOB *
+job_by_id(JESJOB **joblist, const char *jobid)
+{
+    int i;
+
+    if (!joblist || !jobid || !jobid[0])
+        return NULL;
+    for (i = 0; joblist[i]; i++) {
+        if (strcmp((const char *)joblist[i]->jobid, jobid) == 0)
+            return joblist[i];
+    }
+    return NULL;
+}
+
+/* --------------------------------------------------------------------
 ** List spool files for a specific job (LIST JOBnnnnn).
 ** z/OS format:
 **   JOBNAME  JOBID    STEPNAME PROCSTEP C DDNAME   BYTE-COUNT
@@ -415,7 +434,12 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     JES *jes = NULL;
     JESJOB **joblist = NULL;
     JESJOB *job;
+    char jobid[16];
     int i;
+
+    for (i = 0; jobid_arg[i] && i < (int)sizeof(jobid) - 1; i++)
+        jobid[i] = (char)toupper((unsigned char)jobid_arg[i]);
+    jobid[i] = '\0';
 
     jes = jesopen();
     if (!jes) {
@@ -425,9 +449,10 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
     }
 
     /* Query with dd=1 to include JESDD array */
-    joblist = jesjob(jes, jobid_arg, FILTER_JOBID, 1);
+    joblist = jesjob(jes, jobid, FILTER_JOBID, 1);
 
-    if (!joblist || !joblist[0] || !job_matches_status(sess, joblist[0])) {
+    job = job_by_id(joblist, jobid);
+    if (!job || !job_matches_status(sess, job)) {
         if (joblist) jesjobfr(&joblist);
         jesclose(&jes);
         ftpd_session_reply(sess, FTP_550,
@@ -435,8 +460,6 @@ list_job_files(ftpd_session_t *sess, const char *jobid_arg)
                            jobid_arg, status_filter(sess));
         return 0;
     }
-
-    job = joblist[0];
 
     ftpd_session_reply(sess, FTP_125, "List started OK for %s",
                        jobid_arg);
@@ -662,6 +685,7 @@ find_job(const ftpd_session_t *sess, const char *jobid_arg,
 {
     JES *jes;
     JESJOB **joblist;
+    JESJOB *job;
 
     *out_joblist = NULL;
 
@@ -671,13 +695,14 @@ find_job(const ftpd_session_t *sess, const char *jobid_arg,
     joblist = jesjob(jes, jobid_arg, FILTER_JOBID, 1);
     jesclose(&jes);
 
-    if (!joblist || !joblist[0] || !job_matches_status(sess, joblist[0])) {
+    job = job_by_id(joblist, jobid_arg);
+    if (!job || !job_matches_status(sess, job)) {
         if (joblist) jesjobfr(&joblist);
         return NULL;
     }
 
     *out_joblist = joblist;
-    return joblist[0];
+    return job;
 }
 
 /* --------------------------------------------------------------------

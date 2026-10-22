@@ -754,15 +754,65 @@ test_tally(void)
     CHECK(lines == 16 && ftpd_jwn_tally_session_more(&st) == 2,
           "NONE, NOPROFILE and NOCANCEL count together");
 
-    /* ERR after the limit is still written; the counter stays */
+    /* ERR has its own limit: the WARN limit being spent does not touch it */
     ftpd_jwn_tally_init(&t);
     lerr = ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_RETR, &err);
     CHECK(lerr == FTPD_JWN_LINE_ERROR && st.denied_more == 2,
-          "ERR after the session limit: a line, denied_more unchanged");
+          "ERR after the WARN limit: a line, denied_more unchanged");
     ftpd_jwn_tally_init(&t);
     CHECK(ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_RETR, &noacee) ==
           FTPD_JWN_LINE_NOACEE && st.denied_more == 2,
           "NOACEE after the session limit: a line");
+
+    /* the ERR limit of a session: one failing command after the other */
+    memset(&st, 0, sizeof(st));
+    lines = 0;
+    for (i = 0; i < 40; i++) {
+        static const int ops[] = { FTPD_JWN_OP_RETR, FTPD_JWN_OP_DELE,
+                                   FTPD_JWN_OP_LISTJOB };
+
+        ftpd_jwn_tally_init(&t);
+        if (ftpd_jwn_tally(&t, &st, ops[i % 3], i & 1 ? &err : &errc) ==
+                FTPD_JWN_LINE_ERROR)
+            lines++;
+    }
+    CHECK(lines == FTPD_JWN_ERRSESSMAX, "40 failing commands write 16 lines");
+    CHECK(ftpd_jwn_tally_session_err_more(&st) == 24,
+          "... and 24 more ERR");
+    CHECK(st.err == 40 && st.denied == 0 && st.denied_more == 0,
+          "every ERR counted, none of them a refusal");
+
+    memset(&st, 0, sizeof(st));
+    for (i = 0; i < FTPD_JWN_ERRSESSMAX; i++) {
+        ftpd_jwn_tally_init(&t);
+        ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_DELE, &err);
+    }
+    CHECK(ftpd_jwn_tally_session_err_more(&st) == 0, "16: no summary line");
+    ftpd_jwn_tally_init(&t);
+    CHECK(ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_DELE, &err) ==
+          FTPD_JWN_LINE_NONE && ftpd_jwn_tally_session_err_more(&st) == 1,
+          "17: no line, one more");
+
+    /* the WARN limit does not use it up and the other way round */
+    memset(&st, 0, sizeof(st));
+    for (i = 0; i < 20; i++) {
+        ftpd_jwn_tally_init(&t);
+        ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_RETR, &err);
+    }
+    ftpd_jwn_tally_init(&t);
+    CHECK(ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_RETR, &none) ==
+          FTPD_JWN_LINE_WARN, "spent ERR limit: a refusal still has a line");
+    ftpd_jwn_tally_init(&t);
+    CHECK(ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_RETR, &noacee) ==
+          FTPD_JWN_LINE_NOACEE, "spent ERR limit: NOACEE still has a line");
+
+    /* a listing counts against the command limit only */
+    memset(&st, 0, sizeof(st));
+    ftpd_jwn_tally_init(&t);
+    for (i = 0; i < 100; i++)
+        ftpd_jwn_tally(&t, &st, FTPD_JWN_OP_LIST, &err);
+    CHECK(st.err == 0 && ftpd_jwn_tally_session_err_more(&st) == 0,
+          "a listing does not touch the session ERR count");
 
     /* a listing never writes WARN lines and never touches the session */
     memset(&st, 0, sizeof(st));
@@ -789,7 +839,8 @@ test_tally(void)
     CHECK(ftpd_jwn_tally(NULL, &st, FTPD_JWN_OP_LIST, &none) ==
           FTPD_JWN_LINE_NONE, "no counter is no line");
     CHECK(ftpd_jwn_tally_more(NULL) == 0 &&
-          ftpd_jwn_tally_session_more(NULL) == 0, "NULL counters");
+          ftpd_jwn_tally_session_more(NULL) == 0 &&
+          ftpd_jwn_tally_session_err_more(NULL) == 0, "NULL counters");
     ftpd_jwn_tally_init(&t);
     CHECK(ftpd_jwn_tally(&t, NULL, FTPD_JWN_OP_RETR, &none) ==
           FTPD_JWN_LINE_NONE, "no session counter: no WARN line");

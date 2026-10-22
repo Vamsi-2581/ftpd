@@ -757,6 +757,14 @@ ftpd_session_run(void *udata, CTHDWORK *work)
                      who, ftpd_jwn_tally_session_more(&sess->jwn));
         }
 
+        if (ftpd_jwn_tally_session_err_more(&sess->jwn) > 0) {
+            char who[FTPD_JWN_PRTSZ];
+
+            ftpd_jwn_printable(who, sizeof(who), sess->user);
+            ftpd_log(LOG_ERROR, "JES error: user=%s and %d more ERR",
+                     who, ftpd_jwn_tally_session_err_more(&sess->jwn));
+        }
+
         server->total_bytes_in += sess->bytes_recv;
         server->total_bytes_out += sess->bytes_sent;
         server->num_sessions--;

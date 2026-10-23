@@ -882,8 +882,9 @@ Without this, FTPD starts and refuses every login. The short version:
    — not `STCGROUP`, which has ALTER on all datasets there. Create the user
    with `ADDUSER FTPD PASSWORD(pw) DFLTGRP(STARTED)`; `ADDUSER` and `PERMIT`
    need the SPECIAL authority, which is column 30 of the `USERS` line (a `Y`),
-   and a `USERS` table from an earlier RAKF has none. The setup guide, sections
-   1 and 2, has the details.
+   and a `USERS` table from an earlier RAKF has none. The user must also be
+   connected to the group `RAKFADM`. The setup guide, sections 1 and 2, has the
+   details.
 
 2. Define the `FTPAUTH` FACILITY profile, which controls who may use FTP at
    all, and let the group of your FTP users read it. If it is **not** defined,
@@ -897,9 +898,9 @@ Without this, FTPD starts and refuses every login. The short version:
    hand-edited file that is wrong aborts the reload (`U0300`, `U0400`,
    `U0500`) and, on RAKF 2.0.0, keeps JES2 from starting at the next IPL.
 
-   Run the commands in TSO under a userid with the SPECIAL authority, each
-   command starting in column 1 (`USER` for every ordinary user, or your own
-   group):
+   Run the commands in TSO under a userid with the SPECIAL authority that is
+   connected to the group `RAKFADM`, each command starting in column 1 (`USER`
+   for every ordinary user, or your own group):
 
    ```
    RDEFINE FTPAUTH CLASS(FACILITY) UACC(NONE)

@@ -581,11 +581,13 @@ two pieces; the short version for the installation:
   #cmd("SYS1.SECURE.CNTL(USERS)"), and a blank column means no. A table of
   users that you keep from an earlier RAKF has nothing in column 30. Put the
   #cmd("Y") on every line of your administrator, then reload with
-  #cmd("S RAKF"). The commands cannot set it for you, because they need it.]
+  #cmd("S RAKF"). The commands cannot set it for you, because they need it.
+  The administrator must also be connected to the group #cmd("RAKFADM").]
 + Define the profile #cmd("FTPAUTH") in the class #cmd("FACILITY"). It
   controls who may use FTP at all (@ug-security-ftpauth). Use the RAKF
   commands #cmd("RDEFINE") and #cmd("PERMIT") in a TSO session or a TSO batch
-  job of the administrator (SPECIAL authority, see the note above), each
+  job of the administrator (SPECIAL authority and group #cmd("RAKFADM"), see the
+  note above), each
   command starting in column 1:
 
   #note[*Do not edit #cmd("PROFILES") by hand; RAKF's maintainer recommends

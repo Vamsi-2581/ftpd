@@ -411,8 +411,11 @@ refused with `501`. That is the state of FTPD 1.3.0 without any action.
 
 A refused check writes no message to the operator console. FTPD asks RAKF
 through libc370's `racf_auth()`, which sets the request flag LOG=NONE, and
-RAKF's `ICHSFR00` then skips `RAKF0005`/`RAKF000A`. The reason a job was hidden
-is in FTPD's own `STDOUT` log (`JES LISTJOB denied: ...`). The User's Guide, "A
+RAKF's `ICHSFR00` then skips `RAKF0005`/`RAKF000A`. FTPD's own
+`STDOUT` log records what it refused: a `JES <op> denied: ...` line for each
+job hidden from `dir JOBnnnnn`, `RETR` and `DELE`, and a `SITE JESOWNER
+refused` line. A plain `dir` hides jobs without a line of their own; the
+number is in the `JES LIST: ... hidden ...` line. The User's Guide, "A
 Complete Sample Session with JESSPOOL", has a full session and the measurement.
 
 ### What FTPD asks RACF

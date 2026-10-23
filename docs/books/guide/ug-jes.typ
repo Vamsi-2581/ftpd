@@ -556,5 +556,8 @@ One message does not depend on the flag. A check against a class that RAKF
 does not know writes #cmd("RAKF0012 UNDEFINED CLASS") every time, and that
 only happens on a RAKF without the class #cmd("JESSPOOL"); it was not tried
 here. So the console is the wrong place to look for a refusal. FTPD writes
-what it refused to its own log, #cmd("STDOUT") (@ug-ops-log), and that is where
-an administrator finds out why a user does not see a job.
+its refusals to its own log, #cmd("STDOUT") (@ug-ops-log). For
+#cmd("dir JOBnnnnn"), #cmd("get") and #cmd("delete") it writes one
+#cmd("JES op denied") line for each job it hid or refused, with the reason. A plain #cmd("dir") hides
+jobs without a line of their own: the number of hidden jobs is in the
+#cmd("JES LIST") line of that listing.

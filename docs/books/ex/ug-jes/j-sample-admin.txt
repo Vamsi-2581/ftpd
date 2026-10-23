@@ -1,0 +1,44 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): IBMUSER
+331 Send password please.
+Password: 
+230 IBMUSER is logged on.  Working directory is "IBMUSER.".
+Remote system type is MVS.
+ftp> site filetype=jes
+200 SITE command was accepted
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=IBMUSER
+JOBNAME  JOBID    OWNER    STATUS CLASS
+250 List completed successfully.
+ftp> site jesowner=*
+200 SITE command was accepted
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=*
+JOBNAME  JOBID    OWNER    STATUS CLASS
+PAYROLL  JOB00038 ALICE    OUTPUT  A   RC=0000
+FTPHELLO JOB00039 BOB      OUTPUT  A   RC=0000
+250 List completed successfully.
+ftp> get JOB00038 payroll.txt
+local: payroll.txt remote: JOB00038
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending all spool files for requested Jobid
+250 Transfer completed successfully.
+3307 bytes received in 00:00 (53.59 KiB/s)
+ftp> !head -3 payroll.txt
+                                                J E S 2   J O B   L O G
+ 6.06.52 JOB   38  $HASP373 PAYROLL  STARTED - INIT  1 - CLASS A - SYS MVSC
+ 6.06.52 JOB   38  IEF403I PAYROLL - STARTED - TIME=06.06.52
+ftp> delete JOB00039
+250 Cancel successful
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=*
+JOBNAME  JOBID    OWNER    STATUS CLASS
+PAYROLL  JOB00038 ALICE    OUTPUT  A   RC=0000
+250 List completed successfully.
+ftp> quit
+221 Quit command received. Goodbye.

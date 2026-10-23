@@ -1,0 +1,46 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): ALICE
+331 Send password please.
+Password: 
+230 ALICE is logged on.  Working directory is "ALICE.".
+Remote system type is MVS.
+ftp> site filetype=jes
+200 SITE command was accepted
+ftp> get job00038 again.txt
+local: again.txt remote: job00038
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending all spool files for requested Jobid
+250 Transfer completed successfully.
+3307 bytes received in 00:00 (44.47 KiB/s)
+ftp> get JOB38 x.txt
+local: x.txt remote: JOB38
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid job ID
+ftp> get JOB* x.txt
+local: x.txt remote: JOB*
+229 Entering Extended Passive Mode (|||22000|)
+501 Invalid job ID
+ftp> dir JOB00038
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JOB00038
+JOBNAME  JOBID    STEPNAME PROCSTEP C DDNAME   BYTE-COUNT
+PAYROLL  JOB00038                   H JESJCLIN        720
+PAYROLL  JOB00038                   H JESMSGLG        931
+PAYROLL  JOB00038                   H JESJCL          810
+PAYROLL  JOB00038                   H JESYSMSG       3192
+PAYROLL  JOB00038                   A JESINTXT          0
+PAYROLL  JOB00038 STEP1             H SYSUT1           80
+PAYROLL  JOB00038 STEP1             H SYSPRINT        484
+PAYROLL  JOB00038 STEP1             H SYSUT2           80
+250 List completed successfully.
+ftp> delete JOB00038
+250 Cancel successful
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=ALICE
+JOBNAME  JOBID    OWNER    STATUS CLASS
+250 List completed successfully.
+ftp> quit
+221 Quit command received. Goodbye.

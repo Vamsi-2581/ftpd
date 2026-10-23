@@ -375,6 +375,11 @@ are:
   #cmd("dir JOBnnnnn"), #cmd("RETR") and #cmd("DELE") the lines are also
   limited for the whole session, see below.
 
+The console stays quiet about these refusals. FTPD asks RAKF with the flag
+"LOG=NONE", and RAKF then does not write #cmd("RAKF0005") for a refused check
+(@ug-jes-sample has the measurement and the sources). Look for a refusal in
+this log, not on the console.
+
 FTPD writes at most 16 lines of the form #cmd("denied") for a session, so that
 a client cannot fill the log. When it left more out, it writes
 #cmd("JES denied: user=USERID and n more denied") when the session ends. The

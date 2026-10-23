@@ -1,0 +1,38 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): BOB
+331 Send password please.
+Password: 
+230 BOB is logged on.  Working directory is "BOB.".
+Remote system type is MVS.
+ftp> site filetype=jes
+200 SITE command was accepted
+ftp> put hello.jcl
+local: hello.jcl remote: hello.jcl
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending Job to JES internal reader FIXrecfm 80
+250-It is known to JES as JOB00039
+250 Transfer completed successfully.
+211 bytes sent in 00:00 (3.14 KiB/s)
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=BOB
+JOBNAME  JOBID    OWNER    STATUS CLASS
+FTPHELLO JOB00039 BOB      OUTPUT  A   RC=0000
+250 List completed successfully.
+ftp> site jesowner=ALICE
+501 JESOWNER is not permitted
+ftp> site jesowner=*
+501 JESOWNER is not permitted
+ftp> dir JOB00038
+229 Entering Extended Passive Mode (|||22000|)
+550 Jobid JOB00038 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=BOB
+ftp> get JOB00038 x.txt
+local: x.txt remote: JOB00038
+229 Entering Extended Passive Mode (|||22000|)
+550 Jobid JOB00038 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=BOB
+ftp> delete JOB00038
+550 Jobid JOB00038 not found for JESJOBNAME=*, JESSTATUS=ALL, JESOWNER=BOB
+ftp> quit
+221 Quit command received. Goodbye.

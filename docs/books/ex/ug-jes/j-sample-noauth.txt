@@ -1,0 +1,14 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): CAROL
+331 Send password please.
+Password: 
+530 Not authorized for FTP access.
+ftp: Login failed
+ftp> pwd
+Unable to determine remote directory
+ftp> site filetype=jes
+530 Not logged in.
+ftp> quit
+221 Quit command received. Goodbye.

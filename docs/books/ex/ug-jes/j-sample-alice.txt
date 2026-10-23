@@ -1,0 +1,38 @@
+Trying 127.0.0.1:2121 ...
+Connected to localhost.
+220 MVS 3.8j FTPD Server
+Name (localhost:user): ALICE
+331 Send password please.
+Password: 
+230 ALICE is logged on.  Working directory is "ALICE.".
+Remote system type is MVS.
+ftp> site filetype=jes
+200 SITE command was accepted
+ftp> put payroll.jcl
+local: payroll.jcl remote: payroll.jcl
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending Job to JES internal reader FIXrecfm 80
+250-It is known to JES as JOB00038
+250 Transfer completed successfully.
+203 bytes sent in 00:00 (4.46 KiB/s)
+ftp> dir
+229 Entering Extended Passive Mode (|||22000|)
+125 List started OK for JESJOBNAME=*, JESSTATUS=ALL and JESOWNER=ALICE
+JOBNAME  JOBID    OWNER    STATUS CLASS
+PAYROLL  JOB00038 ALICE    OUTPUT  A   RC=0000
+250 List completed successfully.
+ftp> get JOB00038 alice.txt
+local: alice.txt remote: JOB00038
+229 Entering Extended Passive Mode (|||22000|)
+125 Sending all spool files for requested Jobid
+250 Transfer completed successfully.
+3307 bytes received in 00:00 (57.18 KiB/s)
+ftp> quote retr JOB00038
+125 Sending all spool files for requested Jobid
+425 Cannot open data connection
+ftp> !head -3 alice.txt
+                                                J E S 2   J O B   L O G
+ 6.06.52 JOB   38  $HASP373 PAYROLL  STARTED - INIT  1 - CLASS A - SYS MVSC
+ 6.06.52 JOB   38  IEF403I PAYROLL - STARTED - TIME=06.06.52
+ftp> quit
+221 Quit command received. Goodbye.

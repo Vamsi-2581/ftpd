@@ -9,7 +9,8 @@ cancels a job. The view uses the same client commands as the data set view
 (@ug-data), and the commands then do something else. A session starts in the
 data set view. This chapter goes through the tasks of the JES view, one session
 for each. The sessions run on one system in sequence, so the job IDs follow one
-another.
+another. The last section is a separate run of the whole story, from the
+profiles to the refusals, with its own job IDs (@ug-jes-sample).
 
 A user works on the own jobs. The jobs of other users stay hidden, unless the
 administrator allows them with a profile in the RAKF class #cmd("JESSPOOL")
@@ -420,3 +421,140 @@ same job gets the #cmd("550"): the job is gone. The other errors are:
 
 #cmd("site filetype=seq") ends the JES view, and #cmd("pwd") shows the working
 directory of the view that was active before. Any other value of #cmd("FILETYPE") ends the view too.
+
+== A Complete Sample Session with JESSPOOL <ug-jes-sample>
+
+#idx("JESSPOOL")#idx("job", "other users")#idx("console")
+The sections above show each task on its own. This section runs the whole
+story once on a fresh system, so that you can compare a first test with real
+output. It is a separate run: the job IDs start again at #cmd("JOB00038") and
+do not continue those of the sections above. FTPD 1.3.0 runs with RAKF 2.0.0.
+
+*The setup.* ALICE and BOB have the default group #cmd("FTPUSERS"), and CAROL
+has the group #cmd("USER"). IBMUSER is a member of #cmd("ADMIN"). The
+users are made with the RAKF command #cmd("ADDUSER") in a TSO batch job, and
+the procedure #cmd("RAKFUSER") loads the table; the profiles are made in the
+same way and loaded with #cmd("RAKFPROF") (@ug-security-jesspool has the job
+step by step):
+
+#screen(```
+ADDUSER ALICE PASSWORD(ALICEPW1) DFLTGRP(FTPUSERS)
+ADDUSER BOB PASSWORD(BOBPW123) DFLTGRP(FTPUSERS)
+ADDUSER CAROL PASSWORD(CAROLPW1) DFLTGRP(USER)
+PE FTPAUTH CL(FACILITY) ID(FTPUSERS) ACCESS(READ)
+RDEF * CL(JESSPOOL) UACC(NONE)
+PE * CL(JESSPOOL) ID(ADMIN) ACCESS(UPDATE)
+RDEF SYSTEM.* CL(JESSPOOL) UACC(NONE)
+```)
+
+The passwords are for this test only. The group #cmd("FTPUSERS") may read
+#cmd("FTPAUTH") after the first #cmd("PE"), and MVS/CE has given the same
+right to #cmd("ADMIN") from the start. So ALICE, BOB and IBMUSER may log in by
+FTP, and CAROL may not. The profile #cmd("*") hides the jobs of every user from every other user,
+and #cmd("ADMIN") may update all of them. The last line closes the started
+tasks (@ug-security-jesspool). There is no profile for ALICE or BOB. A user
+needs none for the own jobs.
+
+*Own jobs need no profile.* ALICE logs in, switches to the JES view, submits
+the job #cmd("payroll.jcl") (the same kind of job as in @ug-jes-submit, with
+the name #cmd("PAYROLL")), lists the jobs, and fetches the output with
+#cmd("get JOB00038"). The last client command, #cmd("quote retr JOB00038"),
+shows why #cmd("get") is the command to use:
+
+#screen(raw(read("../ex/ug-jes/j-sample-alice.txt"), block: true))
+
+- #cmd("put") and #cmd("dir") need nothing but the login and
+  #cmd("site filetype=jes"). The list names #cmd("JESOWNER=ALICE") and has the
+  one job.
+- #cmd("get JOB00038 alice.txt") sends all output files of the job into the
+  local file, which starts with the job log. The line
+  #cmd("229 Entering Extended Passive Mode") is the answer to the #cmd("EPSV")
+  that #cmd("tnftp") sends before it sends #cmd("RETR") (@ug-jes-badid).
+- #cmd("quote retr JOB00038") sends the #cmd("RETR") without that preparation.
+  There is no data connection, and the reply is the pair
+  #cmd("125 Sending all spool files for requested Jobid") and
+  #cmd("425 Cannot open data connection"): FTPD finds the job, announces the
+  transfer with the #cmd("125"), and then fails to open the connection. The
+  #cmd("125") is no sign that anything was sent. Use #cmd("get"), which
+  prepares the data connection.
+
+*Jobs of others stay hidden.* BOB submits his own job, which has the ID
+#cmd("JOB00039"), and then asks for the job of ALICE in the three ways a user
+tries first:
+
+#screen(raw(read("../ex/ug-jes/j-sample-bob.txt"), block: true))
+
+- #cmd("site jesowner=ALICE") and #cmd("site jesowner=*") are refused with
+  #cmd("501 JESOWNER is not permitted"). BOB has no READ on the jobs of ALICE
+  or of all users, so the filter stays at #cmd("BOB"): the next list is the
+  one of his own jobs. This is the check of @ug-jes-list.
+- #cmd("dir JOB00038"), #cmd("get JOB00038") and #cmd("delete JOB00038") all
+  get #cmd("550 Jobid JOB00038 not found ..."), the reply for a job that
+  does not exist. The job is there, and BOB is told no more than that he cannot
+  see it. The owner in the text is the filter of BOB, not the owner of the job.
+
+A user who sees only the own jobs, as BOB does, is not a malfunction. It is
+the state of a user for whom no profile gives more.
+
+*An administrator sees and cancels everything.* IBMUSER is in the group
+#cmd("ADMIN"), which has UPDATE on all jobs. The first #cmd("dir") lists only
+the own jobs, and there are none. After #cmd("site jesowner=*") the list has
+the jobs of ALICE and BOB, and the job log of ALICE can be fetched. The
+#cmd("delete") cancels the job of BOB:
+
+#screen(raw(read("../ex/ug-jes/j-sample-admin.txt"), block: true))
+
+The list of all users has no started task, because the profile
+#cmd("SYSTEM.*") closes them, also for #cmd("ADMIN"). After the
+#cmd("delete") only the job of ALICE is left.
+
+*A user without access to FTP.* CAROL has a good password. The profile
+#cmd("FTPAUTH") gives her no READ, and the login is refused:
+
+#screen(raw(read("../ex/ug-jes/j-sample-noauth.txt"), block: true))
+
+FTPD answers #cmd("530 Not authorized for FTP access"), the client says
+#cmd("Login failed"), and every other command gets #cmd("530 Not logged in.")
+(@ug-first-fail). The JES view is not reached at all, so the profiles of the
+class #cmd("JESSPOOL") play no part.
+
+*Which job IDs are accepted.* ALICE is back. The ID is #cmd("JOB"), #cmd("STC")
+or #cmd("TSU") with exactly five digits, in any case (@ug-jes-badid). Her
+session fetches with the lower case ID, with two IDs of the wrong form, lists
+the spool files of the job, cancels it, and lists again:
+
+#screen(raw(read("../ex/ug-jes/j-sample-ids.txt"), block: true))
+
+- #cmd("get job00038") works: FTPD makes the letters upper case.
+- #cmd("get JOB38") has too few digits, and #cmd("get JOB*") is a pattern.
+  Both get #cmd("501 Invalid job ID"). FTPD refuses the form before it asks
+  JES2, and #cmd("501") never means that the job is hidden: a hidden or
+  missing job gets the #cmd("550") of BOB's session.
+- #cmd("dir JOB00038") lists the spool files of the job, and the own
+  #cmd("delete") answers #cmd("250 Cancel successful"). The last list is
+  empty.
+
+*What the operator sees.* None of the refusals above wrote a RAKF message to
+the console. The console of the test system was read from the first job to the
+end of the sessions. It had the lines of JES2 for the jobs and the lines of
+the RAKF procedures that loaded the tables (#cmd("RAKFUIDS4  USER TABLE UPDATED"),
+#cmd("RAKFPROF7  RAKF PROFILES UPDATED")), and no line from RAKF for the
+refused #cmd("site jesowner"), the hidden jobs, or the login of CAROL. That is
+by design, not an oversight, and it comes from two places:
+
+- FTPD asks RAKF through the library routine #cmd("racf_auth()") of LIBC/370,
+  which sets the request flag "LOG=NONE" (#cmd("RACHECK_FLAG1_LOG_NONE")) in
+  every call, for the class #cmd("JESSPOOL") as well as for #cmd("FTPAUTH") and
+  for data sets.
+- RAKF honours that flag. In its check routine #cmd("ICHSFR00"), a request with
+  the flag sets an internal "no log" bit, and the path for a refused check
+  tests the bit and skips the message #cmd("RAKF0005 INVALID ATTEMPT TO ACCESS
+  RESOURCE") and the following #cmd("RAKF000A") line. The decision is the same
+  with or without the flag: a refused check is still refused.
+
+One message does not depend on the flag. A check against a class that RAKF
+does not know writes #cmd("RAKF0012 UNDEFINED CLASS") every time, and that
+only happens on a RAKF without the class #cmd("JESSPOOL"); it was not tried
+here. So the console is the wrong place to look for a refusal. FTPD writes
+what it refused to its own log, #cmd("STDOUT") (@ug-ops-log), and that is where
+an administrator finds out why a user does not see a job.

@@ -199,6 +199,16 @@ with its default and its range.
 connection. If the range is closed on the way from the client to the host, the
 login works, and the first #cmd("LIST") or #cmd("RETR") fails.]
 
+#note[*Passive transfers behind NAT need #cmd("PASVADR").* The reply to
+#cmd("PASV") carries an address. With #cmd("PASVADR=ANY") it is the local
+address of the control connection, and behind NAT, port forwarding or a
+container network that address is private. Set #cmd("PASVADR") to the IPv4
+address that the client can reach, and forward the #cmd("PASVPORTS") range to
+the host as well. A name is not accepted: FTPD logs a warning and uses
+#cmd("ANY"). The reply to #cmd("EPSV") carries no address, so a client that
+uses it connects to the address of the control connection. For the symptom of a
+wrong address, see @ug-install-trouble.]
+
 #note[*The port.* The default is 2121, not 21. A value that is not a number
 makes FTPD log a warning and use the port 21.]
 

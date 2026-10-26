@@ -21,13 +21,17 @@ delete = ["TFTP110"]
 a second digit. At patch 9 cut the next minor, at minor 9 the next major;
 ftpd 1.2.10 cannot be expressed and must not be released.
 
-Current: `main` is 1.3.0-dev, so mbt 3 derives **`TFTP130`**, deleting
-`TFTP120`; not yet checked on any stand. `TFTP111` was assigned to a 1.1.1 that
+Current: 1.3.0 is released (`TFTP130`, deleting `TFTP120`). The patch release
+1.3.1 on the branch `release-1.3.x` is **`TFTP131`**, deleting `TFTP130` only; mbt
+derives the id from the minor version only, so `mbt.toml` needs an explicit
+`fmid = "TFTP131"` and `delete = ["TFTP130"]` in `[smp]` when it is cut (see
+the comment there). Not yet checked on any stand. `TFTP111` was assigned to a 1.1.1 that
 was never cut (the libc370 2.0 port made the next release 1.2.0) and is unspent
 and unassigned. Burned: `TFTP100` (1.0.0–1.0.2), `TFTP110` (1.1.0, released
-2026-09-14) and `TFTP120` (1.2.0, released 2026-10-13; free on the maintainer's
-word, no `LIST` was run on any stand before it shipped). `docs/uninstall.md`
-names every spent id and carries `TFTP130`; add each later id there.
+2026-09-14), `TFTP120` (1.2.0, released 2026-10-13; free on the maintainer's
+word, no `LIST` was run on any stand before it shipped) and `TFTP130` (1.3.0).
+`docs/uninstall.md` names every spent id and carries `TFTP131`; add each later
+id there.
 
 Never re-spend an id, and never install a test package under the real one: a
 test needs a throwaway id **and** throwaway module names, because SMP keys
@@ -70,7 +74,7 @@ books; that is a manual step after the tag exists.
 Before the tag:
 
 1. The books' part of the release is ready: every behaviour change in the
-   release has its section, and the table "What Is New in FTPD 1.3" has one
+   release has its section, and the table "What Is New in FTPD 1.3.1" has one
    row per change. Check it against the closed issues and merged PRs of the
    milestone, and against the source, not against the PR texts.
 2. `make -C docs/books` builds both PDFs without errors and without warnings

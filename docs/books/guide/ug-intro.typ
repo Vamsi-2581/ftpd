@@ -98,11 +98,55 @@ FTPD runs on MVS 3.8j with these parts:
   every UFS request is answered with #cmd("550 UFS service not available").
 
 FTPD 1.3 is built against LIBC/370 2.25.1, and its load module is
-link-edited authorized (AC(1)). Which libraries to install, how to
+link-edited authorized (AC(1)). FTPD 1.3.1 carries the client library of
+UFSD 1.5.1 (@ug-install-ufsd). Which libraries to install, how to
 authorize them and how to upgrade from an earlier release is the subject of
 @ug-install.
 
-== What Is New in FTPD 1.3 <ug-intro-new>
+== What Is New in FTPD 1.3.1 <ug-intro-new-131>
+
+#idx("FTPD 1.3.1", "changes")
+FTPD 1.3.1 changes these behaviours against 1.3.0. Each is described where
+the book explains the subject:
+
+#tab(caption: [Changes in FTPD 1.3.1])[
+  #table(columns: (2.3in, 1fr),
+    [Change], [Where],
+    [#cmd("LIST") and #cmd("NLST") with #cmd("'DSN(pattern)'") answer with the
+      members of that partitioned data set that fit the pattern, from any
+      working directory. A data set that is not there, is not partitioned or
+      has no such member gets #cmd("550 No data sets found."). Before, the
+      list was empty with the reply #cmd("226"). Clients such as the Zowe FTP
+      plugin ask for the members this way.],
+      [@ug-data-list, _FTPD Reference_, "LIST and NLST"],
+    [#cmd("SITE ISPFSTATS") is accepted and ignored, with any value or none,
+      and answers #cmd("200 SITE command was accepted"). Before, the reply was
+      #cmd("Unrecognized parameter"), which the same clients take as a
+      failure.], [_FTPD Reference_, "The SITE Command"],
+    [FTPD carries the client library of UFSD 1.5.1. Under parallel uploads, a
+      block that the server refuses because its buffer pool is empty is sent
+      again; before, the upload could fail. A write that the server rejects is no
+      longer counted as written. A #cmd("put") whose request never reached
+      the server gets #cmd("451 Write failed on the server ..."), not a
+      success. Install UFSD 1.5.1.], [@ug-ufs-errors, @ug-install-ufsd],
+    [Behind NAT, port forwarding or a container network, set #cmd("PASVADR")
+      to the address that the client can reach. With the default #cmd("ANY")
+      some clients wait 30 seconds before every transfer. New in the
+      troubleshooting table and in the notes on the configuration.],
+      [@ug-install-trouble, @ug-ops-config],
+    [Create the profiles of RAKF with #cmd("RDEFINE"), #cmd("PERMIT") and
+      #cmd("ADDSD"), and reload with #cmd("S RAKFPROF"). Do not edit
+      #cmd("PROFILES") by hand. The set-up of #cmd("FTPAUTH") uses the
+      commands, and the administrator must be connected to the group
+      #cmd("RAKFADM").], [@ug-install-rakfsetup, @ug-security-jesspool],
+    [A complete session with JESSPOOL, from the profiles to the jobs that
+      each user sees, with the log lines of the refusals. A refused check
+      writes nothing on the operator console.],
+      [@ug-jes-sample, @ug-ops-log],
+  )
+] <ug-intro-new-131-tab>
+
+== What Is New in FTPD 1.3.0 <ug-intro-new>
 
 #idx("FTPD 1.3", "changes")
 FTPD 1.3.0 changes these behaviours against 1.2.0. Each is described where

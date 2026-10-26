@@ -120,7 +120,9 @@ The replies to a failed #cmd("put") depend on the cause:
       other than #cmd("STOR"), for example #cmd("MKD"). A retry later can
       work. A lack of space during the write is the #cmd("552") above.],
     [#cmd("451 Write failed on the server after n bytes received: the file is incomplete.")],
-      [The write failed and UFSD gave no reason.],
+      [The write failed and UFSD gave no reason, or the request never reached
+      UFSD. Since FTPD 1.3.1 the second case is this reply; it is never a
+      success.],
     [#cmd("426 Connection closed; transfer aborted after n bytes. The file on the server is incomplete.")],
       [The data connection broke.],
     [#cmd("553 Path name too long")], [The name is longer than UFS allows.],

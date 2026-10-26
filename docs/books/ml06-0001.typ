@@ -12,11 +12,12 @@
     #text(font: head-font, weight: "bold", size: 11pt)[First Edition (October 2026)]
 
     This edition applies to Version 1 Release 3 of FTPD, the FTP server for
-    MVS 3.8j (ftpd 1.3.0), and to all subsequent releases and modifications
+    MVS 3.8j (ftpd 1.3.1), and to all subsequent releases and modifications
     until otherwise indicated in new editions.
 
     *Draft.* This book is a draft edition. The chapters on installing and
-    removing FTPD were measured on a test system with release 1.3.0.
+    removing FTPD were measured on a test system with release 1.3.0; the
+    screens show its ids, and the jobs name the ids of release 1.3.1.
 
     Comments on this book may be addressed to the issue tracker of the
     mvslovers/ftpd repository on GitHub.

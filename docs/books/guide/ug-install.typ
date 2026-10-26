@@ -325,9 +325,10 @@ job; there is no third file to send.
 On a new installation, every step ends with #cmd("COND CODE 0000"). The
 screens below are the SMP output of a new installation of release 1.3.0,
 measured on a test system. In release 1.3.1 the SYSMOD is #cmd("TFTP131") and
-it deletes #cmd("TFTP130"); in the screens of this chapter that were
-measured, read #cmd("TFTP131") for #cmd("TFTP130") and #cmd("TFTP130") for
-#cmd("TFTP120"). The #cmd("RECV") step receives the SYSMOD:
+it deletes #cmd("TFTP130"). In the measured screens, the SYSMOD shows as
+#cmd("TFTP130"): read #cmd("TFTP131"). The id it deletes shows as
+#cmd("TFTP120"): read #cmd("TFTP130"). The #cmd("RECV") step receives the
+SYSMOD:
 
 #screen(raw(read("../ex/ug-install/receive.txt")))
 

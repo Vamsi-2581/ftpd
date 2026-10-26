@@ -128,7 +128,10 @@ the book explains the subject:
       again; before, the upload could fail. A write that the server rejects is no
       longer counted as written. A #cmd("put") whose request never reached
       the server gets #cmd("451 Write failed on the server ..."), not a
-      success. Install UFSD 1.5.1.], [@ug-ufs-errors, @ug-install-ufsd],
+      success. On the read side, the library could report end of file early
+      when that pool was empty, and the file position could move ahead of the
+      data delivered; a #cmd("get") from the UFS view could end short. The
+      library of 1.5.1 no longer does this. Install UFSD 1.5.1.], [@ug-ufs-errors, @ug-install-ufsd],
     [Behind NAT, port forwarding or a container network, set #cmd("PASVADR")
       to the address that the client can reach. With the default #cmd("ANY")
       some clients wait 30 seconds before every transfer. New in the

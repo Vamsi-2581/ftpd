@@ -29,7 +29,7 @@ tables and adds TSO commands for them (`ADDUSER`, `ALTUSER`, `DELUSER`,
 > write, so that you can check the result. A RAKF 1.2.x has no such commands;
 > for it the reference at the end of section 7 is all there is.
 
-**FTPD 1.3.0 does not need RAKF 2.0.0 to run.** RAKF itself, for the login, is
+**FTPD 1.3 does not need RAKF 2.0.0 to run.** RAKF itself, for the login, is
 required; the release matters for one thing only. **Letting users see the jobs
 of other users (section 7) needs RAKF 2.0.0 or later**, the release whose class
 table contains `JESSPOOL`. On a RAKF 1.2.x FTPD installs and starts, and every
@@ -253,7 +253,7 @@ After any change to the tables, `S RAKF`.
 >   Both commands need the SPECIAL authority (section 1). Then `S RAKF`.
 
 > **Upgrading from FTPD 1.2.0 or earlier:** those releases logged on as
-> `FTPD`/`USER` themselves at startup. FTPD 1.3.0 does not. On a RAKF without a
+> `FTPD`/`USER` themselves at startup. FTPD 1.3 does not. On a RAKF without a
 > mapping by STC name the started task now runs as `STC`/`STCGROUP` again, with
 > Operations authority; section 5 says what that means. On RAKF 2.0.0 the
 > `FTPD` line in `USERS` is used again, now as the mapping: its group decides
@@ -479,7 +479,7 @@ gating anything.
 
 ## 7. JESSPOOL — who may see and delete other users' jobs
 
-FTPD 1.3.0 decides for every job whether the logged-in user may list it, read
+FTPD 1.3 decides for every job whether the logged-in user may list it, read
 its output and delete it. This applies to the JES mode of FTP (`SITE FILETYPE=JES`:
 `LIST`, `NLST`, `RETR`, `DELE`). The RAKF class `JESSPOOL` holds the rules.
 RAKF 2.0.0 introduced that class: FTPD runs without it, but then no user can
@@ -495,7 +495,7 @@ read the spool through TSO, SDSF or another interface.
 
 Without any JESSPOOL profile nothing else is visible: every user sees, reads and
 deletes only their own jobs, and `SITE JESOWNER=*` or another user's id is
-refused with `501`. That is the state of FTPD 1.3.0 without any action.
+refused with `501`. That is the state of FTPD 1.3 without any action.
 
 A refused check writes no message to the operator console. FTPD asks RAKF
 through libc370's `racf_auth()`, which sets the request flag LOG=NONE, and

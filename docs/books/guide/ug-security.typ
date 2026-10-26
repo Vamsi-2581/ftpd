@@ -117,7 +117,7 @@ FTPD004I STC RUNS AS STC/STCGROUP
 ```
 
 Earlier releases logged on as the user #cmd("FTPD") in the group #cmd("USER") at
-startup. FTPD 1.3.0 does not, and the line for #cmd("FTPD") in the RAKF table
+startup. FTPD 1.3 does not, and the line for #cmd("FTPD") in the RAKF table
 of users is no longer used by FTPD.
 
 What the message shows depends on the RAKF release:
@@ -166,7 +166,7 @@ Jobs of other users are a separate matter: FTPD asks RAKF for each one
 
 #idx("JESSPOOL")#idx("JES", "security")#idx("RAKF", "JESSPOOL")
 This section needs RAKF 2.0.0 or later, the release whose class table contains
-#cmd("JESSPOOL"). FTPD 1.3.0 does not need that release to run: on a RAKF 1.2.x
+#cmd("JESSPOOL"). FTPD 1.3 does not need that release to run: on a RAKF 1.2.x
 it installs and starts, and every user sees, reads and cancels only the own
 jobs.
 
@@ -197,7 +197,7 @@ asks for #cmd("USERID.."). The profile #cmd("*") covers both, and the profile
 #cmd("USERID.*") covers the second.
 
 *Without any profile every user sees only the own jobs.* That is the state
-after the upgrade to FTPD 1.3.0, and it is the most restrictive one. FTPD 1.2.0
+after the upgrade to FTPD 1.3, and it is the most restrictive one. FTPD 1.2.0
 let every user list, read and cancel the jobs of everybody. An administrator
 who relied on that creates the profiles before the upgrade.
 

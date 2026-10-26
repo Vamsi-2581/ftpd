@@ -13,6 +13,7 @@
 #include "ftpd#aut.h"
 #include "ftpd#dat.h"
 #include "ftpd#dsn.h"
+#include "ftpd#lmp.h"
 #include "ftpd#lse.h"
 #include "ftpd#mvs.h"
 #include "ftpd#ret.h"
@@ -934,6 +935,8 @@ send_pds_entry(ftpd_session_t *sess, PDSLIST *pd, int nlst,
 **
 ** z/OS behavior:
 ** - In PDS context, arg is a member filter (e.g. "R*")
+** - 'DSN(pattern)' lists the members of DSN from any CWD; a DSN that is
+**   not a PDS answers 550 "No data sets found." (#302)
 ** - In dataset context, arg with wildcards filters the listing
 ** - Empty dataset result → empty listing with header (z/OS compat)
 ** ----------------------------------------------------------------- */
@@ -943,7 +946,10 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
     char prefix[FTPD_MAX_DSN_LEN + 2];
     char cwd_notrail[FTPD_MAX_DSN_LEN + 2];
     int is_pds;
+    char mdsn[FTPD_MAX_DSN_LEN + 2];
+    char mpat[FTPD_MAX_MBR_LEN + 2];
     int cwd_len;
+    int mrc;
     const char *member_filter;
 
     /* Strip trailing dot from CWD for catalog queries */
@@ -958,7 +964,27 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
 
     member_filter = NULL;
 
-    if (is_pds) {
+    /* LIST 'DSN(pattern)' answers with the member list of DSN, whatever the
+    ** CWD is -- the Zowe FTP plugin sends nothing else to list members or to
+    ** find one before it downloads (#302).  The data set itself is looked up
+    ** here: __locate() on the CWD, as the data set listing below does, would
+    ** find the CWD and not the data set asked for. */
+    mrc = ftpd_lmp_split(arg, sess->mvs_cwd, mdsn, sizeof(mdsn),
+                         mpat, sizeof(mpat));
+    if (mrc < 0) {
+        dsn_error(sess, arg, mdsn, mrc);
+        return 0;
+    }
+    if (mrc == 1) {
+        if (ftpd_mvs_is_pds(mdsn) != 1) {
+            ftpd_session_reply(sess, FTP_550, "No data sets found.");
+            return 0;
+        }
+        is_pds = 1;
+        strcpy(prefix, mdsn);
+        if (mpat[0] && strcmp(mpat, "*") != 0)
+            member_filter = mpat;
+    } else if (is_pds) {
         /* PDS context: arg is a member filter, not a dataset name */
         strcpy(prefix, sess->pds_name);
         if (arg && arg[0])

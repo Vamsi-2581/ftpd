@@ -103,6 +103,7 @@ static const site_keyword_t site_keywords[] = {
     { "DCBDSN",          2 },
     { "DIRECTORY",       1 },
     { "FILETYPE",        4 },
+    { "ISPFSTATS",       9 },
     { "JESJOBNAME",      7 },
     { "JESOWNER",        4 },
     { "JESSTATUS",       5 },
@@ -595,6 +596,13 @@ site_apply_one(ftpd_session_t *sess,
                             name);
         return 0;
     }
+
+    /* On z/OS it makes a STOR write ISPF statistics into the member's
+    ** directory entry.  FTPD never writes them, so there is nothing to
+    ** switch, but the Zowe FTP plugin sends it with every transfer and
+    ** reads the "Unrecognized parameter" reply as a failure (#302). */
+    if (strcmp(key, "ISPFSTATS") == 0)
+        return 0;
 
     /* --- SMS classes (accepted silently, no SMS on MVS 3.8j) --- */
 

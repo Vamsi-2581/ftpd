@@ -88,6 +88,10 @@ sources = ["test/tstdsn.c", "src/ftpd#dsn.c"]
 # ftpd_ret_unexpired() -- does the DSCB's expiration date make OPEN for output
 # ask the operator (IEC507D)?  STOR and APPE refuse with 550 instead (#198).
 # ftpd#ret.c is free of project and MVS headers, so this is DUAL like TSTDSN.
+# ftpd_lmp_split() -- LIST/NLST of DSN(pattern) (#302).
+[test.TSTLMP]
+sources = ["test/tstlmp.c", "src/ftpd#lmp.c", "src/ftpd#dsn.c"]
+
 [test.TSTRET]
 sources = ["test/tstret.c", "src/ftpd#ret.c"]
 
@@ -213,7 +217,7 @@ sources = ["test/tstdcb.c", "src/ftpd#*.c"]
 [test.TSTRCL]
 host = false
 sources = ["test/tstrcl.c", "src/ftpd#log.c",
-           "src/ftpd#dsn.c", "src/ftpd#lse.c", "src/ftpd#rec.c",
+           "src/ftpd#dsn.c", "src/ftpd#lmp.c", "src/ftpd#lse.c", "src/ftpd#rec.c",
            "src/ftpd#ret.c", "src/ftpd#xlt.c"]
 
 # ── Dependencies ─────────────────────────────────────────

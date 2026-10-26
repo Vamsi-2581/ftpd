@@ -119,6 +119,14 @@ filter:
   [#cmd("%")], [one character.],
 )
 
+A name of the form #cmd("'DSN(pattern)'") is not a data set filter. #cmd("LIST")
+and #cmd("NLST") answer it with the members of that partitioned data set that
+fit the pattern, from any working directory, in the form that the listing
+inside the data set has. The reply is #cmd("550 No data sets found.") when the
+data set is not there, is not partitioned, or has no member that fits. Before
+FTPD 1.3.1 the list of such a name was empty. The _FTPD Reference_, "LIST and
+NLST", has the rules.
+
 #note[The catalog is read at the level of the working directory. A filter
 can only keep names below it, so to list another high-level qualifier, change
 the working directory to it first.]

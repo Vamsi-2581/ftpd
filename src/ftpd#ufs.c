@@ -526,9 +526,9 @@ ftpd_ufs_stor(ftpd_session_t *sess, const char *arg)
     ** one it truncated would need a ufs_stat() before the open (#148). */
     if (io_err) {
         /* total counts what arrived from the client, not what reached the
-        ** file: on several of do_fwrite()'s early exits the response carries
-        ** no byte count and ufs_fwrite() reads back the request field
-        ** instead, so its return on a failure measures nothing. */
+        ** file: ufs_fwrite() returns the bytes the server confirmed, but an
+        ** earlier chunk of this STOR may still be only in the server's cache
+        ** and the failing one may be partly written. */
         ftpd_log(LOG_ERROR,
                  "STOR: write failed on %s after %ld bytes received (rc=%d)",
                  path, total, io_rc);
@@ -557,12 +557,12 @@ ftpd_ufs_stor(ftpd_session_t *sess, const char *arg)
                                "the file. The filesystem is full or the file "
                                "reached the maximum size UFS supports. The "
                                "file on the server is incomplete.");
-        else if (io_rc)
+        else if (io_rc > 0)
             ftpd_ufs_error(sess, io_rc);
         else
-            /* Short with no rc on the handle: libufs sets its error flag but
-            ** leaves the code 0 when the request never reached the server.
-            ** Unknown, but never a success. */
+            /* The UFSD_RC_* codes are positive.  libufs reports -1 when the
+            ** request never reached the server (0 only if a write came up
+            ** short with no flag).  Unknown, but never a success. */
             ftpd_session_reply(sess, FTP_451,
                                "Write failed on the server after %ld bytes "
                                "received: the file is incomplete.", total);

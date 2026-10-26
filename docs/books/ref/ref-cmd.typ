@@ -250,6 +250,27 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
     [MVS], [One line for each data set, or for each member inside a partitioned
       data set. The argument is a filter. #cmd("*"), #cmd("**") and
       #cmd("%") are wildcards. Reply: #cmd("226 List completed successfully."); #cmd("550 No data sets found."); #cmd("451 Insufficient storage to list NAME."). #cmd("NLST") sends the names only.],
+    [MVS, #cmd("DSN(pattern)")], [The members of the partitioned data set
+      #cmd("DSN") that fit the pattern, from any working directory. With quotes,
+      #cmd("'DSN(pattern)'"), the name is the full name, and the closing quote
+      may be left out. Without quotes the name is relative to the working
+      directory, as for every other command. FTPD folds the name and the
+      pattern to upper case and cuts the pattern to 8 characters. No pattern,
+      #cmd("DSN()") and #cmd("DSN(*)") list every member, and a #cmd("*") at the
+      end of the pattern stands for the rest of the member name:
+      #cmd("DSN(AL*)"). The list is the one that #cmd("LIST") gives inside the
+      data set after #cmd("CWD"), and #cmd("NLST") sends the member names
+      only. The user needs READ access to the data set, as for that list
+      (_FTPD User's Guide_, "Controlling Access to Data Sets"). Reply:
+      #cmd("226 List completed successfully."); #cmd("550 No data sets found.")
+      when the data set does not exist, is not a partitioned data set, or has no
+      member that fits the pattern; #cmd("501") when the name part has a
+      wildcard, a character that a data set name cannot have, or more than 44
+      characters (@ref-reply-501). Before FTPD 1.3.1 FTPD took the argument for
+      a data set level, and the list had the header, no entry and
+      #cmd("226"). The forms #cmd("LIST DSN") without parentheses, and
+      #cmd("LIST pattern") inside a partitioned data set after #cmd("CWD"), are
+      as before.],
     [UFS], [#cmd("150 Opening data connection for file list") and
       #cmd("226 Transfer complete"). The lines are in the Unix long format.
       #cmd("NLST") sends the names only. The entries #cmd(".") and #cmd("..")

@@ -107,6 +107,7 @@ full name always wins over a shorter keyword that it starts with, which keeps
     [#cmd("DCBDSN")], [#cmd("DC")], [],
     [#cmd("DIRECTORY")], [#cmd("D")], [],
     [#cmd("FILETYPE")], [#cmd("FILE")], [],
+    [#cmd("ISPFSTATS")], [#cmd("ISPFSTATS")], [No shorter form.],
     [#cmd("JESJOBNAME")], [#cmd("JESJOBN")], [],
     [#cmd("JESOWNER")], [#cmd("JESO")], [],
     [#cmd("JESSTATUS")], [#cmd("JESST")], [],
@@ -220,6 +221,11 @@ of the full names, and still work.
       Nothing changes.],
     [#cmd("DATACLASS"), #cmd("STORCLASS"), #cmd("MGMTCLASS")], [Accepted and
       ignored, with any value. MVS 3.8j has no SMS.],
+    [#cmd("ISPFSTATS")], [Accepted and ignored, with any value or none, and
+      the reply is the plain #cmd("200 SITE command was accepted"). On z/OS it
+      makes a #cmd("STOR") write ISPF statistics into the directory entry of the
+      member. FTPD never writes them, so nothing changes. Before FTPD 1.3.1 the
+      word was not a keyword and the reply was #cmd("Unrecognized parameter").],
   )
 ]
 

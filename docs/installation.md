@@ -800,6 +800,12 @@ DEFSPACETYPE=TRACK
   way, and an unprivileged client reaches it with `ftp -P 2121`.
 - `PASVPORTS` must be a range your firewall or NAT lets through, or passive
   mode stalls after `227`.
+- `PASVADR` is `ANY`, which is right when the client reaches the host
+  directly. Behind NAT, port forwarding or a container network, set it to the
+  address the client can reach, written as an IPv4 address, not as a name, and
+  forward the whole `PASVPORTS` range to the host. Left at `ANY`, FTPD gives
+  the client a private address, and some clients wait 30 seconds for it before
+  every transfer (see Troubleshooting).
 - `MAXSESSIONS` is the most sessions at the same time. The next connection is
   closed at once, without a reply, and FTPD logs `max sessions reached,
   rejecting` to `STDOUT`. FTPD runs one worker thread for each session, so
@@ -1072,6 +1078,7 @@ in step 7, and your RAKF definitions. Those are yours to delete.
 | `552 ... out of space on the data set` on an upload | The data set could not grow: the space it was allocated is used up. `552` is permanent on purpose — retrying the same upload into the same allocation cannot succeed. Give the transfer more space *before* the next attempt: raise `DEFPRIMARY`/`DEFSECONDARY`/`DEFSPACETYPE` in `FTPDPRM`, or have the client send `SITE CYLINDERS PRIMARY=10 SECONDARY=10`. If FTPD created the data set for this upload it scratches it again, so the retry starts from a clean allocation. |
 | `550 UFS service not available` | The UFSD started task is not running (installed is not enough) |
 | Passive transfer stalls after `227` | `PASVPORTS` not reachable, or `PASVADR` wrong behind NAT — step 7 |
+| Every transfer waits about 30 seconds with some clients (the Zowe FTP plugin), not with others (curl, Python `ftplib`) | Behind NAT, port forwarding or a container network, `PASVADR=ANY` puts the private local address of the control connection into the `227` reply. The Zowe FTP plugin 3.1.1 connects to it, waits 30 seconds, then tries the control address; curl and `ftplib` connect to the control address at once. Set `PASVADR` to the address the client can reach, forward the whole `PASVPORTS` range, and start FTPD again — step 7 |
 | `S106` at start on a freshly installed library | The XMIT was uploaded in text mode. Re-upload in **binary** and re-run the install job |
 | `S0C4` at start, JESMSGLG holds only the `IEF450I` — no `FTPD000I`, no banner | FTPD 1.0.0 started from an **APF-authorised** LINKLIB. The module is then key 0 and the first store into its own storage abends before the first WTO. Upgrade to 1.0.1, or take the APF entry back out and let SVC 244 authorise instead — step 2 |
 

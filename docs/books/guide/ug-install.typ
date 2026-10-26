@@ -527,13 +527,19 @@ set is cataloged.
 
 === Edit FTPDPRM0 <ug-install-prm>
 
-The member that comes with FTPD is a working default, and three settings are
+The member that comes with FTPD is a working default, and four settings are
 worth a look before the first start:
 
 - #cmd("SRVPORT") is 2121, not 21, so nothing else on the system has to move
   out of the way.
 - #cmd("PASVPORTS") must be a range that your firewall or NAT lets through, or
   a passive transfer stalls after the reply 227.
+- #cmd("PASVADR") is #cmd("ANY"), which is right when the client reaches the
+  host directly. Behind NAT, port forwarding or a container network, set it to
+  the address that the client can reach, written as an IPv4 address, not as a
+  name, and forward the whole #cmd("PASVPORTS") range to the host. Left at
+  #cmd("ANY"), FTPD gives the client a private address, and some clients wait
+  30 seconds for it before every transfer (@ug-install-trouble).
 - #cmd("DEFPRIMARY"), #cmd("DEFSECONDARY") and #cmd("DEFSPACETYPE") decide how
   much space a data set gets when a client creates one. The shipped
   #cmd("TRACK 10,5") caps an upload at 85 tracks, roughly 4 MB at FB/80/3120,
@@ -827,5 +833,16 @@ libraries are the way back until the banner says that the new release runs:
       (@ug-install-jes).],
     [#cmd("550 UFS service not available")], [The UFSD started task is not
       running. Installed is not enough (@ug-install-ufsd).],
+    [Every transfer waits about 30 seconds with some clients, and not with
+      others], [The host is behind NAT, port forwarding or a container
+      network, and #cmd("PASVADR") is still #cmd("ANY"). FTPD then puts the
+      local address of the control connection into the #cmd("227") reply, and
+      that address is private. A client that connects to the address in
+      #cmd("227") waits for its time-out, then tries the address of the control
+      connection. The Zowe FTP plugin 3.1.1 does so, with a time-out of 30
+      seconds. curl and Python #cmd("ftplib") connect to the control address
+      at once and see no delay. Set #cmd("PASVADR") to the address that the
+      client can reach, forward the whole #cmd("PASVPORTS") range to the host,
+      and start FTPD again (@ug-ops-config).],
   )
 ]

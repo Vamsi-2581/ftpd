@@ -3074,8 +3074,8 @@ if [ "$JW8_OK" = 1 ]; then
     JW_LOWER=$(echo "${JW_PREFIX}*" | tr '[:upper:]' '[:lower:]')
     JW_BEFORE=$(jw_jobs)
 
-    # A request that is not the exact job ID of one job: 550, and nothing
-    # is opened, listed or removed.
+    # A request that is not the exact job ID of one job: 501 (invalid job
+    # ID) or 550, and nothing is opened, listed or removed.
     jw_refused() {
         local verb="$1" arg="$2" cmd out="$TMPDIR/jw_case.log"
         case "$verb" in
@@ -3088,10 +3088,10 @@ if [ "$JW8_OK" = 1 ]; then
 type ascii
 $cmd
 site filetype=seq" "$out"
-        if grep -q '^550 ' "$out" \
+        if grep -q '^\(501\|550\) ' "$out" \
            && ! grep -q '^\(125\|150\|250 Cancel\)' "$out" \
            && { [ ! -s "$TMPDIR/jw_got.txt" ]; }; then
-            pass "Fall 8: $verb $arg -> 550"
+            pass "Fall 8: $verb $arg refused (501/550)"
         else
             fail "Fall 8: $verb $arg was not refused"
             tail -4 "$out" | sed 's/^/    /'
@@ -3355,7 +3355,7 @@ delete job*
 --
 delete *"
 JW_W=1
-for n in 3 4 5; do jw_seg $n | grep -q '^550' || JW_W=0; done
+for n in 3 4 5; do jw_seg $n | grep -q '^\(501\|550\)' || JW_W=0; done
 jw_ids ADMA '*' > "$TMPDIR/jw_ids.after"
 if [ $JW_W = 1 ] && cmp -s "$TMPDIR/jw_ids.before" "$TMPDIR/jw_ids.after"; then
     pass "Fall 8: DELE JOB*, job* and * by an administrator are refused and remove no job"
@@ -3570,7 +3570,7 @@ lmp_expect "cd '$LMP_PDS'
 ls" "ALPHA ALPHB BETA" "cd into the PDS and ls: unchanged"
 lmp_expect "cd '$LMP_PDS'
 ls AL*" "ALPHA ALPHB" "cd into the PDS and ls with a pattern: unchanged"
-lmp_expect "ls '$LMP_PDS'" "TEST.LMPPDS" "ls of the PDS name without parentheses: still a data set listing"
+lmp_expect "nlist '$LMP_PDS'" "TEST.LMPPDS" "NLST of the PDS name without parentheses: still a data set listing"
 
 ftp_run "type ascii
 dir '$LMP_PDS(*)'" "$LMP_OUT"

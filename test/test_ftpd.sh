@@ -3515,6 +3515,92 @@ if [ -n "$JW_SKIPPED" ]; then
 fi
 
 # ============================================================
+# Test 19: LIST and NLST of 'DSN(pattern)' (#302)
+#
+# The Zowe FTP plugin lists the members of a PDS, and looks for a member
+# before it downloads one, with LIST 'DSN(*)' from whatever the working
+# directory is.  FTPD used to take that for a data set prefix and answer an
+# empty data set list and 226, which the plugin cannot parse.
+# ============================================================
+section "Test 19: LIST and NLST of 'DSN(pattern)'"
+
+LMP_PDS="${HLQ}.TEST.LMPPDS"
+LMP_SEQ="${HLQ}.TEST.LMPSEQ"
+LMP_TEXT="$TMPDIR/lmp_text.txt"
+LMP_OUT="$TMPDIR/ftp_lmp.log"
+printf 'one\ntwo\n' > "$LMP_TEXT"
+
+ftp_run "rmdir '$LMP_PDS'
+delete '$LMP_SEQ'" /dev/null
+ftp_run "mkdir '$LMP_PDS'
+type ascii
+put $LMP_TEXT '$LMP_PDS(ALPHA)'
+put $LMP_TEXT '$LMP_PDS(ALPHB)'
+put $LMP_TEXT '$LMP_PDS(BETA)'
+put $LMP_TEXT '$LMP_SEQ'" "$TMPDIR/ftp_lmp_setup.log"
+
+# Expect the member names of one command's listing, in order, and nothing else.
+lmp_expect() {
+    local cmds="$1" want="$2" label="$3" got
+    ftp_run "type ascii
+$cmds" "$LMP_OUT"
+    got=$(sed -n '/^150 /,/^226 /p' "$LMP_OUT" | grep -v '^1[0-9][0-9] \|^226 \|^ Name ' \
+          | awk '{ printf "%s ", $1 }' | sed 's/ $//')
+    if [ "$got" = "$want" ]; then
+        pass "$label"
+    else
+        fail "$label: got '$got', wanted '$want'"; tail -8 "$LMP_OUT" | sed 's/^/    /'
+    fi
+}
+
+lmp_expect "ls '$LMP_PDS(*)'" "ALPHA ALPHB BETA" \
+    "NLST 'DSN(*)' from the HLQ lists the members"
+lmp_expect "dir '$LMP_PDS(*)'" "ALPHA ALPHB BETA" \
+    "LIST 'DSN(*)' from the HLQ lists the members"
+lmp_expect "ls '$LMP_PDS(AL*)'" "ALPHA ALPHB" "a member pattern narrows the list"
+lmp_expect "ls '$LMP_PDS(BETA)'" "BETA" "a member name lists that member"
+lmp_expect "ls '$LMP_PDS(al*)'" "ALPHA ALPHB" "the pattern is case-insensitive"
+lmp_expect "cd TEST
+ls LMPPDS(*)" "ALPHA ALPHB BETA" "DSN(pattern) is relative to the working directory"
+lmp_expect "cd '$LMP_SEQ'
+ls '$LMP_PDS(*)'" "ALPHA ALPHB BETA" "the working directory does not matter"
+lmp_expect "cd '$LMP_PDS'
+ls '$LMP_PDS(B*)'" "BETA" "a quoted DSN(pattern) works inside another PDS context"
+lmp_expect "cd '$LMP_PDS'
+ls" "ALPHA ALPHB BETA" "cd into the PDS and ls: unchanged"
+lmp_expect "cd '$LMP_PDS'
+ls AL*" "ALPHA ALPHB" "cd into the PDS and ls with a pattern: unchanged"
+lmp_expect "ls '$LMP_PDS'" "TEST.LMPPDS" "ls of the PDS name without parentheses: still a data set listing"
+
+ftp_run "type ascii
+dir '$LMP_PDS(*)'" "$LMP_OUT"
+if grep -q '^ Name     VV.MM ' "$LMP_OUT"; then
+    pass "LIST 'DSN(*)' starts with the member header"
+else
+    fail "LIST 'DSN(*)' has no member header"; tail -6 "$LMP_OUT" | sed 's/^/    /'
+fi
+
+for LMP_BAD in "'$LMP_PDS(ZZ*)'" "'${HLQ}.TEST.NOSUCH(*)'" "'$LMP_SEQ(*)'"; do
+    ftp_run "type ascii
+ls $LMP_BAD" "$LMP_OUT"
+    if grep -q '^550 No data sets found\.' "$LMP_OUT" && ! grep -q '^226 ' "$LMP_OUT"; then
+        pass "ls $LMP_BAD: 550 No data sets found."
+    else
+        fail "ls $LMP_BAD"; tail -4 "$LMP_OUT" | sed 's/^/    /'
+    fi
+done
+
+ftp_run "quote SITE FILETYPE=SEQ ISPFSTATS" "$LMP_OUT"
+if grep -q '^200 SITE command was accepted' "$LMP_OUT" && ! grep -q 'Unrecognized' "$LMP_OUT"; then
+    pass "SITE ISPFSTATS is accepted"
+else
+    fail "SITE ISPFSTATS"; tail -3 "$LMP_OUT" | sed 's/^/    /'
+fi
+
+ftp_run "rmdir '$LMP_PDS'
+delete '$LMP_SEQ'" /dev/null
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""

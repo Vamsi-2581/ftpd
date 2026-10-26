@@ -350,6 +350,13 @@ main(void)
     CHECK(code == 200 && strstr(text, "Unrecognized parameter") != NULL,
           "jesinterfacelevel=1 is unrecognised too");
 
+    /* --- ISPFSTATS: the Zowe FTP plugin sends it with every transfer (#302) */
+    run("FILETYPE=JES ISPFSTATS", &st, &code, text, sizeof(text));
+    CHECK(code == 200 && strstr(text, "Unrecognized") == NULL,
+          "ISPFSTATS is accepted without a warning");
+    CHECK(st.filetype == FT_JES, "  and FILETYPE=JES next to it still applies");
+    same("ISPFSTATS", "ispfstats");
+
     /* --- settings that took effect nowhere (#207) ---------------------- */
 
     /* TRUNCATE is read by STOR/APPE (test/test_ftpd.sh, section "TRUNCATE"):

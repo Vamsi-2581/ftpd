@@ -99,7 +99,7 @@ FTPD runs on MVS 3.8j with these parts:
 
 FTPD 1.3 is built against LIBC/370 2.25.1, and its load module is
 link-edited authorized (AC(1)). FTPD 1.3.1 carries the client library of
-UFSD 1.5.1 (@ug-install-ufsd). Which libraries to install, how to
+UFSD 1.5.2 (@ug-install-ufsd). Which libraries to install, how to
 authorize them and how to upgrade from an earlier release is the subject of
 @ug-install.
 
@@ -123,7 +123,7 @@ the book explains the subject:
       and answers #cmd("200 SITE command was accepted"). Before, the reply was
       #cmd("Unrecognized parameter"), which the same clients take as a
       failure.], [_FTPD Reference_, "The SITE Command"],
-    [FTPD carries the client library of UFSD 1.5.1. Under parallel uploads, a
+    [FTPD carries the client library of UFSD 1.5.2. Under parallel uploads, a
       block that the server refuses because its buffer pool is empty is sent
       again; before, the upload could fail. A write that the server rejects is no
       longer counted as written. A #cmd("put") whose request never reached
@@ -131,7 +131,11 @@ the book explains the subject:
       success. On the read side, the library could report end of file early
       when that pool was empty, and the file position could move ahead of the
       data delivered; a #cmd("get") from the UFS view could end short. The
-      library of 1.5.1 no longer does this. Install UFSD 1.5.1.], [@ug-ufs-errors, @ug-install-ufsd],
+      library no longer does this. Install the UFSD 1.5.2 server too: UFSD
+      1.5.1 and earlier could give one disk block to two files while writing,
+      without an error, and a written file then held foreign data. The fix is
+      in the server, and it does not repair files that were damaged before.],
+      [@ug-ufs-errors, @ug-install-ufsd],
     [Behind NAT, port forwarding or a container network, set #cmd("PASVADR")
       to the address that the client can reach. With the default #cmd("ANY")
       some clients wait 30 seconds before every transfer. New in the

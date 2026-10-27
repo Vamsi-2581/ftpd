@@ -98,13 +98,21 @@ want it: <https://github.com/mvslovers/ufsd/releases>, with its own guide at
 Note that UFSD has to be **running**, not just installed — it is a started task
 FTPD talks to across address spaces.
 
-FTPD 1.3.1 carries `libufs` from UFSD 1.5.1; 1.3.0 carried the one from UFSD
+FTPD 1.3.1 carries `libufs` from UFSD 1.5.2; 1.3.0 carried the one from UFSD
 1.4.0. `libufs` is linked into the load module, so a new FTPD build is the only
-way its fixes reach FTPD. The 1.5.1 library reports a write that the server
+way its fixes reach FTPD. The library reports a write that the server
 rejected, and it sends a block again when the server's buffer pool is empty,
-which a parallel upload could hit. FTPD 1.3.1 was tested with UFSD 1.5.1: if
-you use the UFS view, install UFSD 1.5.1. No earlier UFSD release was tried
-with this build.
+which a parallel upload could hit.
+
+**If you use the UFS view, install UFSD 1.5.2.** UFSD 1.5.1 and earlier
+releases could give one disk block to two files, or twice to the same file,
+while a file was being written, and reported no error. A file written this way
+holds foreign data (measured on 1.4.0 and 1.5.1). The fix is in the UFSD
+server, not in `libufs`: a new FTPD does not help, the server must be
+upgraded. UFSD 1.5.2 stops the damage, it does not undo it. A file that was
+damaged before stays damaged. Compare such files with a copy, or write them
+again after the upgrade. `F UFSD,REBUILD` is not a repair. The release notes of
+UFSD 1.5.2 have the details.
 
 ### RAKF is required for logins
 
@@ -261,17 +269,20 @@ before you install, with one exception for the UFS view.
 | FMID | `TFTP130` | `TFTP131`, deletes `TFTP130` |
 | Libraries | `FTPD.LINKLIB`, … | unchanged |
 | C library | LIBC/370 2.25.1 (built with CC/370 1.6.1) | unchanged |
-| `libufs` | UFSD 1.4.0 | UFSD 1.5.1 |
+| `libufs` | UFSD 1.4.0 | UFSD 1.5.2 |
 | RAKF | 1.2.x or 2.0.0 | unchanged |
 
 What changes in behaviour is in the table *What Is New in FTPD 1.3.1* in the
 User's Guide (the book that comes with the release). In short: `LIST` and
 `NLST` of `'DSN(pattern)'` answer with the members of that PDS from any working
 directory, `SITE ISPFSTATS` is accepted and ignored, and the UFS view is built
-with `libufs` of UFSD 1.5.1.
+with `libufs` of UFSD 1.5.2.
 
-**If you use the UFS view, install UFSD 1.5.1 with this release.** FTPD 1.3.1
-was tested with that UFSD. How to install and upgrade UFSD is in its own guide
+**If you use the UFS view, install UFSD 1.5.2 with this release.** UFSD 1.5.1
+and earlier can give one disk block to two files while writing, without an
+error, and a written file then holds foreign data. UFSD 1.5.2 stops this, but
+does not repair files that are already damaged. How to install and upgrade UFSD
+is in its own guide
 ([ufsd/docs/installation.md](https://github.com/mvslovers/ufsd/blob/main/docs/installation.md)).
 FTPD without UFSD is not affected.
 

@@ -399,7 +399,7 @@ ftpd_mvs_cwd(ftpd_session_t *sess, const char *arg)
     }
 
     rc = resolve_dsn(sess, arg, dsn, sizeof(dsn), 0);
-    if (rc == 0 && strchr(dsn, '(') != NULL) {
+    if (rc == 0 && ftpd_dsn_has_member(dsn)) {
         /* CWD sets a prefix.  A member is not one, and DSN(MEMBER) kept as the
         ** working directory would be read back by LIST as a data set name. */
         rc = -3;
@@ -2108,13 +2108,10 @@ ftpd_mvs_scratch(ftpd_session_t *sess, const char *dsn)
     if (!dsn || !dsn[0])
         return -1;
 
-    /* idcams() takes a format string and cmd is not a literal, which is
-    ** safe only because the name came through resolve_dsn(): a valid MVS
-    ** data set name cannot contain a '%'. */
     snprintf(cmd, sizeof(cmd), " DELETE '%s'", dsn);
 
     ftpd_acee_enter(sess);
-    rc = idcams(cmd);
+    rc = idcams("%s", cmd);
     ftpd_acee_leave(sess);
 
     if (rc != 0)
@@ -2875,7 +2872,7 @@ ftpd_mvs_dele(ftpd_session_t *sess, const char *arg)
 
     /* Switch to user's security environment for IDCAMS */
     ftpd_acee_enter(sess);
-    rc = idcams(cmd);
+    rc = idcams("%s", cmd);
     ftpd_acee_leave(sess);
     if (rc != 0) {
         ftpd_log(LOG_ERROR, "%s: idcams(\"%s\") rc=%d", __func__, cmd, rc);
@@ -2912,6 +2909,11 @@ ftpd_mvs_mkd(ftpd_session_t *sess, const char *arg)
     }
 
     rc = resolve_dsn(sess, arg, dsn, sizeof(dsn), 0);
+    if (rc == 0 && ftpd_dsn_has_member(dsn)) {
+        /* MKD takes a data set, never DSN(MEMBER).  Refused before the access
+        ** check, so that RACF is only ever asked about the data set. */
+        rc = -3;
+    }
     if (rc != 0) {
         dsn_error(sess, arg, dsn, rc);
         return 0;
@@ -2968,6 +2970,11 @@ ftpd_mvs_rmd(ftpd_session_t *sess, const char *arg)
     }
 
     rc = resolve_dsn(sess, arg, dsn, sizeof(dsn), 0);
+    if (rc == 0 && ftpd_dsn_has_member(dsn)) {
+        /* RMD takes a data set, never DSN(MEMBER).  Refused before the access
+        ** check, so that RACF is only ever asked about the data set. */
+        rc = -3;
+    }
     if (rc != 0) {
         dsn_error(sess, arg, dsn, rc);
         return 0;
@@ -2989,7 +2996,7 @@ ftpd_mvs_rmd(ftpd_session_t *sess, const char *arg)
 
     /* Switch to user's security environment for IDCAMS */
     ftpd_acee_enter(sess);
-    rc = idcams(cmd);
+    rc = idcams("%s", cmd);
     ftpd_acee_leave(sess);
     if (rc != 0) {
         ftpd_log(LOG_ERROR, "%s: idcams(\"%s\") rc=%d", __func__, cmd, rc);
@@ -3192,7 +3199,7 @@ ftpd_mvs_rnto(ftpd_session_t *sess, const char *arg)
              " ALTER '%s' NEWNAME('%s')", src, dsn);
 
     ftpd_acee_enter(sess);
-    rc = idcams(cmd);
+    rc = idcams("%s", cmd);
     ftpd_acee_leave(sess);
     if (rc != 0) {
         ftpd_log(LOG_ERROR, "%s: idcams(\"%s\") rc=%d", __func__, cmd, rc);

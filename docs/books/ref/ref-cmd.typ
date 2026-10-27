@@ -282,8 +282,9 @@ The rules for names are in the _FTPD User's Guide_, "Working with Data Sets".
       #cmd("DSN(x)(y)") and #cmd("DSN(x)z"), gets #cmd("501") as well (since
       FTPD 1.4.0; the rule is in @ref-cmd-member). Inside a partitioned data
       set after #cmd("CWD") the argument is a member filter and FTPD reads no
-      name in it, so these arguments find no member and get #cmd("550"). Before FTPD 1.3.1 FTPD took the argument for
-      a data set level, and the list had the header, no entry and
+      name in it, so these arguments find no member and get #cmd("550").
+      Before FTPD 1.3.1 FTPD took the argument for a data set level, and the
+      list had the header, no entry and
       #cmd("226"). The forms #cmd("LIST DSN") without parentheses, and
       #cmd("LIST pattern") inside a partitioned data set after #cmd("CWD"), are
       as before.],
@@ -374,26 +375,36 @@ holds for #cmd("RETR"), #cmd("STOR"), #cmd("APPE"), #cmd("DELE"), #cmd("RNFR"),
 #cmd("(NAME)") at the end of the name. #cmd("NAME") is not empty and holds the
 characters that a qualifier holds: the letters, the digits, #cmd("@"),
 #cmd("#"), #cmd("$") and #cmd("-"). FTPD folds it to upper case and cuts it
-to 8 characters.
+to 8 characters. The character check is made for the commands that name one
+member (#cmd("RETR"), #cmd("STOR"), #cmd("APPE"), #cmd("DELE"), #cmd("RNFR"),
+#cmd("RNTO")). #cmd("LIST") and #cmd("NLST") check the form only: the text
+between the parentheses is a filter, and a character that a member name cannot
+hold finds no member (#cmd("550 No data sets found.")).
 
 #tab(caption: [Member forms and the answer to them])[
   #table(columns: (1.9in, 1fr),
     [Form], [Answer],
     [#cmd("'DSN(NAME)'"), #cmd("DSN(NAME)")], [The member #cmd("NAME").
       Without quotes the working directory is put in front of #cmd("DSN").],
-    [#cmd("'DSN(NAME.ext)'")], [The member #cmd("NAME"). FTPD cuts the
-      extension off after it checked its characters.],
+    [#cmd("'DSN(NAME.ext)'")], [In a command that names one member: the member
+      #cmd("NAME"). FTPD cuts the extension off after it checked its
+      characters.],
     [#cmd("'DSN(*)'"), #cmd("'DSN(AL%)'")], [In #cmd("LIST") and #cmd("NLST")
       the members that fit. Any other command: #cmd("501 A qualifier in ...
       contains an invalid character") (@ref-reply-501).],
     [#cmd("'DSN()'")], [In #cmd("LIST") and #cmd("NLST") every member. Any
       other command: #cmd("501 Invalid data set name ...").],
-    [#cmd("'DSN(.ext)'")], [#cmd("501 Invalid data set name ..."). No member
+    [#cmd("'DSN(.ext)'")], [In a command that names one member:
+      #cmd("501 Invalid data set name ..."). No member
       name is left once the extension is cut off. Before FTPD 1.4.0 FTPD took
       the name for the data set itself, and #cmd("DELE") deleted it.],
-    [#cmd("'DSN(NAME'"), #cmd("'DSN(NAME)(OTHER)'"), #cmd("'DSN(NAME)x'"), a
-      character that a qualifier cannot hold inside the parentheses],
+    [#cmd("'DSN(NAME'"), #cmd("'DSN(NAME)(OTHER)'"), #cmd("'DSN(NAME)x'")],
       [#cmd("501 Invalid data set name ..."), and nothing else happens.],
+    [#cmd("'DSN(A_B)'"), a character that a qualifier cannot hold inside the
+      parentheses], [In #cmd("RETR"), #cmd("STOR"), #cmd("APPE"), #cmd("DELE"),
+      #cmd("RNFR") and #cmd("RNTO"): #cmd("501 Invalid data set name ..."), and
+      nothing else happens. In #cmd("LIST") and #cmd("NLST") the text is a
+      filter that no member fits: #cmd("550 No data sets found.").],
     [In a partitioned data set after #cmd("CWD"): #cmd("name"),
       #cmd("name.ext")], [The member #cmd("NAME"), built as
       #cmd("PDS(NAME)") from the partitioned data set. A character that a

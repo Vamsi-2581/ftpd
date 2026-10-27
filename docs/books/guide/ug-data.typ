@@ -449,23 +449,27 @@ FTPD reads a name to its end, the part in parentheses included. A member is
 written #cmd("DSN(MEMBER)") and stands at the end of the name. These rules
 decide whether FTPD takes it:
 
-- *The member is not empty.* It holds the characters that a qualifier holds
-  (@ug-data-names): letters, digits, #cmd("@"), #cmd("#"), #cmd("$") and
-  #cmd("-").
+- *The member is not empty.* In a command that names one member, it holds the
+  characters that a qualifier holds (@ug-data-names): letters, digits,
+  #cmd("@"), #cmd("#"), #cmd("$") and #cmd("-").
 - *Nothing follows the closing parenthesis*, and there is one member only.
 - *An extension is allowed.* #cmd("'DSN(alpha.txt)'") is the member
   #cmd("ALPHA"): FTPD cuts the extension off, as it does for a name in a
-  partitioned data set, but it checks the characters of the extension too. A
-  member that is empty once the extension is cut off, such as
-  #cmd("'DSN(.X)'"), is refused.
+  partitioned data set, but it checks the characters of the extension too. In a
+  command that names one member, a member that is empty once the extension is
+  cut off, such as #cmd("'DSN(.X)'"), is refused.
 - *Lower case is folded to upper case*, as it is in the rest of the name.
 - *A pattern character is allowed in a listing only*, as in
   #cmd("nlist 'DSN(AL*)'") (@ug-data-list).
 
 A name that breaks a rule is answered with
 #cmd("501 Invalid data set name ... Use MVS Dsname conventions."), and FTPD does
-nothing else. That holds for every command that takes a name: #cmd("get"),
-#cmd("put"), #cmd("delete"), #cmd("rename") and the listing.
+nothing else. That holds for every command that names one member: #cmd("get"),
+#cmd("put"), #cmd("delete") and #cmd("rename"). A listing checks only the form
+of the name: a member that is not closed, or text after the closing
+parenthesis, is refused. The text between the parentheses is a filter that FTPD
+does not check character by character, so a character that no member name can
+hold finds no member, and the reply is #cmd("550 No data sets found.").
 The session shows the cases that matter, from the working directory
 #cmd("IBMUSER.") first and then from inside the partitioned data set:
 

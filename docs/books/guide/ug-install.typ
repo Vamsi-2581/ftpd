@@ -91,9 +91,17 @@ UFS path. On a system without the UFSD started task those commands answer
 and everything else works. Install FTPD now and add UFSD later if you want it.
 UFSD has to be running, not just installed: it is a started task that FTPD
 talks to across address spaces. FTPD 1.3.1 carries the client library
-#cmd("libufs") of UFSD 1.5.1, linked into the load module, and was tested with
-UFSD 1.5.1. Install UFSD 1.5.1 for it; no earlier release was tried with this
-library.
+#cmd("libufs") of UFSD 1.5.2, linked into the load module.
+
+#note[*Install UFSD 1.5.2 for the UFS view.* UFSD 1.5.1 and earlier releases
+could give one disk block to two files, or twice to the same file, while a file
+was being written, and reported no error. A file written this way holds
+foreign data (measured on 1.4.0 and 1.5.1). The fix is in the UFSD server, not
+in #cmd("libufs"), so a new FTPD does not help: the server must be upgraded.
+UFSD 1.5.2 stops the damage. It does not undo it. A file that was damaged
+before stays damaged, so compare such files with a copy, or write them again
+after the upgrade. #cmd("F UFSD,REBUILD") is not a repair. The release notes
+of UFSD 1.5.2 have the details.]
 
 === RAKF Is Required for Logins <ug-install-rakf>
 

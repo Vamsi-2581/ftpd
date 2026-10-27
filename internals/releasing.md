@@ -21,14 +21,21 @@ delete = ["TFTP110"]
 a second digit. At patch 9 cut the next minor, at minor 9 the next major;
 ftpd 1.2.10 cannot be expressed and must not be released.
 
-Current: `main` is 1.4.0-dev, so mbt 3 derives **`TFTP140`**, deleting
-`TFTP130`; not yet checked on any stand. `TFTP111` was assigned to a 1.1.1 that
+Current: `main` is 1.4.0-dev, so mbt 3 derives **`TFTP140`**; not yet checked on
+any stand. 1.3.1, the patch release cut on the branch `release-1.3.x`, was
+**`TFTP131`**, deleting `TFTP130` only (mbt derives the id from the minor
+version only, so that branch carried an explicit `fmid` and `delete` in
+`[smp]`; `main` does not). Because `TFTP131` owns the modules after an install
+of 1.3.1, the derived `delete` of 1.4.0 (`TFTP130`) is not enough: when 1.4.0
+is cut, `[smp]` needs an explicit `delete` that names `TFTP131` (and `TFTP130`
+for a system that skipped 1.3.1). `TFTP111` was assigned to a 1.1.1 that
 was never cut (the libc370 2.0 port made the next release 1.2.0) and is unspent
 and unassigned. Burned: `TFTP100` (1.0.0–1.0.2), `TFTP110` (1.1.0, released
-2026-09-14), `TFTP120` (1.2.0, released 2026-10-13) and `TFTP130` (1.3.0,
-released 2026-10-22); the last two were free on the maintainer's word, no
-`LIST` was run on any stand before they shipped. `docs/uninstall.md`
-names every spent id and carries `TFTP130`; add each later id there.
+2026-09-14), `TFTP120` (1.2.0, released 2026-10-13), `TFTP130` (1.3.0, released
+2026-10-22) and `TFTP131` (1.3.1, released 2026-10-27); `TFTP120` and `TFTP130`
+were free on the maintainer's word, no `LIST` was run on any stand before they
+shipped. `docs/uninstall.md` names every spent id and carries `TFTP131`; add
+each later id there.
 
 Never re-spend an id, and never install a test package under the real one: a
 test needs a throwaway id **and** throwaway module names, because SMP keys
@@ -71,7 +78,7 @@ books; that is a manual step after the tag exists.
 Before the tag:
 
 1. The books' part of the release is ready: every behaviour change in the
-   release has its section, and the table "What Is New in FTPD 1.3" has one
+   release has its section, and the table "What Is New in FTPD 1.3.1" has one
    row per change. Check it against the closed issues and merged PRs of the
    milestone, and against the source, not against the PR texts.
 2. `make -C docs/books` builds both PDFs without errors and without warnings
@@ -92,7 +99,7 @@ Before the tag:
    jobs: change them in the same commit, together with the FMID table, the
    file names (`ftpd-X.Y.Z-*`) and the captures under `docs/books/ex/ug-install/`
    and `docs/books/ex/ug-remove/`. The jobs and captures were measured on
-   1.3.0 (the edition notice says so); run them once on a throwaway container
+   1.3.1 (the edition notice says so); run them once on a throwaway container
    with the release candidate installed from the SMP package, replace the
    captures with that output, compare it with the text, and name the release
    they were measured with in the notice.

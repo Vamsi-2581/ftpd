@@ -344,7 +344,7 @@ session sent and received. The warnings about the configuration (@ug-ops-config)
 and the refusal of a connection at the session limit (@ug-ops-ses) are only in
 this log. Look at it when the console is quiet and a client has a problem.
 
-*The JES spool.* FTPD 1.3.0 checks every job that a user touches in the JES
+*The JES spool.* FTPD 1.3 checks every job that a user touches in the JES
 view against the profiles of the class #cmd("JESSPOOL")
 (@ug-security-jesspool), and it writes what it refused to this log. The lines
 are:

@@ -4,18 +4,28 @@
 ** See include/ftpd#lvl.h.
 */
 #include <ctype.h>
+#include <stddef.h>
 #include <string.h>
 
 #include "ftpd#dsn.h"
 #include "ftpd#lvl.h"
 
 /* The recursion consumes one '**' of the pattern per level, so its depth is
-** the number of '**' in a pattern of at most 44 characters: 15 at the most. */
-int
-ftpd_dsn_match(const char *pattern, const char *name)
+** the number of '**' in a pattern of at most 44 characters: 15 at the most.
+** The run time is another matter: '**' between literals tries the rest of the
+** pattern at every qualifier boundary, so it costs every way of splitting
+** the name over them (5.8 million calls for 14 "**A" against 22 qualifiers).
+** The calls are counted in *left, which lives on the caller's stack, and the
+** match gives up with "no match" when they run out. */
+static int
+dsn_match(const char *pattern, const char *name, int *left)
 {
     const char *p = pattern;
     const char *n = name;
+
+    if (*left <= 0)
+        return 0;
+    (*left)--;
 
     while (*p && *n) {
         if (*p == '*' && *(p + 1) == '*') {
@@ -36,8 +46,8 @@ ftpd_dsn_match(const char *pattern, const char *name)
                 return 1;  /* ** at end matches everything */
 
             /* Try matching rest of pattern at each qualifier boundary */
-            while (*n) {
-                if (ftpd_dsn_match(p, n))
+            while (*n && *left > 0) {
+                if (dsn_match(p, n, left))
                     return 1;
                 /* Skip to next qualifier */
                 while (*n && *n != '.')
@@ -80,6 +90,24 @@ ftpd_dsn_match(const char *pattern, const char *name)
 
     /* Both must be exhausted */
     return (*p == '\0' && *n == '\0');
+}
+
+int
+ftpd_dsn_match_limit(const char *pattern, const char *name, int limit,
+                     int *used)
+{
+    int left = limit;
+    int rc = dsn_match(pattern, name, &left);
+
+    if (used)
+        *used = limit - left;
+    return rc;
+}
+
+int
+ftpd_dsn_match(const char *pattern, const char *name)
+{
+    return ftpd_dsn_match_limit(pattern, name, FTPD_DSN_MATCH_LIMIT, NULL);
 }
 
 int

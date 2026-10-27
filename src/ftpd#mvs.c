@@ -928,6 +928,13 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
                 dsn_error(sess, arg, prefix, rc);
                 return 0;
             }
+            /* A '(' here is a member form that ftpd_lmp_split() did not
+            ** take ('A.B(x', 'A.B(x).C'), and resolve_dsn() checks nothing
+            ** behind it.  A data set listing has no use for it (#331). */
+            if (strchr(prefix, '(') != NULL) {
+                dsn_error(sess, arg, prefix, -3);
+                return 0;
+            }
         }
     } else {
         /* No arg: use CWD prefix */

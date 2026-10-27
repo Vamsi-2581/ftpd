@@ -156,6 +156,11 @@ resolve_dsn(ftpd_session_t *sess, const char *arg, char *buf, int bufsz,
         if (len >= bufsz)
             return -1;
 
+        /* sanitize_member() uppercases and cuts the name down, it does not
+        ** look at the characters.  Ask like every other branch does. */
+        if (!ftpd_dsn_valid(buf, allow_wildcards))
+            return -3;
+
         return 0;        /* member already clean; skip uppercase/dot-strip */
     } else {
         /* Relative: prepend CWD prefix */
@@ -394,6 +399,11 @@ ftpd_mvs_cwd(ftpd_session_t *sess, const char *arg)
     }
 
     rc = resolve_dsn(sess, arg, dsn, sizeof(dsn), 0);
+    if (rc == 0 && strchr(dsn, '(') != NULL) {
+        /* CWD sets a prefix.  A member is not one, and DSN(MEMBER) kept as the
+        ** working directory would be read back by LIST as a data set name. */
+        rc = -3;
+    }
     if (rc != 0) {
         dsn_error(sess, arg, dsn, rc);
         return 0;
@@ -929,8 +939,9 @@ ftpd_mvs_list(ftpd_session_t *sess, const char *arg, int nlst)
                 return 0;
             }
             /* A '(' here is a member form that ftpd_lmp_split() did not
-            ** take ('A.B(x', 'A.B(x).C'), and resolve_dsn() checks nothing
-            ** behind it.  A data set listing has no use for it (#331). */
+            ** take.  resolve_dsn() now rejects the malformed ones itself
+            ** (#335); this stays for a well-formed member the splitter
+            ** left alone, which a data set listing has no use for (#331). */
             if (strchr(prefix, '(') != NULL) {
                 dsn_error(sess, arg, prefix, -3);
                 return 0;

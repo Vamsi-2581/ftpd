@@ -493,14 +493,12 @@ On an upgrade the `APPLY` step ends **`COND CODE 0004`**, not `0000`:
 
 ```
 HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
-HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP130
-HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY
+HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP131
+HMA2461 SYSMOD TFTP130 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050 APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```
 
-The excerpt was measured on the upgrade from 1.2.0 to 1.3.0. For the upgrade
-from 1.3.0 to 1.3.1 the ids are `TFTP131` in `HMA2270` and `TFTP130` in
-`HMA2461`.
+The excerpt was measured on the upgrade from 1.3.0 to 1.3.1.
 
 `HMA2461` is SMP noting that the deleted level has no backup entry to keep — it
 never will, because it was deleted rather than superseded. The `APPLY` itself
@@ -687,14 +685,14 @@ The SYSMOD travels inline in the job — there is no third file to upload.
 0000`, and in the SMP output:
 
 ```
-HMA3930    SYSMOD TFTP130 SUCCESSFULLY RECEIVED
+HMA3930    SYSMOD TFTP131 SUCCESSFULLY RECEIVED
 HMA2380    COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB
-           - RETURN CODE=00
+           - SYSMOD=TFTP131 - RETURN CODE=00
 HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 00
 ```
 
-These lines were measured on release 1.3.0. For 1.3.1 the SYSMOD in the first
-line is `TFTP131`.
+These lines were measured on a test system with the SMP package of release
+1.3.1.
 
 **On an upgrade the `APPLY` ends `COND CODE 0004` instead, and that is
 correct** — `HMA2461` reporting that the deleted level has no backup entry.

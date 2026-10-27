@@ -15,9 +15,7 @@
     MVS 3.8j (ftpd 1.3.1), and to all subsequent releases and modifications
     until otherwise indicated in new editions.
 
-    *Draft.* This book is a draft edition. The chapters on installing and
-    removing FTPD were measured on a test system with release 1.3.0; the
-    screens show its ids, and the jobs name the ids of release 1.3.1.
+    *Draft.* This book is a draft edition.
 
     Comments on this book may be addressed to the issue tracker of the
     mvslovers/ftpd repository on GitHub.

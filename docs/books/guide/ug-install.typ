@@ -331,12 +331,9 @@ job; there is no third file to send.
 === What a Good Run Looks Like <ug-install-good>
 
 On a new installation, every step ends with #cmd("COND CODE 0000"). The
-screens below are the SMP output of a new installation of release 1.3.0,
-measured on a test system. In release 1.3.1 the SYSMOD is #cmd("TFTP131") and
-it deletes #cmd("TFTP130"). In the measured screens, the SYSMOD shows as
-#cmd("TFTP130"): read #cmd("TFTP131"). The id it deletes shows as
-#cmd("TFTP120"): read #cmd("TFTP130"). The #cmd("RECV") step receives the
-SYSMOD:
+screens below are the SMP output of a new installation of release 1.3.1,
+measured on a test system. The SYSMOD is #cmd("TFTP131") and it deletes
+#cmd("TFTP130"). The #cmd("RECV") step receives the SYSMOD:
 
 #screen(raw(read("../ex/ug-install/receive.txt")))
 
@@ -359,8 +356,8 @@ superseded:
 
 #screen(```
 HMA2380 COPY SUCCESSFUL - MOD=FTPD - LMOD=FTPD - LIBRARY=LINKLIB - ...
-HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP130
-HMA2461 SYSMOD TFTP120 NOT FOUND ON SMPSCDS LIBRARY
+HMA2270 APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTP131
+HMA2461 SYSMOD TFTP130 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050 APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```)
 
@@ -733,7 +730,9 @@ FMID owns the module. Run this under the SMP procedure:
     [#cmd("TFTP120")], [1.2.0. Upgrade to 1.3.0 first, with the 1.3.0 package
       from the releases page, then come back here. FTPD 1.3.1 deletes only
       #cmd("TFTP130"), so on a system where #cmd("TFTP120") owns the module the
-      install copies nothing and still ends with RC 00.],
+      install copies nothing and still ends with RC 00: the #cmd("APPLY")
+      prints no #cmd("HMA2380"), and its report lists the module as
+      #cmd("NOT SEL").],
     [#cmd("TFTP110")], [1.1.0. Upgrade to 1.2.0 first, then to 1.3.0, each
       with its package from the releases page, then come back here.],
     [#cmd("TFTP100")], [1.0.x. Upgrade to 1.1.0 first (@ug-install-from10),
@@ -751,10 +750,10 @@ with #cmd("COND CODE 0004") (@ug-install-good). The banner must name the new
 release; #cmd("FTPD000I FTPD 1.3.0") on the first line means that the started
 task still runs the old load module. Check the member list and look for
 #cmd("HMA2380") in the job log, not the condition codes. This was measured for
-the upgrade from 1.2.0 to 1.3.0 on a test system that carried 1.2.0, installed
+the upgrade from 1.3.0 to 1.3.1 on a test system that carried 1.3.0, installed
 through SMP: the #cmd("APPLY") ended with #cmd("COND CODE 0004") and
-#cmd("HMA2461 SYSMOD TFTP120 NOT FOUND"), and the #cmd("ACCEPT") with 0000. The
-upgrade from 1.3.0 to 1.3.1 deletes #cmd("TFTP130") in the same way. If the
+#cmd("HMA2461 SYSMOD TFTP130 NOT FOUND"), and the #cmd("ACCEPT") with 0000. The
+started task then printed the banner of 1.3.1. If the
 configuration member of 1.2.0 still has a line for #cmd("JESINTERFACELEVEL"), #cmd("AUTHUSER") or a
 volume, the start also prints #cmd("FTPD062W"); the lines have no effect and
 can go.

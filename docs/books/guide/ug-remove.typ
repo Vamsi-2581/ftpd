@@ -53,8 +53,8 @@ upgrade deletes the release before it and leaves its id in the inventory as a
 mark, in both zones:
 
 #screen(```
-TFTP120   TYPE            = FUNCTION
-          DELBY           = TFTP130
+TFTP130   TYPE            = FUNCTION
+          DELBY           = TFTP131
 ```)
 
 A system that went from 1.0.x through 1.1.0, 1.2.0 and 1.3.0 to 1.3.1 carries
@@ -146,9 +146,9 @@ Read the three SMP steps one by one. The receive ends with return code 04:
 
 The apply deletes the load module from the target library. It also ends with
 return code 04, because SMP does not find the release that you remove in the
-restore data set (#cmd("HMA2461")). The output below comes from a system that
-carried 1.3.0, so the message names #cmd("TFTP130"), the release that you
-remove; on a system with 1.3.1 it names #cmd("TFTP131"):
+restore data set (#cmd("HMA2461")). The output below comes from a system with
+release 1.3.1, so the message names #cmd("TFTP131"), the release that you
+remove:
 
 #screen(raw(read("../ex/ug-remove/dummy-apply.txt")))
 
@@ -168,16 +168,17 @@ step does not run; the last step does, and shows what is still there. Read
 the output of the failed step; do not repeat the job before you know what it
 did.
 
-*What has been measured.* The job was run on a test system with a fresh
-SMP installation of release 1.3.0, and on one that had been upgraded from
-1.2.0 to 1.3.0; both ended as shown. That job had four ids in the
-#cmd("DELETE") list, #cmd("TFTP100") to #cmd("TFTP130"); the screens of this
-chapter are from these runs and show #cmd("TFTP130"). The job above adds
-#cmd("TFTP131") as a fifth id and has not been run on a system with release
-1.3.1. A system with an older history, and a
-dummy function with a #cmd("++MAC") element instead of none, have not been
-measured. Whatever the system, the #cmd("LIST") in step 4 is
-the proof.
+*What has been measured.* The job was run on a test system with a new
+SMP installation of release 1.3.1; the screens of this chapter are from that
+run. It was run a second time on a system that carried 1.2.0 through SMP and
+had received the install job of 1.3.1 on top of it. That job copies nothing
+(@ug-install-upgrade), so #cmd("TFTP120") still owned the module. The return
+codes were the same, and both libraries were empty afterwards. The only
+difference is in the #cmd("APPLY"): it printed #cmd("HMA2461") twice, once for
+#cmd("TFTP120") and once for #cmd("TFTP131"). A system whose data sets carry
+the patch level in their names, and a dummy function with a #cmd("++MAC")
+element instead of none, have not been measured. Whatever the system, the
+#cmd("LIST") in step 4 is the proof.
 
 == Step 3: Free the Ids <ug-remove-free>
 
@@ -267,7 +268,7 @@ the step above the 04 that you expect. The job has twelve #cmd("LIST")
 statements, and all twelve must show the id as not found. A stanza that names
 #cmd("TYPE = FUNCTION") is an entry that is still there, whether it shows the
 status #cmd("REC APP ACC") or only a #cmd("DELBY") of its successor. This is
-what the statements #cmd("LIST CDS SYSMOD(TFTP130)") and
+what the statements #cmd("LIST CDS SYSMOD(TFTP131)") and
 #cmd("LIST CDS SYSMOD(TFTPDEL)") print after step 2, before step 3 has run:
 
 #screen(raw(read("../ex/ug-remove/list-present.txt")))
@@ -361,11 +362,9 @@ the ids your system never had; the statements after it are still processed. It
 is no sign that a line did what you wanted, and a step that ends with return
 code 08 can also hide a statement that failed for another reason. Read every
 message, and take the #cmd("LIST") as the only proof. This is the output of the
-step #cmd("UCLCDS") on a system that had installed 1.3.0 from the release, so
-that the first line named #cmd("TFTP130"). The job then had no line for
-#cmd("TFTP131"); on a system with 1.3.1 the first line names #cmd("TFTP131"),
-and the screen has one #cmd("DEL SYSMOD") more. #cmd("TFTP120") is in the zone as the mark that the install left;
-#cmd("TFTP110") and #cmd("TFTP100") were never in it:
+step #cmd("UCLCDS") on a system with a new installation of release 1.3.1.
+#cmd("TFTP130") is in the zone as the mark that the install left;
+#cmd("TFTP120"), #cmd("TFTP110") and #cmd("TFTP100") were never in it:
 
 #screen(raw(read("../ex/ug-remove/uclcds.txt")))
 
@@ -376,11 +375,11 @@ return code 08, SMP does not execute the next #cmd("UCLIN") of the same
 step: it answers #cmd("HMA2293 ** CONTROL STATEMENT IGNORED DUE TO PREVIOUS
 ERROR") and does nothing. With both blocks in one step, the ids that the
 system never had would leave the ACDS untouched. Measured on a system with
-1.2.0, in a test with a #cmd("DEL SYSMOD") for an id that the zone did not
-hold: the #cmd("UCLIN CDS") block ended with return code 08 at
-#cmd("DEL SYSMOD(TFTP130)"), the #cmd("UCLIN ACDS") block that followed was
+a new installation of 1.3.1, with both blocks of the job above in one step:
+the #cmd("UCLIN CDS") block ended with return code 08 at
+#cmd("DEL SYSMOD(TFTP120)"), the #cmd("UCLIN ACDS") block that followed was
 ignored, the step ended with return code 12, and
-#cmd("LIST ACDS SYSMOD(TFTP120)") still showed the entry.
+#cmd("LIST ACDS SYSMOD(TFTP131)") still showed the entry.
 
 Then read the #cmd("LIST") as in step 4, here twelve statements without
 #cmd("TFTPDEL") and with the two module entries, and, if you remove FTPD for

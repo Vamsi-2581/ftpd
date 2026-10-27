@@ -47,8 +47,8 @@ before it: it covered 1.0.0, 1.0.1 and 1.0.2 alike. Each upgrade deletes the
 release before it and leaves its id in the inventory as a mark, in both zones:
 
 ```
-TFTP120   TYPE            = FUNCTION
-          DELBY           = TFTP130
+TFTP130   TYPE            = FUNCTION
+          DELBY           = TFTP131
 ```
 
 A system that went from 1.0.x through 1.1.0, 1.2.0 and 1.3.0 to 1.3.1 carries
@@ -135,7 +135,7 @@ Read the three SMP steps one by one. The receive ends with return code 04:
 ```
  RECEIVE SELECT(TFTPDEL) .
 ----------++FUNCTION(TFTPDEL) .
-----------++VER(Z038) DELETE(TFTP100,TFTP110,TFTP120,TFTP130) .
+----------++VER(Z038) DELETE(TFTP100,TFTP110,TFTP120,TFTP130,TFTP131) .
 HMA3971    SYSMOD TFTPDEL HAS NO ELEMENTS
 HMA3930    SYSMOD TFTPDEL SUCCESSFULLY RECEIVED
 HMA2050    RECEIVE PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
@@ -143,15 +143,14 @@ HMA2050    RECEIVE PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 
 The apply deletes the load module from the target library. It also ends with
 return code 04, because SMP does not find the release that you remove in the
-restore data set (`HMA2461`). The output below comes from a system that carried
-1.3.0, so the message names `TFTP130`, the release that you remove; on a system
-with 1.3.1 it names `TFTP131`:
+restore data set (`HMA2461`). The output below comes from a system with
+release 1.3.1, so the message names `TFTP131`, the release that you remove:
 
 ```
  APPLY S(TFTPDEL) DIS(WRITE) .
 HMA2240    SUCCESSFULLY DELETED LMOD FTPD ON LINKLIB LIBRARY
 HMA2270    APPLY PROCESSING SUCCESSFULLY COMPLETED FOR SYSMOD TFTPDEL
-HMA2461    SYSMOD TFTP130 NOT FOUND ON SMPSCDS LIBRARY
+HMA2461    SYSMOD TFTP131 NOT FOUND ON SMPSCDS LIBRARY
 HMA2050    APPLY PROCESSING COMPLETED - HIGHEST RETURN CODE IS 04
 ```
 
@@ -190,14 +189,17 @@ If a step ends higher than 04, the following `APPLY` or `ACCEPT` step does not
 run; the last step does, and shows what is still there. Read the output of the
 failed step; do not repeat the job before you know what it did.
 
-**What has been measured.** The job was run on a test system with a fresh
-SMP installation of release 1.3.0, and on one that had been upgraded from
-1.2.0 to 1.3.0; both ended as shown. That job had four ids in the `DELETE`
-list, `TFTP100` to `TFTP130`; the output in this document is from these runs
-and shows `TFTP130`. The job above adds `TFTP131` as a fifth id and has not been
-run on a system with release 1.3.1. A system with an older history, and a dummy
-function with a `++MAC` element instead of none, have not been measured.
-Whatever the system, the `LIST` in step 4 is the proof.
+**What has been measured.** The job was run on a test system with a new
+SMP installation of release 1.3.1; the output in this document is from that
+run. It was run a second time on a system that carried 1.2.0 through SMP and
+had received the install job of 1.3.1 on top of it. That job copies nothing
+(see [installation.md](installation.md)), so `TFTP120` still owned the module.
+The return codes were the same, and both libraries were empty afterwards. The
+only difference is in the `APPLY`: it printed `HMA2461` twice, once for
+`TFTP120` and once for `TFTP131`. A system whose data sets carry the patch
+level in their names, and a dummy function with a `++MAC` element instead of
+none, have not been measured. Whatever the system, the `LIST` in step 4 is the
+proof.
 
 ## 3. Free the ids
 
@@ -261,6 +263,8 @@ output of step `UCLCDS`:
  UCLIN CDS .
   DEL SYSMOD(TFTPDEL) .
 HMA2550    UPDATE COMPLETE FOR TFTPDEL
+  DEL SYSMOD(TFTP131) .
+HMA2550    UPDATE COMPLETE FOR TFTP131
   DEL SYSMOD(TFTP130) .
 HMA2550    UPDATE COMPLETE FOR TFTP130
   DEL SYSMOD(TFTP120) .
@@ -310,14 +314,14 @@ step above the 04 that you expect. The job has twelve `LIST` statements, and all
 twelve must show the id as not found. A stanza that names `TYPE = FUNCTION` is an
 entry that is still there, whether it shows the status `REC APP ACC` or only a
 `DELBY` of its successor. This is what the statements
-`LIST CDS SYSMOD(TFTP130)` and `LIST CDS SYSMOD(TFTPDEL)` print after step 2,
+`LIST CDS SYSMOD(TFTP131)` and `LIST CDS SYSMOD(TFTPDEL)` print after step 2,
 before step 3 has run:
 
 ```
- LIST CDS  SYSMOD(TFTP130) .
+ LIST CDS  SYSMOD(TFTP131) .
 SMPCDS   SYSMOD ENTRIES
   NAME
-TFTP130   TYPE            = FUNCTION
+TFTP131   TYPE            = FUNCTION
           DELBY           = TFTPDEL
 
  LIST CDS  SYSMOD(TFTPDEL) .
@@ -326,10 +330,10 @@ SMPCDS   SYSMOD ENTRIES
 TFTPDEL   TYPE            = FUNCTION
           STATUS          = REC  APP  ACC
           FMID            = TFTPDEL
-          DATE/TIME REC   = 26.295  18:33:04
-                    APP   = 26.295  18:33:18
-                    ACC   = 26.295  18:33:27
-          DELETE VER(001) = TFTP100   TFTP110   TFTP120   TFTP130
+          DATE/TIME REC   = 26.300  09:35:20
+                    APP   = 26.300  09:35:39
+                    ACC   = 26.300  09:35:53
+          DELETE VER(001) = TFTP100   TFTP110   TFTP120   TFTP130   TFTP131
 ```
 
 ## 5. Scratch the libraries
@@ -418,24 +422,25 @@ with return code 08. That is expected for the ids your system never had; the
 statements after it are still processed. It is no sign that a line did what you
 wanted, and a step that ends with return code 08 can also hide a statement that
 failed for another reason. Read every message, and take the `LIST` as the only
-proof. This is the output of step `UCLCDS` on a system that had installed 1.3.0
-from the release, so that the first line named `TFTP130`. The job then had no
-line for `TFTP131`; on a system with 1.3.1 the first line names `TFTP131`, and
-the output has one `DEL SYSMOD` more. `TFTP120` is in the zone as the mark that
-the install left; `TFTP110` and `TFTP100` were never in it:
+proof. This is the output of step `UCLCDS` on a system with a new installation
+of release 1.3.1. `TFTP130` is in the zone as the mark that the install left;
+`TFTP120`, `TFTP110` and `TFTP100` were never in it:
 
 ```
  UCLIN CDS .
-  DEL SYSMOD(TFTP130) MOD(FTPD) .
-HMA2550    UPDATE COMPLETE FOR TFTP130
+  DEL SYSMOD(TFTP131) MOD(FTPD) .
+HMA2550    UPDATE COMPLETE FOR TFTP131
   DEL MOD(FTPD) .
 HMA2550    UPDATE COMPLETE FOR FTPD
   DEL LMOD(FTPD) .
 HMA2550    UPDATE COMPLETE FOR FTPD
+  DEL SYSMOD(TFTP131) .
+HMA2550    UPDATE COMPLETE FOR TFTP131
   DEL SYSMOD(TFTP130) .
 HMA2550    UPDATE COMPLETE FOR TFTP130
   DEL SYSMOD(TFTP120) .
-HMA2550    UPDATE COMPLETE FOR TFTP120
+HMA2532 ** SYSMOD ENTRY TFTP120 TO BE DELETED DOES NOT EXIST
+HMA2560    UPDATE PROCESSING TERMINATED - UPDATE NOT COMPLETE
   DEL SYSMOD(TFTP110) .
 HMA2532 ** SYSMOD ENTRY TFTP110 TO BE DELETED DOES NOT EXIST
 HMA2560    UPDATE PROCESSING TERMINATED - UPDATE NOT COMPLETE
@@ -453,11 +458,11 @@ Step `UCLACDS` gives the same, without the `LMOD` statement.
 return code 08, SMP does not execute the next `UCLIN` of the same step: it
 answers `HMA2293 ** CONTROL STATEMENT IGNORED DUE TO PREVIOUS ERROR` and does
 nothing. With both blocks in one step, the ids that the system never had would
-leave the ACDS untouched. Measured on a system with 1.2.0, in a test with a `DEL SYSMOD` for an id
-that the zone did not hold: the `UCLIN CDS` block ended with return code 08 at
-`DEL SYSMOD(TFTP130)`, the `UCLIN ACDS`
-block that followed was ignored, the step ended with return code 12, and
-`LIST ACDS SYSMOD(TFTP120)` still showed the entry.
+leave the ACDS untouched. Measured on a system with a new installation of
+1.3.1, with both blocks of the job above in one step: the `UCLIN CDS` block
+ended with return code 08 at `DEL SYSMOD(TFTP120)`, the `UCLIN ACDS` block that
+followed was ignored, the step ended with return code 12, and
+`LIST ACDS SYSMOD(TFTP131)` still showed the entry.
 
 Then read the `LIST` as in step 4, here twelve statements without `TFTPDEL` and
 with the two module entries, and, if you remove FTPD for good, scratch the
@@ -485,8 +490,8 @@ accepts the FMID in the same run in which it applies it. That closes both of the
 usual ways back:
 
 ```
-HMA2452 ** SYSMOD TFTP130 SELECTED FOR RESTORE HAS BEEN ACCEPTED
-HMA2462 ** SYSMOD TFTP130 NOT FOUND ON SMPPTS LIBRARY
+HMA2452 ** SYSMOD TFTP131 SELECTED FOR RESTORE HAS BEEN ACCEPTED
+HMA2462 ** SYSMOD TFTP131 NOT FOUND ON SMPPTS LIBRARY
 ```
 
 `RESTORE` refuses a SYSMOD that has been accepted (`HMA2452`, return code 12).
